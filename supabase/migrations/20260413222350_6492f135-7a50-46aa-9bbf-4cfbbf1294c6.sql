@@ -1,0 +1,2 @@
+ALTER TABLE public.delivery_alerts DROP CONSTRAINT delivery_alerts_alert_type_check;
+ALTER TABLE public.delivery_alerts ADD CONSTRAINT delivery_alerts_alert_type_check CHECK (alert_type = ANY (ARRAY['late_delivery','route_deviation','suspicious','duplicate','out_of_area','delivery_completed']));

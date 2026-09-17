@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.log_merchant_audit() FROM PUBLIC, anon, authenticated;

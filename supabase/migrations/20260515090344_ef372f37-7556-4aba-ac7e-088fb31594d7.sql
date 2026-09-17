@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.reject_delivery(uuid);

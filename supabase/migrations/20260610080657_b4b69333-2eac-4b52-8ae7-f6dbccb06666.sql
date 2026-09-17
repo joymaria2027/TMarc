@@ -1,0 +1,2 @@
+CREATE POLICY products_admin_insert ON public.products FOR INSERT TO authenticated WITH CHECK (public.has_role(auth.uid(), 'admin'));
+CREATE POLICY products_admin_delete ON public.products FOR DELETE TO authenticated USING (public.has_role(auth.uid(), 'admin'));

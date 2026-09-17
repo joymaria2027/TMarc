@@ -1,0 +1,4 @@
+project_id = "zxstiyqmaixyrtggwkwn"
+
+[functions.modempay-webhook]
+verify_jwt = false
