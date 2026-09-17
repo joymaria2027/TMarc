@@ -1,13 +1,18 @@
-# Graph Report - .  (2026-09-17)
+# Graph Report - download  (2026-09-17)
 
 ## Corpus Check
-- 316 files · ~218,733 words
+- 313 files · ~219,336 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1939 nodes · 3654 edges · 284 communities (136 shown, 148 thin omitted)
-- Extraction: 92% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 274 edges (avg confidence: 0.8)
+- 2631 nodes · 4303 edges · 335 communities (191 shown, 144 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 274 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `81621a9d`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Rider Dispatch Payments|Rider Dispatch Payments]]
@@ -154,6 +159,7 @@
 - [[_COMMUNITY_merchant_tariffs table reference|merchant_tariffs table reference]]
 - [[_COMMUNITY_order_items table reference|order_items table reference]]
 - [[_COMMUNITY_ModemPay Webhook Replay Handler|ModemPay Webhook Replay Handler]]
+- [[_COMMUNITY_NotFound.tsx NotFound|NotFound.tsx NotFound]]
 - [[_COMMUNITY_createShare RevenueSharingPage|createShare RevenueSharingPage]]
 - [[_COMMUNITY_confirmEndOdometer RiderDashboard|confirmEndOdometer RiderDashboard]]
 - [[_COMMUNITY_createExpense RiderExpensesPage|createExpense RiderExpensesPage]]
@@ -282,6 +288,57 @@
 - [[_COMMUNITY_SheetClose sheet|SheetClose sheet]]
 - [[_COMMUNITY_SheetTrigger sheet|SheetTrigger sheet]]
 - [[_COMMUNITY_useToast re-export|useToast re-export]]
+- [[_COMMUNITY_Community 284|Community 284]]
+- [[_COMMUNITY_Community 285|Community 285]]
+- [[_COMMUNITY_Community 286|Community 286]]
+- [[_COMMUNITY_Community 287|Community 287]]
+- [[_COMMUNITY_Community 288|Community 288]]
+- [[_COMMUNITY_Community 289|Community 289]]
+- [[_COMMUNITY_Community 290|Community 290]]
+- [[_COMMUNITY_Community 291|Community 291]]
+- [[_COMMUNITY_Community 292|Community 292]]
+- [[_COMMUNITY_Community 293|Community 293]]
+- [[_COMMUNITY_Community 294|Community 294]]
+- [[_COMMUNITY_Community 295|Community 295]]
+- [[_COMMUNITY_Community 296|Community 296]]
+- [[_COMMUNITY_Community 297|Community 297]]
+- [[_COMMUNITY_Community 298|Community 298]]
+- [[_COMMUNITY_Community 299|Community 299]]
+- [[_COMMUNITY_Community 300|Community 300]]
+- [[_COMMUNITY_Community 301|Community 301]]
+- [[_COMMUNITY_Community 302|Community 302]]
+- [[_COMMUNITY_Community 303|Community 303]]
+- [[_COMMUNITY_Community 304|Community 304]]
+- [[_COMMUNITY_Community 305|Community 305]]
+- [[_COMMUNITY_Community 306|Community 306]]
+- [[_COMMUNITY_Community 307|Community 307]]
+- [[_COMMUNITY_Community 308|Community 308]]
+- [[_COMMUNITY_Community 309|Community 309]]
+- [[_COMMUNITY_Community 310|Community 310]]
+- [[_COMMUNITY_Community 311|Community 311]]
+- [[_COMMUNITY_Community 312|Community 312]]
+- [[_COMMUNITY_Community 313|Community 313]]
+- [[_COMMUNITY_Community 314|Community 314]]
+- [[_COMMUNITY_Community 315|Community 315]]
+- [[_COMMUNITY_Community 316|Community 316]]
+- [[_COMMUNITY_Community 317|Community 317]]
+- [[_COMMUNITY_Community 318|Community 318]]
+- [[_COMMUNITY_Community 319|Community 319]]
+- [[_COMMUNITY_Community 320|Community 320]]
+- [[_COMMUNITY_Community 321|Community 321]]
+- [[_COMMUNITY_Community 322|Community 322]]
+- [[_COMMUNITY_Community 323|Community 323]]
+- [[_COMMUNITY_Community 324|Community 324]]
+- [[_COMMUNITY_Community 325|Community 325]]
+- [[_COMMUNITY_Community 326|Community 326]]
+- [[_COMMUNITY_Community 327|Community 327]]
+- [[_COMMUNITY_Community 328|Community 328]]
+- [[_COMMUNITY_Community 329|Community 329]]
+- [[_COMMUNITY_Community 330|Community 330]]
+- [[_COMMUNITY_Community 331|Community 331]]
+- [[_COMMUNITY_Community 332|Community 332]]
+- [[_COMMUNITY_Community 333|Community 333]]
+- [[_COMMUNITY_Community 334|Community 334]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `cn()` - 74 edges
@@ -355,11 +412,11 @@
 - **Merchant approval and audit log** — mig_f1010_merchant_audit_log, mig_f1010_fn_log_merchant_audit, mig_f1010_trg_merchants_audit_log, mig_f1010_pol_admins_view_audit, mig_f1010_pol_managers_view_audit [EXTRACTED 1.00]
 - **Wholesaler onboarding and pricing** — mig_f1313_wholesalers, mig_f1313_product_wholesale_pricing, mig_f1313_merchant_wholesale_settings, mig_f1313_fn_sync_wholesaler_role, mig_f1313_fn_is_approved_wholesaler [EXTRACTED 1.00]
 
-## Communities (284 total, 148 thin omitted)
+## Communities (335 total, 144 thin omitted)
 
 ### Community 0 - "Rider Dispatch Payments"
-Cohesion: 0.10
-Nodes (32): Offer, TxData, WalletData, COLORS, PAYMENT_LABELS, PIE_COLORS, AuditRow, EVENT_LABEL (+24 more)
+Cohesion: 0.11
+Nodes (30): Offer, TxData, WalletData, PIE_COLORS, AuditRow, EVENT_LABEL, EVENT_TYPES, RiderLocation (+22 more)
 
 ### Community 1 - "Screenshot Helper Bundle"
 Cohesion: 0.09
@@ -382,16 +439,16 @@ Cohesion: 0.07
 Nodes (40): detectCsp(), INLINE_HEADER_SIGNALS, LAYOUT_EXTS, MONOREPO_HELPER_SIGNALS, NUXT_ROUTE_RULES_SIGNALS, NUXT_SECURITY_SIGNALS, SCAN_EXTS, SKIP_DIRS (+32 more)
 
 ### Community 6 - "Merchant Operations Pages"
-Cohesion: 0.15
-Nodes (25): ExpenseType, FuelChange, FuelVariant, EVENT_LABELS, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription (+17 more)
+Cohesion: 0.11
+Nodes (23): COLORS, PAYMENT_LABELS, EVENT_LABELS, Merchant, Product, WholesaleRow, BusinessType, Category (+15 more)
 
 ### Community 7 - "Checkout Auth Payments"
-Cohesion: 0.10
-Nodes (29): resolveDeliveryFee(), money(), PaymentBackfillPage(), ReportRow, ResultRow, RunRow, Recon, ReconciliationPage() (+21 more)
+Cohesion: 0.09
+Nodes (33): resolveDeliveryFee(), money(), PaymentBackfillPage(), ReportRow, ResultRow, RunRow, Assignment, Run (+25 more)
 
 ### Community 8 - "Order Capture Dialogs"
-Cohesion: 0.12
-Nodes (23): Props, PAYMENT_METHODS, PaymentMethodSelectProps, ReceiptUploadProps, Props, BusinessType, Check, Report (+15 more)
+Cohesion: 0.08
+Nodes (30): Props, PAYMENT_METHODS, PaymentMethodSelectProps, ReceiptUploadProps, Props, GpsPosition, useGpsTracking(), BusinessType (+22 more)
 
 ### Community 9 - "Sidebar Sheet UI"
 Cohesion: 0.07
@@ -410,16 +467,16 @@ Cohesion: 0.11
 Nodes (35): hasGeneratedHeader(), HEADER_MARKERS, isGeneratedFile(), isGitIgnored(), acceptCli(), argVal(), deindentContent(), detectCommentSyntax() (+27 more)
 
 ### Community 13 - "App Shell Layout"
-Cohesion: 0.07
-Nodes (34): Layout(), navItems, Msg, OrderChat(), WalletWidget(), useAuth(), AccountantDashboard(), AdminDashboard() (+26 more)
+Cohesion: 0.08
+Nodes (33): Layout(), Msg, OrderChat(), WalletWidget(), useAuth(), AccountantDashboard(), AdminDashboard(), AlertsPage() (+25 more)
 
 ### Community 14 - "Dev Dependencies"
-Cohesion: 0.06
-Nodes (35): devDependencies, autoprefixer, eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, jsdom (+27 more)
+Cohesion: 0.09
+Nodes (23): devDependencies, autoprefixer, eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, jsdom (+15 more)
 
 ### Community 15 - "Storefront Cart Wholesale"
 Cohesion: 0.11
-Nodes (24): StorefrontLayout(), CartItem, groupByMerchant(), useCart(), cache, getProductImageUrl(), PricingRow, SettingsRow (+16 more)
+Nodes (22): navItems, StorefrontLayout(), CartItem, groupByMerchant(), useCart(), cache, getProductImageUrl(), PricingRow (+14 more)
 
 ### Community 16 - "Core Schema Wallets"
 Cohesion: 0.11
@@ -434,8 +491,8 @@ Cohesion: 0.16
 Nodes (28): cleanup(), clearScrollY(), clearSession(), closeTunePopover(), desc(), handleAccept(), handleClick(), handleDiscard() (+20 more)
 
 ### Community 19 - "Auth Roles Permissions"
-Cohesion: 0.10
-Nodes (16): AppRole, AuthContext, AuthContextType, AuthProvider(), Merchant, Product, WholesaleRow, BUILT_IN_RESOURCES (+8 more)
+Cohesion: 0.15
+Nodes (8): AppRole, AuthContext, AuthContextType, AuthProvider(), ProtectedRoute(), queryClient, Toaster(), ToasterProps
 
 ### Community 20 - "Order Timeline Utilities"
 Cohesion: 0.12
@@ -510,12 +567,12 @@ Cohesion: 0.20
 Nodes (15): applyParamDefaults(), applyParamValue(), buildCyclingRow(), closedClipPath(), getVisibleVariantEl(), hideParamsPanel(), navBtn(), openTunePopover() (+7 more)
 
 ### Community 38 - "Config Shadcn"
-Cohesion: 0.18
-Nodes (14): Capacitor Config delivery-ace-insight, Single-context domain docs layout, shadcn UI Config, Delivery Guardian, ESLint flat config, DeliveryAce HTML entry, Vite React shadcn TS project, PostCSS Tailwind plugins (+6 more)
+Cohesion: 0.10
+Nodes (21): Capacitor Config delivery-ace-insight, Agent skills, Domain docs, Issue tracker, Triage labels, shadcn UI Config, Delivery Guardian, Example dialogue (+13 more)
 
 ### Community 39 - "Color States"
-Cohesion: 0.15
-Nodes (14): Cognitive Load, OKLCH Color, Craft Flow, Dual Assessment Critique, Delight Moments, Resilience Hardening, Nielsen's 10 Heuristics, Eight Interactive States (+6 more)
+Cohesion: 0.33
+Nodes (6): Cognitive Load, Dual Assessment Critique, Delight Moments, Resilience Hardening, Empty States, Persona-Based Testing
 
 ### Community 40 - "Carousel Carouselapi"
 Cohesion: 0.19
@@ -590,12 +647,12 @@ Cohesion: 0.22
 Nodes (9): Policy categories_merchant_manage on product_categories, Policy categories_public_read on product_categories, Table merchants external, Table product_categories, Trigger trg_categories_updated on product_categories, Trigger trg_customers_updated on customers, Trigger trg_orders_updated on orders, Trigger trg_products_updated on products (+1 more)
 
 ### Community 58 - "Backfill Payment"
-Cohesion: 0.25
-Nodes (8): App, ProtectedRoute, Merchant auto-settlement rider cancel live ETA dispatch audit, Backfill merchant wallet credits for already-paid orders, Payment Backfill admin page, Payment reconciliation report safe backfills merchant notifications, StoreLandingPage route s merchantId, StoreQrDialog
+Cohesion: 0.17
+Nodes (11): App, ProtectedRoute, Merchant auto-settlement rider cancel live ETA dispatch audit, Payment Backfill admin page, Payment reconciliation report safe backfills merchant notifications, Backfill merchant wallet credits for already-paid orders, Technical note, What's there now (+3 more)
 
 ### Community 59 - "Design Strategy"
-Cohesion: 0.29
-Nodes (8): Impeccable frontend skill v3.0.6, Impeccable preflight mutation gates, PRODUCT.md DESIGN.md context loader, Shared design laws OKLCH theme typography, Responsive adaptation strategy, Purposeful animation system, Bolder amplification strategy, Brand imagery must-ship rule
+Cohesion: 0.09
+Nodes (22): 1. Context gathering, 2. Register, Absolute bans, Color, Commands, Copy, Impeccable frontend skill v3.0.6, Layout (+14 more)
 
 ### Community 60 - "Webhook Modempay"
 Cohesion: 0.25
@@ -622,8 +679,8 @@ Cohesion: 0.29
 Nodes (7): Self-owned Supabase system of record decision, Domain docs agent guidance, Create target Supabase project, Freeze dump source database, Switch env verify local, Delivery Guardian migration PRD, Self-owned Supabase target project
 
 ### Community 66 - "Usegpstracking Gpsposition"
-Cohesion: 0.29
-Nodes (5): GpsPosition, useGpsTracking(), haversineKm(), RiderDashboard(), viewDelivery
+Cohesion: 0.05
+Nodes (36): 1. Read the screenshot (if present), 2. Wrap the element, 3. Load the action's reference, 4. Plan three variants — identity first, then mode, then axes, 5. Apply the freeform prompt (if present), 6. Write all variants in a single edit, 7. Parameters (composition-sized, 0–4 per variant), 8. Signal done (+28 more)
 
 ### Community 67 - "Toggle Group"
 Cohesion: 0.52
@@ -678,8 +735,8 @@ Cohesion: 0.50
 Nodes (5): Your app will live here, placeholder.svg - vector text placeholder graphic, Two-line stacked black vector text on transparent background, larger headline above smaller subline, 150x39 viewBox, Live app preview placeholder prompting user to use Lovable AI builder, Ask Lovable to build it
 
 ### Community 80 - "Tinted Neutrals"
-Cohesion: 0.40
-Nodes (5): Tinted Neutrals, Strategic Color Introduction, Visual Rhythm and Spacing System, Live Variant Mode, Core Web Vitals Optimization
+Cohesion: 0.29
+Nodes (7): Building Functional Palettes, Palette Structure, The 60-30-10 Rule (Applied Correctly), Tinted Neutrals, Strategic Color Introduction, Visual Rhythm and Spacing System, Live Variant Mode
 
 ### Community 81 - "Input Inputotp"
 Cohesion: 0.40
@@ -710,11 +767,11 @@ Cohesion: 0.50
 Nodes (4): Table order_messages, Policy Participants can read messages on order_messages, Policy Participants can send messages on order_messages, Policy Recipients can mark read on order_messages
 
 ### Community 89 - "Design Json"
-Cohesion: 0.50
-Nodes (4): DESIGN.json Sidecar, DESIGN.md System, Identity Lock, Product Register
+Cohesion: 0.15
+Nodes (12): DESIGN.json Sidecar, DESIGN.md System, Identity Lock, Color, Components, Layout, Motion, Product bans (on top of the shared absolute bans) (+4 more)
 
 ### Community 90 - "Command Metadata"
-Cohesion: 0.50
+Cohesion: 0.67
 Nodes (3): animate, argumentHint, description
 
 ### Community 91 - "Live Poll"
@@ -750,7 +807,7 @@ Cohesion: 1.00
 Nodes (3): Typeset Improvement Guide, Typography Reference, Modular Scale
 
 ### Community 100 - "adapt command metadata"
-Cohesion: 0.67
+Cohesion: 0.50
 Nodes (3): adapt, argumentHint, description
 
 ### Community 101 - "audit command metadata"
@@ -853,6 +910,230 @@ Nodes (3): Table delivery_rejections add reason column, Function reject_delivery
 Cohesion: 0.67
 Nodes (3): Table company_tariffs renamed from restaurant_tariffs, Table merchant_tariffs renamed from company_tariffs, Function notify_tariff_change merchant version
 
+### Community 126 - "sonner.tsx sonner"
+Cohesion: 0.08
+Nodes (24): Component translation rules, Narrative mapping, Pitfalls, Scan mode (approach C: auto-extract, then confirm descriptive language), Schema, Seed mode, Step 1: Confirm seed mode, Step 1: Find the design assets (+16 more)
+
+### Community 130 - "Local markdown issue tracker"
+Cohesion: 0.09
+Nodes (22): Assess Onboarding Needs, Context Over Ceremony, Contextual Help, Design Onboarding Experiences, Documentation & Help, Empty State Design, Feature Discovery & Adoption, Guided Tours & Walkthroughs (+14 more)
+
+### Community 144 - "NotFound.tsx NotFound"
+Cohesion: 0.10
+Nodes (20): Animate complex properties, Assess What "Extraordinary" Means Here, For data-heavy interfaces, For functional UI, For performance-critical UI, For visual/marketing surfaces, Implement with Discipline, Interact with the device (+12 more)
+
+### Community 160 - "WCAG Contrast Requirements"
+Cohesion: 0.11
+Nodes (18): WCAG Contrast Requirements, Accent Color Application, Accessibility, Assess Color Opportunity, Background & Surfaces, Balance & Refinement, Borders & Accents, Cohesion (+10 more)
+
+### Community 161 - "Design Health Score"
+Cohesion: 0.12
+Nodes (16): Action Summary, Anti-Patterns Verdict, Ask the User, Assessment A: LLM Design Review, Assessment B: Automated Detection, Design Health Score, Gather Assessments, Generate Combined Critique Report (+8 more)
+
+### Community 165 - "Reduced Motion Support"
+Cohesion: 0.20
+Nodes (9): Duration: The 100/300/500 Rule, Easing: Pick the Right Curve, Motion Design, Perceived Performance, Performance, Premium Motion Materials, Reduced Motion, Staggered Animations (+1 more)
+
+### Community 168 - "Sub-merchant approval admin audit log"
+Cohesion: 0.25
+Nodes (7): Database, Frontend, How it works, Notes, Sub-merchants and store QR codes, What you get, Sub-merchant approval admin audit log QR landing page
+
+### Community 284 - "Community 284"
+Cohesion: 0.10
+Nodes (19): Clean Up, Code Quality, Color & Contrast, Content & Copy, Design System Discovery, Edge Cases & Error States, Final Verification, Forms & Inputs (+11 more)
+
+### Community 285 - "Community 285"
+Cohesion: 0.11
+Nodes (18): Appropriate to Context, Assess Delight Opportunities, Celebration Moments, Compound Over Time, Delight Amplifies, Never Blocks, Delight Principles, Delight Techniques, Easter Eggs & Hidden Delights (+10 more)
+
+### Community 286 - "Community 286"
+Cohesion: 0.11
+Nodes (18): Anti-Patterns, CSS Anchor Positioning, Destructive Actions: Undo > Confirm, Dropdown & Overlay Positioning, Fixed Positioning Fallback, Focus Rings: Do Them Right, Form Design: The Non-Obvious, Gesture Discoverability (+10 more)
+
+### Community 287 - "Community 287"
+Cohesion: 0.11
+Nodes (17): Accessibility, Assess Animation Opportunities, CSS Animations, Delight Moments, Entrance Animations, Feedback & Guidance, Implement Animations, JavaScript Animation (+9 more)
+
+### Community 288 - "Community 288"
+Cohesion: 0.12
+Nodes (16): 1. The Wall of Options, 2. The Memory Bridge, 3. The Hidden Navigation, 4. The Jargon Barrier, 5. The Visual Noise Floor, 6. The Inconsistent Pattern, 7. The Multi-Task Demand, 8. The Context Switch (+8 more)
+
+### Community 289 - "Community 289"
+Cohesion: 0.12
+Nodes (16): Avoid Redundant Copy, Confirmation Dialogs: Use Sparingly, Consistency: The Terminology Problem, Don't Blame the User, Empty States Are Opportunities, Error Message Templates, Error Messages: The Formula, Form Instructions (+8 more)
+
+### Community 290 - "Community 290"
+Cohesion: 0.12
+Nodes (15): Anti-Goals, Brief Structure, Constraints, Content & Data, Design Direction, How to use the probes, Important limits, Interview cadence (+7 more)
+
+### Community 291 - "Community 291"
+Cohesion: 0.12
+Nodes (15): Accessibility Considerations, Anti-reflexes worth defending against, Classic Typography Principles, Fluid Type, Font Selection & Pairing, Modern Web Typography, Modular Scale & Hierarchy, OpenType Features (+7 more)
+
+### Community 292 - "Community 292"
+Cohesion: 0.33
+Nodes (11): ExpenseType, FuelChange, FuelVariant, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter() (+3 more)
+
+### Community 293 - "Community 293"
+Cohesion: 0.13
+Nodes (14): Assess Adaptation Challenge, Content Adaptation, Desktop Adaptation (Mobile → Desktop), Email Adaptation (Web → Email), Implement Adaptations, Layout Adaptation Techniques, Mobile Adaptation (Desktop → Mobile), Navigation Adaptation (+6 more)
+
+### Community 294 - "Community 294"
+Cohesion: 0.13
+Nodes (14): 1. Accessibility (A11y), 2. Performance, 3. Theming, 4. Responsive Design, 5. Anti-Patterns (CRITICAL), Anti-Patterns Verdict, Audit Health Score, Detailed Findings by Severity (+6 more)
+
+### Community 295 - "Community 295"
+Cohesion: 0.13
+Nodes (14): Brand bans (on top of the shared absolute bans), Brand permissions, Brand register, Color, Font selection procedure, Imagery, Layout, Motion (+6 more)
+
+### Community 296 - "Community 296"
+Cohesion: 0.13
+Nodes (14): Apply Clarity Principles, Assess Current Copy, Button & CTA Text, Confirmation Dialogs, Empty States, Error Messages, Form Labels & Instructions, Help Text & Tooltips (+6 more)
+
+### Community 297 - "Community 297"
+Cohesion: 0.13
+Nodes (14): OKLCH Color, Build Gate, Craft Contract, Craft Flow, Critique and fix loop, Production bar, Required viewport pass, Step 1: Shape the Design (+6 more)
+
+### Community 298 - "Community 298"
+Cohesion: 0.13
+Nodes (14): Cards Are Not Required, Container Queries, Depth & Elevation, Grid Systems, Hierarchy Through Multiple Dimensions, Name Tokens Semantically, Optical Adjustments, Spacing Systems (+6 more)
+
+### Community 299 - "Community 299"
+Cohesion: 0.14
+Nodes (13): Assess Current Layout, Break Card Grid Monotony, Choose the Right Layout Tool, Create Visual Rhythm, Establish a Spacing System, Improve Layout Systematically, Live-mode signature params, Manage Depth & Elevation (+5 more)
+
+### Community 300 - "Community 300"
+Cohesion: 0.14
+Nodes (13): Accessibility & Inclusion, Brand & Personality, Interview mode, not confirmation mode, Minimum viable interview, Register (ask first — it shapes everything below), Step 1: Load current state, Step 2: Explore the codebase, Step 3: Ask strategic questions (for PRODUCT.md) (+5 more)
+
+### Community 301 - "Community 301"
+Cohesion: 0.15
+Nodes (12): name, private, scripts, build, build:dev, dev, lint, preview (+4 more)
+
+### Community 302 - "Community 302"
+Cohesion: 0.15
+Nodes (13): 10. Help and Documentation, 1. Visibility of System Status, 2. Match Between System and Real World, 3. User Control and Freedom, 4. Consistency and Standards, 5. Error Prevention, 6. Recognition Rather Than Recall, 7. Flexibility and Efficiency of Use (+5 more)
+
+### Community 303 - "Community 303"
+Cohesion: 0.17
+Nodes (11): Amplify the Design, Assess Current State, Color Intensification, Composition Boldness, Motion & Animation, Plan Amplification, Register, Spatial Drama (+3 more)
+
+### Community 304 - "Community 304"
+Cohesion: 0.17
+Nodes (11): Alpha Is A Design Smell, Color & Contrast, Color Spaces: Use OKLCH, Contrast & Accessibility, Dangerous Color Combinations, Dark Mode Is Not Inverted Light Mode, Never Use Pure Gray or Pure Black, Testing (+3 more)
+
+### Community 305 - "Community 305"
+Cohesion: 0.17
+Nodes (11): Assess Current State, Code Simplification, Content Simplification, Document Removed Complexity, Information Architecture, Interaction Simplification, Layout Simplification, Plan Simplification (+3 more)
+
+### Community 306 - "Community 306"
+Cohesion: 0.17
+Nodes (11): Accessibility Resilience, Assess Hardening Needs, Edge Cases & Boundary Conditions, Error Handling, Hardening Dimensions, Input Validation & Sanitization, Internationalization (i18n), Performance Resilience (+3 more)
+
+### Community 307 - "Community 307"
+Cohesion: 0.17
+Nodes (11): Assess Current Typography, Establish Hierarchy, Fix Readability, Font Selection, Improve Typography Systematically, Live-mode signature params, Plan Typography Improvements, Refine Details (+3 more)
+
+### Community 308 - "Community 308"
+Cohesion: 0.18
+Nodes (10): Assess Current State, Color Refinement, Composition Refinement, Motion Reduction, Plan Refinement, Refine the Design, Register, Simplification (+2 more)
+
+### Community 309 - "Community 309"
+Cohesion: 0.18
+Nodes (10): Breakpoints: Content-Driven, Detect Input Method, Not Just Screen Size, Layout Adaptation Patterns, Mobile-First: Write It Right, Picture Element for Art Direction, Responsive Design, Responsive Images: Get It Right, Safe Areas: Handle the Notch (+2 more)
+
+### Community 310 - "Community 310"
+Cohesion: 0.22
+Nodes (8): 1. Impatient Power User — "Alex", 2. Confused First-Timer — "Jordan", 3. Accessibility-Dependent User — "Sam", 4. Deliberate Stress Tester — "Riley", 5. Distracted Mobile User — "Casey", Persona-Based Design Testing, Project-Specific Personas, Selecting Personas
+
+### Community 311 - "Community 311"
+Cohesion: 0.25
+Nodes (7): ADR candidates (not yet created), Background, Decisions (grilled), Out of scope, Plan, PRD: Delivery Guardian — Lovable → Self-owned Supabase + Local Setup, Verification
+
+### Community 312 - "Community 312"
+Cohesion: 0.25
+Nodes (7): Block access to unapproved stores at the backend, Frontend, Ordering, Products and related storefront tables, Store rows (`merchants`), Technical detail, What changes for people
+
+### Community 313 - "Community 313"
+Cohesion: 0.25
+Nodes (7): Extract Flow, Step 1: Discover the Design System, Step 2: Identify Patterns, Step 3: Plan Extraction, Step 4: Extract & Enrich, Step 5: Migrate, Step 6: Document
+
+### Community 314 - "Community 314"
+Cohesion: 0.25
+Nodes (7): Assess Performance Issues, Core Web Vitals Optimization, Cumulative Layout Shift (CLS < 0.1), First Input Delay (FID < 100ms) / INP (< 200ms), Largest Contentful Paint (LCP < 2.5s), Performance Monitoring, Verify Improvements
+
+### Community 315 - "Community 315"
+Cohesion: 0.29
+Nodes (6): 01 — Create target Supabase project, Comments, Context, Depends on, Tasks, Verify
+
+### Community 316 - "Community 316"
+Cohesion: 0.29
+Nodes (6): 03 — Freeze + dump source database, Comments, Context, Depends on, Tasks, Verify
+
+### Community 317 - "Community 317"
+Cohesion: 0.29
+Nodes (6): 04 — Restore schema + data to target, Comments, Context, Depends on, Tasks, Verify
+
+### Community 318 - "Community 318"
+Cohesion: 0.29
+Nodes (6): 05 — Migrate storage (4 buckets), Comments, Context, Depends on, Tasks, Verify
+
+### Community 319 - "Community 319"
+Cohesion: 0.29
+Nodes (6): 07 — Deploy edge functions + secrets, Comments, Context, Depends on, Tasks, Verify
+
+### Community 320 - "Community 320"
+Cohesion: 0.29
+Nodes (6): 08 — Switch .env + verify local, Comments, Context, Depends on, Tasks, Verify
+
+### Community 321 - "Community 321"
+Cohesion: 0.29
+Nodes (6): 1. Pay the merchant automatically on successful payment, 2. Rider "Cancel acceptance", 3. Live distance / ETA on each offer, 4. Admin dispatch audit log, Merchant auto-settlement, rider cancel, live ETA, dispatch audit log, Technical notes
+
+### Community 322 - "Community 322"
+Cohesion: 0.29
+Nodes (6): 1. Reconciliation report of paid orders, 2. Backfills can never double-pay, 3. Admin backfill page, 4. Merchant notification on every credit, Payment reconciliation report, safe backfills, and merchant notifications, Technical notes
+
+### Community 323 - "Community 323"
+Cohesion: 0.29
+Nodes (6): Database, Fix found while checking the current setup, Frontend, Sub-merchant approval, admin audit log, and QR landing page, Technical detail, What you get
+
+### Community 324 - "Community 324"
+Cohesion: 0.29
+Nodes (7): Motion Timing and Easing, Animation Performance, Loading Performance, Network Optimization, Optimization Strategy, React/Framework Optimization, Rendering Performance
+
+### Community 325 - "Community 325"
+Cohesion: 0.33
+Nodes (5): Before exploring, read these, Domain Docs, File structure, Flag ADR conflicts, Use the glossary's vocabulary
+
+### Community 326 - "Community 326"
+Cohesion: 0.33
+Nodes (5): 02 — Local toolchain setup + link, Context, Depends on, Tasks, Verify
+
+### Community 327 - "Community 327"
+Cohesion: 0.33
+Nodes (5): 06 — Migrate auth users (13), Context, Depends on, Tasks, Verify
+
+### Community 328 - "Community 328"
+Cohesion: 0.40
+Nodes (4): Conventions, Issue tracker: Local Markdown, When a skill says "fetch the relevant ticket", When a skill says "publish to the issue tracker"
+
+### Community 329 - "Community 329"
+Cohesion: 0.40
+Nodes (4): Ready → Rider Pool → Transit → Delivered, Technical notes, What changes, What's wrong today
+
+### Community 330 - "Community 330"
+Cohesion: 0.40
+Nodes (5): Approval loop, Mock fidelity inventory, Purpose, Step 3: Land the Visual Direction (Capability-Gated), What to generate
+
+### Community 331 - "Community 331"
+Cohesion: 0.50
+Nodes (3): Consequences, Considered Options, Self-owned Supabase is the system of record; Lovable Cloud is abandoned after cutover
+
+### Community 332 - "Community 332"
+Cohesion: 0.50
+Nodes (3): Heuristics Scoring Guide, Issue Severity (P0–P3), Score Summary
+
 ## Ambiguous Edges - Review These
 - `Delivery Guardian` → `DeliveryAce HTML entry`  [AMBIGUOUS]
   index.html · relation: conceptually_related_to
@@ -860,9 +1141,9 @@ Nodes (3): Table company_tariffs renamed from restaurant_tariffs, Table merchant
   capacitor.config.ts · relation: references
 
 ## Knowledge Gaps
-- **842 isolated node(s):** `DEPRECATED_NAMES`, `HARNESS_DIRS`, `SKILL_FINGERPRINTS`, `description`, `argumentHint` (+837 more)
+- **1367 isolated node(s):** `DEPRECATED_NAMES`, `HARNESS_DIRS`, `SKILL_FINGERPRINTS`, `description`, `argumentHint` (+1362 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **148 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **144 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
@@ -871,13 +1152,13 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **What is the exact relationship between `Capacitor Config delivery-ace-insight` and `Vite React shadcn TS project`?**
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **Why does `cn()` connect `Order Timeline Utilities` to `Rider Dispatch Payments`, `Merchant Operations Pages`, `Checkout Auth Payments`, `Order Capture Dialogs`, `Sidebar Sheet UI`, `App Shell Layout`, `Toast Notification System`, `Auth Roles Permissions`, `Accordion UI Primitives`, `Context Menu UI`, `Navlink Alert`, `Carousel Carouselapi`, `Getpayloadconfigfrompayload Chart`, `Form Formcontrol`, `Menubar Menubarcheckboxitem`, `Command Commanddialog`, `Sheet Sheetcontent`, `Breadcrumb Breadcrumbellipsis`, `Drawer Drawercontent`, `Navigation Menu`, `Toggle Group`, `Input Inputotp`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
-- **Why does `removeDeliveryFromQueue()` connect `Screenshot Helper Bundle` to `Order Capture Dialogs`?**
-  _High betweenness centrality (0.010) - this node is a cross-community bridge._
+- **Why does `cn()` connect `Order Timeline Utilities` to `Rider Dispatch Payments`, `Merchant Operations Pages`, `Checkout Auth Payments`, `Order Capture Dialogs`, `Sidebar Sheet UI`, `App Shell Layout`, `Storefront Cart Wholesale`, `Toast Notification System`, `Accordion UI Primitives`, `Context Menu UI`, `Navlink Alert`, `Community 292`, `Carousel Carouselapi`, `Getpayloadconfigfrompayload Chart`, `Form Formcontrol`, `Menubar Menubarcheckboxitem`, `Command Commanddialog`, `Sheet Sheetcontent`, `Breadcrumb Breadcrumbellipsis`, `Drawer Drawercontent`, `Navigation Menu`, `Toggle Group`, `Input Inputotp`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **What connects `DEPRECATED_NAMES`, `HARNESS_DIRS`, `SKILL_FINGERPRINTS` to the rest of the system?**
-  _858 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1382 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Rider Dispatch Payments` be split into smaller, more focused modules?**
-  _Cohesion score 0.09903846153846153 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10629296668429403 - nodes in this community are weakly interconnected._
 - **Should `Screenshot Helper Bundle` be split into smaller, more focused modules?**
   _Cohesion score 0.09322033898305085 - nodes in this community are weakly interconnected._
+- **Should `NPM Dependencies` be split into smaller, more focused modules?**
+  _Cohesion score 0.034482758620689655 - nodes in this community are weakly interconnected._
