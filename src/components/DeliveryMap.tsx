@@ -50,21 +50,36 @@ export default function DeliveryMap({
         ? [pickupLat, pickupLng]
         : [0, 0];
 
-    const map = L.map(mapRef.current).setView(center, 13);
+    const map = L.map(mapRef.current, {
+      scrollWheelZoom: false,
+      tapTolerance: 15,
+    }).setView(center, 13);
     mapInstance.current = map;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    const isDark =
+      (typeof document !== "undefined" && document.documentElement.classList.contains("dark")) ||
+      (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+    mapRef.current?.classList.toggle("dark-tiles", !!isDark);
+
+    L.tileLayer(
+      isDark
+        ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        attribution: isDark ? "© OpenStreetMap contributors © CARTO" : "© OpenStreetMap contributors",
+      }
+    ).addTo(map);
 
     const bounds = L.latLngBounds([]);
 
     if (pickupLat && pickupLng) {
       L.marker([pickupLat, pickupLng], {
+        keyboard: false,
+        title: "Pickup location",
         icon: L.divIcon({
           className: 'bg-transparent',
-          html: '<div style="background:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
-          iconSize: [14, 14], iconAnchor: [7, 7]
+          html: '<div role="img" aria-label="Pickup location" style="background:#22c55e;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+          iconSize: [16, 16], iconAnchor: [8, 8]
         })
       }).addTo(map).bindPopup('Pickup');
       bounds.extend([pickupLat, pickupLng]);
@@ -72,10 +87,12 @@ export default function DeliveryMap({
 
     if (dropoffLat && dropoffLng) {
       L.marker([dropoffLat, dropoffLng], {
+        keyboard: false,
+        title: "Drop-off location",
         icon: L.divIcon({
           className: 'bg-transparent',
-          html: '<div style="background:#ef4444;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
-          iconSize: [14, 14], iconAnchor: [7, 7]
+          html: '<div role="img" aria-label="Drop-off location" style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+          iconSize: [16, 16], iconAnchor: [8, 8]
         })
       }).addTo(map).bindPopup('Drop-off');
       bounds.extend([dropoffLat, dropoffLng]);
@@ -83,10 +100,12 @@ export default function DeliveryMap({
 
     if (currentLat && currentLng) {
       L.marker([currentLat, currentLng], {
+        keyboard: false,
+        title: "Rider current location",
         icon: L.divIcon({
           className: 'bg-transparent',
-          html: '<div style="background:#3b82f6;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
-          iconSize: [16, 16], iconAnchor: [8, 8]
+          html: '<div role="img" aria-label="Rider current location" style="background:#3b82f6;width:22px;height:22px;border-radius:50%;border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4), 0 0 0 4px rgba(59,130,246,0.25)"></div>',
+          iconSize: [22, 22], iconAnchor: [11, 11]
         })
       }).addTo(map).bindPopup('Current Location');
       bounds.extend([currentLat, currentLng]);
@@ -108,5 +127,12 @@ export default function DeliveryMap({
     };
   }, [waypoints, pickupLat, pickupLng, dropoffLat, dropoffLng, currentLat, currentLng]);
 
-  return <div ref={mapRef} className={className} />;
+  return (
+    <div
+      ref={mapRef}
+      className={className}
+      role="img"
+      aria-label="Delivery map showing pickup, drop-off, and rider current location. Use the order status list for equivalent text information."
+    />
+  );
 }

@@ -1,10 +1,10 @@
-import { Check, ChefHat, PackageCheck, Bike, Navigation, Home, Search } from "lucide-react";
+import { Check, ChefHat, PackageCheck, Bike, Navigation, Home, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
   { key: "preparing", label: "Preparing", icon: ChefHat, statuses: ["paid", "accepted", "preparing"] },
   { key: "ready", label: "Ready", icon: PackageCheck, statuses: ["ready"] },
-  { key: "dispatched", label: "Rider assigned", icon: Search, statuses: ["dispatched"] },
+  { key: "dispatched", label: "Rider assigned", icon: UserCheck, statuses: ["dispatched"] },
   { key: "picked_up", label: "Picked up", icon: Bike, statuses: ["picked_up"] },
   { key: "in_transit", label: "In transit", icon: Navigation, statuses: ["in_transit"] },
   { key: "delivered", label: "Delivered", icon: Home, statuses: ["delivered"] },
@@ -30,38 +30,42 @@ export default function OrderStatusTimeline({
   const currentIdx = ORDER[status] ?? -1;
 
   return (
-    <div className={cn("w-full", className)}>
-      <div className="flex items-center justify-between gap-1">
+    <ol aria-label="Delivery progress" className={cn("w-full flex items-start justify-between gap-1", className)}>
         {steps.map((step, i) => {
           const stepIdx = STEPS.findIndex(s => s.key === step.key);
           const reached = currentIdx >= stepIdx;
           const isCurrent = (step.statuses as readonly string[]).includes(status);
           const Icon = step.icon;
           return (
-            <div key={step.key} className="flex flex-1 items-center">
+            <li key={step.key} className="flex flex-1 items-start" aria-current={isCurrent ? "step" : undefined} aria-label={`${step.label}, step ${i + 1} of ${steps.length}${isCurrent ? ", current" : reached ? ", completed" : ""}`}>
               <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
                 <div
+                  aria-hidden="true"
                   className={cn(
-                    "h-8 w-8 rounded-full flex items-center justify-center border-2 transition-colors shrink-0",
+                    "h-8 w-8 rounded-full flex items-center justify-center border-2 transition-colors shrink-0 relative",
                     reached
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted text-muted-foreground border-border",
-                    isCurrent && "ring-2 ring-primary/30 ring-offset-2 ring-offset-background"
+                    isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                   )}
                 >
-                  {reached && !isCurrent ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {reached && !isCurrent && (
+                    <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center border-2 border-background">
+                      <Check className="h-2.5 w-2.5" aria-hidden="true" />
+                    </span>
+                  )}
                 </div>
-                <span className={cn("text-[10px] text-center leading-tight truncate w-full", reached ? "text-foreground font-medium" : "text-muted-foreground")}>
+                <span className={cn("text-xs text-center leading-relaxed break-words w-full", reached ? "text-foreground font-medium" : "text-muted-foreground")}>
                   {step.label}
                 </span>
               </div>
               {i < steps.length - 1 && (
-                <div className={cn("h-0.5 flex-1 -mt-5 mx-1", currentIdx > stepIdx ? "bg-primary" : "bg-border")} />
+                <div aria-hidden="true" className={cn("h-0.5 flex-1 mt-4 mx-1", currentIdx > stepIdx ? "bg-primary" : "bg-border")} />
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
-    </div>
+    </ol>
   );
 }

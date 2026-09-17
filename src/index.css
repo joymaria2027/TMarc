@@ -21,8 +21,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 25 20% 12%;
 
-    /* Primary — burnt orange (committed brand color) */
-    --primary: 18 78% 48%;
+    /* Primary — burnt orange (committed brand color, darkened for 4.5:1 with white text) */
+    --primary: 18 82% 42%;
     --primary-foreground: 30 25% 98%;
     --primary-glow: 18 90% 58%;
 
@@ -30,10 +30,10 @@
     --secondary-foreground: 25 25% 18%;
 
     --muted: 30 12% 94%;
-    --muted-foreground: 25 8% 42%;
+    --muted-foreground: 25 10% 32%;
 
-    /* Accent — fresh sage (for confirmation, success-adjacent UI) */
-    --accent: 150 38% 38%;
+    /* Accent — fresh sage (darkened for contrast with white text) */
+    --accent: 150 42% 32%;
     --accent-foreground: 30 25% 98%;
 
     --destructive: 358 70% 48%;
@@ -102,6 +102,13 @@
     --border: 25 14% 18%;
     --input: 25 14% 18%;
     --ring: 18 80% 56%;
+
+    --warning: 35 85% 55%;
+    --warning-foreground: 25 20% 10%;
+    --success: 150 35% 52%;
+    --success-foreground: 25 20% 10%;
+    --info: 200 65% 60%;
+    --info-foreground: 25 20% 10%;
   }
 }
 
@@ -134,9 +141,9 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Subtler, branded focus rings */
+  /* Subtler, branded focus rings — solid for contrast (no translucency) */
   *:focus-visible {
-    outline: 2px solid hsl(var(--ring) / 0.6);
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
     border-radius: calc(var(--radius) - 2px);
   }
@@ -176,4 +183,35 @@
 .leaflet-container {
   z-index: 1;
   font-family: var(--font-sans);
+}
+
+/* iOS safe-area utilities (env() is 0 without viewport-fit=cover) */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+
+/* iOS 44px map controls */
+.leaflet-bar a {
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 44px !important;
+}
+.leaflet-control-zoom {
+  margin-bottom: env(safe-area-inset-bottom) !important;
+}
+.leaflet-container.dark-tiles {
+  background: hsl(var(--card));
+}
+
+/* Increase Contrast: strengthen muted text and borders */
+@media (prefers-contrast: more) {
+  :root {
+    --muted-foreground: 25 12% 25%;
+    --border: 30 12% 75%;
+  }
+  .dark {
+    --muted-foreground: 30 10% 72%;
+    --border: 25 14% 32%;
+  }
 }

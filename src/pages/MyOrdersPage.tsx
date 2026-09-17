@@ -1,50 +1,111 @@
-import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import OrderStatusTimeline from "@/components/OrderStatusTimeline";
 import LiveDeliveryMap from "@/components/LiveDeliveryMap";
 import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import OrderChat from "@/components/OrderChat";
 import { Button } from "@/components/ui/button";
-import { MessageCircle } from "lucide-react";
+import { ChevronDown, ChevronLeft, MessageCircle, RefreshCw } from "lucide-react";
+import { haptics } from "@/lib/haptics";
 
-const statusVariant: Record<string, "default" | "secondary" | "destructive"> = {
-  pending_payment: "secondary", paid: "default", accepted: "default",
-  preparing: "default", ready: "default", dispatched: "default",
-  picked_up: "default", in_transit: "default",
-  delivered: "default", cancelled: "destructive", refunded: "destructive",
+const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  pending_payment: "secondary",
+  paid: "default",
+  accepted: "default",
+  preparing: "secondary",
+  ready: "default",
+  dispatched: "default",
+  picked_up: "default",
+  in_transit: "default",
+  delivered: "outline",
+  cancelled: "destructive",
+  refunded: "destructive",
 };
+
+function humanizeStatus(status: string): string {
+  return status
+    .split("_")
+    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+function formatCurrency(n: number): string {
+  return `D ${Number(n).toFixed(2)}`;
+}
 
 export default function MyOrdersPage() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const prevStatuses = useRef<Record<string, string>>({});
+  const orderIdsRef = useRef<string[]>([]);
+  const lastFetchRef = useRef(0);
 
-  const fetchOrders = async (cid: string) => {
-    const { data } = await supabase
-      .from("orders")
-      .select("*, merchants(name), order_items(*)")
-      .eq("customer_id", cid)
-      .order("created_at", { ascending: false });
-    setOrders(data || []);
-    const ids = (data || []).map((o: any) => o.id);
-    if (ids.length && user) {
-      const { data: msgs } = await supabase
-        .from("order_messages")
-        .select("order_id,sender_user_id,read_at")
-        .in("order_id", ids)
-        .is("read_at", null);
-      const counts: Record<string, number> = {};
-      (msgs || []).forEach((m: any) => {
-        if (m.sender_user_id !== user.id) counts[m.order_id] = (counts[m.order_id] || 0) + 1;
-      });
-      setUnread(counts);
-    }
-  };
+  const fetchOrders = useCallback(
+    async (cid: string, opts?: { manual?: boolean }) => {
+      // Throttle realtime refetch storms (order_messages * fires often)
+      const now = Date.now();
+      if (!opts?.manual && now - lastFetchRef.current < 1000) return;
+      lastFetchRef.current = now;
+      if (opts?.manual) setRefreshing(true);
+      try {
+        const { data } = await supabase
+          .from("orders")
+          .select("*, merchants(name), order_items(*)")
+          .eq("customer_id", cid)
+          .order("created_at", { ascending: false });
+        const next = data || [];
+        // Announce status changes for VoiceOver
+        next.forEach((o: any) => {
+          const prev = prevStatuses.current[o.id];
+          if (prev && prev !== o.status) {
+            setAnnouncement(`Order ${o.order_reference} is now ${humanizeStatus(o.status)}`);
+          }
+          prevStatuses.current[o.id] = o.status;
+        });
+        setOrders(next);
+        const ids = next.map((o: any) => o.id);
+        orderIdsRef.current = ids;
+        if (ids.length && user) {
+          const { data: msgs } = await supabase
+            .from("order_messages")
+            .select("order_id,sender_user_id,read_at")
+            .in("order_id", ids)
+            .is("read_at", null);
+          const counts: Record<string, number> = {};
+          (msgs || []).forEach((m: any) => {
+            if (m.sender_user_id !== user.id) counts[m.order_id] = (counts[m.order_id] || 0) + 1;
+          });
+          setUnread((prev) => {
+            // Announce + haptic only on growth (new inbound message)
+            Object.entries(counts).forEach(([oid, n]) => {
+              if ((prev[oid] || 0) < n) {
+                const o = next.find((x: any) => x.id === oid);
+                setAnnouncement(
+                  `New message from merchant${o ? ` for order ${o.order_reference}` : ""}`
+                );
+                haptics.success();
+              }
+            });
+            return counts;
+          });
+        } else {
+          setUnread({});
+        }
+      } finally {
+        if (opts?.manual) setRefreshing(false);
+      }
+    },
+    [user]
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -52,7 +113,7 @@ export default function MyOrdersPage() {
     (async () => {
       const { data: customer } = await supabase.from("customers").select("id").eq("user_id", user.id).maybeSingle();
       if (!customer) return setOrders([]);
-      await fetchOrders(customer.id);
+      await fetchOrders(customer.id, { manual: true });
 
       channel = supabase
         .channel(`my-orders-${customer.id}`)
@@ -60,7 +121,17 @@ export default function MyOrdersPage() {
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "orders", filter: `customer_id=eq.${customer.id}` },
           (payload: any) => {
-            setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o));
+            setOrders((prev) => {
+              const next = prev.map((o) => (o.id === payload.new.id ? { ...o, ...payload.new } : o));
+              const changed = prev.find((o) => o.id === payload.new.id);
+              if (changed && changed.status !== payload.new.status) {
+                setAnnouncement(
+                  `Order ${payload.new.order_reference ?? "updated"} is now ${humanizeStatus(payload.new.status)}`
+                );
+                haptics.selectionChanged();
+              }
+              return next;
+            });
           }
         )
         .on(
@@ -68,34 +139,96 @@ export default function MyOrdersPage() {
           { event: "INSERT", schema: "public", table: "orders", filter: `customer_id=eq.${customer.id}` },
           () => fetchOrders(customer.id)
         )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "order_messages" },
-          () => fetchOrders(customer.id)
-        )
+        .on("postgres_changes", { event: "*", schema: "public", table: "order_messages" }, (payload: any) => {
+          const oid = (payload.new as any)?.order_id ?? (payload.old as any)?.order_id;
+          // Only refetch when the message belongs to one of my orders (avoid over-fetch)
+          if (!oid || orderIdsRef.current.includes(oid)) {
+            fetchOrders(customer.id);
+          }
+        })
         .subscribe();
     })();
 
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, [user]);
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [user, fetchOrders]);
 
-  if (loading) return <StorefrontLayout><p>Loading…</p></StorefrontLayout>;
+  const handleManualRefresh = async () => {
+    if (!user) return;
+    await haptics.impact("LIGHT");
+    const { data: customer } = await supabase.from("customers").select("id").eq("user_id", user.id).maybeSingle();
+    if (customer) {
+      await fetchOrders(customer.id, { manual: true });
+      setAnnouncement("Orders refreshed");
+    }
+  };
+
+  if (loading)
+    return (
+      <StorefrontLayout>
+        <p role="status" aria-live="polite">
+          Loading your orders…
+        </p>
+      </StorefrontLayout>
+    );
   if (!user) return <Navigate to="/auth?as=customer&next=/account/orders" replace />;
 
   return (
     <StorefrontLayout>
-      <div className="max-w-3xl mx-auto space-y-4">
-        <h1 className="font-display text-3xl">My orders</h1>
+      {/* Screen-reader announcements for realtime updates */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
+      </div>
+      <div className="max-w-xl mx-auto space-y-4" aria-busy={refreshing}>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              haptics.selectionChanged();
+              if (window.history.length > 1) navigate(-1);
+              else navigate("/shop");
+            }}
+            aria-label="Back to shop"
+            className="-ml-2"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </Button>
+          <h1 className="font-sans text-[34px] font-bold leading-tight tracking-tight flex-1">My orders</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+            aria-label="Refresh orders"
+          >
+            <RefreshCw className={`h-5 w-5 mr-1 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        </div>
+        {orders.length > 0 && (
+          <p className="text-base leading-relaxed text-muted-foreground" role="status">
+            {orders.length} {orders.length === 1 ? "order" : "orders"}
+          </p>
+        )}
         {orders.length === 0 ? (
-          <p className="text-muted-foreground">No orders yet.</p>
-        ) : orders.map(o => (
-          <OrderCard
-            key={o.id}
-            o={o}
-            unread={unread[o.id] || 0}
-            onChatOpened={() => setUnread(u => ({ ...u, [o.id]: 0 }))}
-          />
-        ))}
+          <div className="space-y-2">
+            <p role="status" className="text-base leading-relaxed text-muted-foreground">No orders yet.</p>
+            <Button asChild>
+              <Link to="/shop">Browse shop</Link>
+            </Button>
+          </div>
+        ) : (
+          orders.map((o) => (
+            <OrderCard
+              key={o.id}
+              o={o}
+              unread={unread[o.id] || 0}
+              onChatOpened={() => setUnread((u) => ({ ...u, [o.id]: 0 }))}
+            />
+          ))
+        )}
       </div>
     </StorefrontLayout>
   );
@@ -103,55 +236,98 @@ export default function MyOrdersPage() {
 
 function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChatOpened: () => void }) {
   const [chatOpen, setChatOpen] = useState(false);
-  useEffect(() => {
-    if (unread > 0 && !chatOpen) setChatOpen(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unread]);
-  const toggleChat = () => {
-    setChatOpen(v => {
-      const next = !v;
-      if (next) onChatOpened();
-      return next;
-    });
+  const chatRegionId = `chat-${o.id}`;
+  const unreadId = `unread-${o.id}`;
+
+  const toggleChat = async () => {
+    const next = !chatOpen;
+    if (next) {
+      await haptics.impact("LIGHT");
+      onChatOpened();
+    } else {
+      await haptics.selectionChanged();
+    }
+    setChatOpen(next);
   };
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="text-base">{o.order_reference}</CardTitle>
-          <p className="text-xs text-muted-foreground">{o.merchants?.name} · {new Date(o.created_at).toLocaleString()}</p>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-sans text-[17px] font-semibold leading-relaxed">
+            <span className="sr-only">Order </span>
+            {o.order_reference}
+          </h2>
+          <p className="text-[15px] leading-relaxed text-muted-foreground break-words">
+            {o.merchants?.name} · <time dateTime={o.created_at}>{new Date(o.created_at).toLocaleString()}</time>
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <PaymentStatusBadge status={o.payment_status} />
-          <Badge variant={statusVariant[o.status] || "default"}>{o.status.replace(/_/g, " ")}</Badge>
+          <Badge role="status" variant={statusVariant[o.status] || "default"}>
+            {humanizeStatus(o.status)}
+          </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         {!["pending_payment", "cancelled", "refunded"].includes(o.status) && (
           <OrderStatusTimeline status={o.status} fulfillmentType={o.fulfillment_type} className="py-2" />
         )}
         {o.fulfillment_type === "delivery" && ["picked_up", "in_transit"].includes(o.status) && o.delivery_id && (
           <LiveDeliveryMap orderId={o.id} deliveryId={o.delivery_id} />
         )}
-        {o.order_items?.map((it: any) => (
-          <div key={it.id} className="flex justify-between text-sm">
-            <span>{it.quantity}× {it.name_snapshot}</span>
-            <span>D {Number(it.line_total).toFixed(2)}</span>
-          </div>
-        ))}
-        <div className="border-t pt-2 flex justify-between font-semibold">
+        <ul className="space-y-1">
+          {o.order_items?.map((it: any) => (
+            <li key={it.id} className="flex justify-between items-center gap-3 text-base leading-relaxed min-h-[44px] py-1">
+              <span className="flex-1 min-w-0 break-words">
+                {it.quantity}× {it.name_snapshot}
+              </span>
+              <span className="shrink-0 tabular-nums">{formatCurrency(it.line_total)}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="border-t pt-2 flex justify-between gap-3 font-semibold text-base leading-relaxed">
           <span>{o.fulfillment_type === "delivery" ? "Delivery" : "Pickup"} · Total</span>
-          <span>D {Number(o.total).toFixed(2)}</span>
+          <span className="tabular-nums">
+            {formatCurrency(o.total)}
+            <span className="sr-only"> total</span>
+          </span>
         </div>
         <div>
-          <Button variant="outline" size="sm" onClick={toggleChat} className="relative">
-            <MessageCircle className="h-4 w-4 mr-1" /> {chatOpen ? "Hide messages" : "Message merchant"}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleChat}
+            aria-expanded={chatOpen}
+            aria-controls={chatRegionId}
+            aria-describedby={unread > 0 ? unreadId : undefined}
+            aria-label="Message merchant"
+            className="relative"
+          >
+            <MessageCircle className="h-5 w-5 mr-1" aria-hidden="true" />
+            Message merchant
+            <ChevronDown
+              className={`h-4 w-4 ml-1 transition-transform ${chatOpen ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
             {unread > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5">{unread}</span>
+              <span
+                id={unreadId}
+                className="ml-2 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 min-w-5 min-h-5"
+              >
+                <span aria-hidden="true">{unread > 99 ? "99+" : unread}</span>
+                <span className="sr-only">
+                  {unread} unread message{unread === 1 ? "" : "s"}
+                </span>
+              </span>
             )}
           </Button>
         </div>
-        {chatOpen && <OrderChat orderId={o.id} senderRole="customer" />}
+        {chatOpen && (
+          <section id={chatRegionId} aria-label={`Messages for order ${o.order_reference}`}>
+            <OrderChat orderId={o.id} senderRole="customer" />
+          </section>
+        )}
       </CardContent>
     </Card>
   );

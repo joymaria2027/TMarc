@@ -64,10 +64,11 @@ export default function LiveDeliveryMap({ orderId, deliveryId, className }: Prop
         className="h-56 w-full rounded-lg"
       />
       {loc.recorded_at && (
-        <p className="text-xs text-muted-foreground mt-1">
+        <p role="status" aria-live="polite" className="text-sm text-muted-foreground mt-1">
           Rider location updated {new Date(loc.recorded_at).toLocaleTimeString()}
         </p>
       )}
+      <p className="text-sm text-muted-foreground">Map shows the rider&apos;s location shared by the merchant, not your device location.</p>
     </div>
   );
 }
