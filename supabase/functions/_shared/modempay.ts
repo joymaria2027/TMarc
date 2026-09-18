@@ -48,40 +48,8 @@ async function isValidSignature(secret: string, rawBody: string, signatureHeader
     }
   }
 
-  // Debug (first 12 chars only; safe to log)
-  console.log("modempay sig mismatch", {
-    got: candidates.map((c) => c.slice(0, 12)),
-    expected_sha512_first12: expected[0]?.slice(0, 12),
-    secret_len: cleanSecret.length,
-    body_len: rawBody.length,
-  });
-  return false;
-}
-
-// Fallback: when the HMAC signature can't be verified (e.g. rotated/mismatched
-// webhook secret), confirm the payment straight from the ModemPay API instead of
-// rejecting a genuine payment.
-async function verifyWithModemPayApi(reference: string | null, expectedOrderId: string | null): Promise<boolean> {
-  const apiKey = Deno.env.get("MODEMPAY_API_KEY");
-  if (!apiKey || !reference) return false;
-  for (const url of [
-    `https://api.modempay.com/v1/payments/${reference}`,
-    `https://api.modempay.com/v1/charges/${reference}`,
-  ]) {
-    try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
-      if (!res.ok) continue;
-      const body = await res.json();
-      const p = body?.data ?? body?.payload ?? body;
-      const status = String(p?.status ?? "").toLowerCase();
-      const apiOrderId = p?.metadata?.order_id ?? null;
-      if (!/^(completed|succeeded|paid)$/.test(status)) continue;
-      if (expectedOrderId && apiOrderId && apiOrderId !== expectedOrderId) continue;
-      return true;
-    } catch (e) {
-      console.error("modempay api verify failed", String((e as Error).message ?? e));
-    }
-  }
+  // No signature details are logged: they would aid offline brute-forcing of
+  // the webhook secret. Triage happens out-of-band via modempay_webhook_events.
   return false;
 }
 
@@ -157,16 +125,11 @@ export async function processWebhookEvent(
       .eq("id", logRow.id);
   };
 
-  let apiVerified = false;
   if (signatureValid === false) {
-    apiVerified = await verifyWithModemPayApi(reference, orderId);
-    if (!apiVerified) {
-      await setStatus("invalid_signature", "HMAC signature mismatch and ModemPay API verification failed");
-      return { status: 401, body: { error: "invalid signature" }, logId: logRow.id };
-    }
-    await admin.from("modempay_webhook_events")
-      .update({ processing_error: "Signature mismatch; payment confirmed via ModemPay API" })
-      .eq("id", logRow.id);
+    // Fail closed: an invalid HMAC is rejected outright. Triage happens
+    // out-of-band via the events table (or an admin replay), never inline.
+    await setStatus("invalid_signature", "HMAC signature mismatch");
+    return { status: 401, body: { error: "invalid signature" }, logId: logRow.id };
   }
 
 
@@ -200,13 +163,38 @@ export async function processWebhookEvent(
   const isFail = /(cancelled|expired|failed)$/.test(eventType);
 
   try {
-    const { data: order } = await admin.from("orders").select("id, payment_status, status").eq("id", resolvedOrderId).maybeSingle();
+    const { data: order } = await admin.from("orders").select("id, payment_status, status, total").eq("id", resolvedOrderId).maybeSingle();
     if (!order) {
       await setStatus("ignored", "order not found");
       return { status: 200, body: { ok: true, ignored: "order_not_found" }, logId: logRow.id };
     }
 
     if (isSuccess) {
+      // Record the server-verified payment before any fulfillment. submit_order
+      // refuses to submit orders without a covering verification row (fail-closed).
+      // ModemPay payload shapes vary: only enforce an amount comparison when the
+      // event actually reports one; a reported shortfall blocks the order.
+      const reportedAmount = Number(inner?.amount ?? payload?.amount ?? NaN);
+      const orderTotal = Number(order.total);
+      const hasReportedAmount = Number.isFinite(reportedAmount);
+      const covers = !hasReportedAmount
+        || (Number.isFinite(orderTotal) && reportedAmount + 0.009 >= orderTotal);
+      const { error: verErr } = await admin
+        .from("order_payment_verifications")
+        .upsert({
+          order_id: resolvedOrderId,
+          provider: "modempay",
+          payment_reference: reference,
+          verified_amount: hasReportedAmount ? reportedAmount : 0,
+          amount_covers_order: covers,
+          source_event_id: String(eventId),
+        }, { onConflict: "order_id,provider" });
+      if (verErr) throw verErr;
+      if (!covers) {
+        await setStatus("ignored", `reported amount ${reportedAmount} does not cover order total ${orderTotal}`);
+        return { status: 200, body: { ok: true, ignored: "amount_mismatch" }, logId: logRow.id };
+      }
+
       if (order.payment_status === "paid") {
         // Paid but never submitted (e.g. earlier failure) — finish the job.
         if (order.status === "pending_payment") {

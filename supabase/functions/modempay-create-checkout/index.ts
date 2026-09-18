@@ -35,14 +35,9 @@ Deno.serve(async (req) => {
 
     const apiKey = Deno.env.get("MODEMPAY_API_KEY");
     if (!apiKey) {
-      // fallback: mark paid immediately for dev/testing
-      await admin.from("orders").update({
-        payment_status: "paid",
-        payment_provider: "modempay-stub",
-        payment_reference: `STUB-${Date.now()}`,
-      }).eq("id", order_id);
-      await admin.rpc("submit_order", { _order_id: order_id });
-      return json({ ok: true, stub: true, redirect_url: return_url ?? "/account/orders" });
+      // Fail closed: never simulate payments in a deployed function.
+      console.error("MODEMPAY_API_KEY is not configured");
+      return json({ error: "payment unavailable" }, 500);
     }
 
     // Call ModemPay Payment Intent API
