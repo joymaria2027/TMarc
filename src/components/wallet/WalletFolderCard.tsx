@@ -60,6 +60,109 @@ function matchesEntry(
   return ws.some(w => w.merchant_id && (partyNames[w.merchant_id] || '').toLowerCase().includes(needle));
 }
 
+function sumsFor(walletId: string, transactions: TransactionRow[]) {
+  let income = 0;
+  let withdrawn = 0;
+  for (const t of transactions) {
+    if (t.wallet_id !== walletId) continue;
+    if (t.type === 'credit') income += Number(t.amount);
+    else if (t.type === 'debit') withdrawn += Number(t.amount);
+  }
+  return { income, withdrawn };
+}
+
+interface WalletBalancesTableProps {
+  wallets: WalletRow[];
+  transactions: TransactionRow[];
+  getPartyLabel: (w: WalletRow) => string;
+  canOwn: (w: WalletRow) => boolean;
+  onWithdraw: (w: WalletRow) => void;
+  caption: string;
+  ariaLabel: string;
+}
+
+export function WalletBalancesTable({
+  wallets,
+  transactions,
+  getPartyLabel,
+  canOwn,
+  onWithdraw,
+  caption,
+  ariaLabel,
+}: WalletBalancesTableProps) {
+  const totalBalance = wallets.reduce((s, w) => s + Number(w.balance), 0);
+  const totals = wallets.reduce(
+    (acc, w) => {
+      const { income, withdrawn } = sumsFor(w.id, transactions);
+      acc.income += income;
+      acc.withdrawn += withdrawn;
+      return acc;
+    },
+    { income: 0, withdrawn: 0 },
+  );
+
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <Table aria-label={ariaLabel}>
+        <caption className="sr-only">{caption}</caption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Wallet</TableHead>
+            <TableHead>Party</TableHead>
+            <TableHead className="text-right">Balance</TableHead>
+            <TableHead className="text-right">Income</TableHead>
+            <TableHead className="text-right">Withdrawn</TableHead>
+            <TableHead>Updated</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {wallets.map(w => {
+            const { income, withdrawn } = sumsFor(w.id, transactions);
+            const label = getPartyLabel(w);
+            return (
+              <TableRow key={w.id}>
+                <TableCell className="font-medium">{label}</TableCell>
+                <TableCell className="capitalize text-muted-foreground">{w.party_type}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums text-primary">D {Number(w.balance).toFixed(2)}</TableCell>
+                <TableCell className="text-right tabular-nums text-success">D {income.toFixed(2)}</TableCell>
+                <TableCell className="text-right tabular-nums text-destructive">D {withdrawn.toFixed(2)}</TableCell>
+                <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                  <time dateTime={w.updated_at}>{new Date(w.updated_at).toLocaleDateString()}</time>
+                </TableCell>
+                <TableCell className="text-right">
+                  {canOwn(w) && Number(w.balance) > 0 ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="min-h-[44px] gap-1"
+                      onClick={() => onWithdraw(w)}
+                      aria-label={`Request withdrawal from ${label}`}
+                    >
+                      <ArrowUpFromLine className="h-3.5 w-3.5" aria-hidden="true" /> Withdraw
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={2} className="font-semibold">Totals</TableCell>
+            <TableCell className="text-right tabular-nums text-primary font-semibold">D {totalBalance.toFixed(2)}</TableCell>
+            <TableCell className="text-right tabular-nums text-success font-semibold">D {totals.income.toFixed(2)}</TableCell>
+            <TableCell className="text-right tabular-nums text-destructive font-semibold">D {totals.withdrawn.toFixed(2)}</TableCell>
+            <TableCell colSpan={2} />
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </div>
+  );
+}
+
 
 interface WalletBalanceCardProps {
   walletKey: string;
@@ -80,9 +183,6 @@ export function WalletBalanceCard({
   canOwn,
   onWithdraw,
 }: WalletBalanceCardProps) {
-  const totalBalance = ws.reduce((s, w) => s + Number(w.balance), 0);
-  const income = ws.reduce((s, w) => s + transactions.filter(t => t.wallet_id === w.id && t.type === 'credit').reduce((a, t) => a + Number(t.amount), 0), 0);
-  const withdrawn = ws.reduce((s, w) => s + transactions.filter(t => t.wallet_id === w.id && t.type === 'debit').reduce((a, t) => a + Number(t.amount), 0), 0);
   const head = ws[0];
   const headerLabel = head.party_type === 'rider' && head.party_id
     ? `Rider: ${partyNames[head.party_id] || 'Rider'}`
@@ -95,47 +195,19 @@ export function WalletBalanceCard({
         <CardDescription className="capitalize">{head.party_type}</CardDescription>
         <CardTitle className="text-lg">{headerLabel}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="text-4xl tracking-tight tabular-nums text-primary">D {totalBalance.toFixed(2)}</div>
-        <p className="text-xs text-muted-foreground mt-1">
+      <CardContent className="space-y-2">
+        <p className="text-xs text-muted-foreground">
           {showBreakdown ? `Across ${ws.length} merchants` : `Updated ${new Date(head.updated_at).toLocaleDateString()}`}
         </p>
-
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="bg-muted rounded p-1.5">
-            <p className="text-muted-foreground">Total Income</p>
-            <p className="font-semibold tabular-nums text-success">D {income.toFixed(2)}</p>
-          </div>
-          <div className="bg-muted rounded p-1.5">
-            <p className="text-muted-foreground">Withdrawn</p>
-            <p className="font-semibold tabular-nums text-destructive">D {withdrawn.toFixed(2)}</p>
-          </div>
-        </div>
-
-        {showBreakdown && ws.some(w => w.merchant_id && partyNames[w.merchant_id]) ? (
-          <div className="mt-3 space-y-1.5 border-t pt-2">
-            <p className="text-xs font-semibold text-muted-foreground">Per merchant</p>
-            {ws.filter(w => w.merchant_id && partyNames[w.merchant_id]).map(w => (
-              <div key={w.id} className="flex items-center justify-between text-xs gap-2">
-                <span className="truncate">{partyNames[w.merchant_id!]}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-medium tabular-nums">D {Number(w.balance).toFixed(2)}</span>
-                  {canOwn(w) && Number(w.balance) > 0 && (
-                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs gap-1" onClick={() => onWithdraw(w)}>
-                      <ArrowUpFromLine className="h-3 w-3" aria-hidden="true" /> Withdraw
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          canOwn(head) && Number(head.balance) > 0 && (
-            <Button size="sm" className="mt-3 gap-1" onClick={() => onWithdraw(head)}>
-              <ArrowUpFromLine className="h-3.5 w-3.5" aria-hidden="true" /> Request Withdrawal
-            </Button>
-          )
-        )}
+        <WalletBalancesTable
+          wallets={ws}
+          transactions={transactions}
+          getPartyLabel={getPartyLabel}
+          canOwn={canOwn}
+          onWithdraw={onWithdraw}
+          caption={`Wallets for ${headerLabel}`}
+          ariaLabel={`Wallets for ${headerLabel}`}
+        />
       </CardContent>
     </Card>
   );
@@ -155,19 +227,7 @@ export default function WalletFolderCard({
   const totalIncome = b.entries.reduce((s, [, ws]) => s + ws.reduce((a, w) => a + transactions.filter(t => t.wallet_id === w.id && t.type === 'credit').reduce((x, t) => x + Number(t.amount), 0), 0), 0);
   const totalWithdrawn = b.entries.reduce((s, [, ws]) => s + ws.reduce((a, w) => a + transactions.filter(t => t.wallet_id === w.id && t.type === 'debit').reduce((x, t) => x + Number(t.amount), 0), 0), 0);
   const filtered = b.entries.filter(([, ws]) => matchesEntry(ws, q, partyNames, getPartyLabel));
-
-  const renderCard = (key: string, ws: WalletRow[]) => (
-    <WalletBalanceCard
-      key={key}
-      walletKey={key}
-      wallets={ws}
-      transactions={transactions}
-      partyNames={partyNames}
-      getPartyLabel={getPartyLabel}
-      canOwn={canOwn}
-      onWithdraw={onWithdraw}
-    />
-  );
+  const flatWallets = filtered.flatMap(([, ws]) => ws);
 
   type BreakdownRow = { date: string; walletId: string; walletLabel: string; income: number; withdrawals: number };
   const rowsMap = new Map<string, BreakdownRow>();
@@ -231,9 +291,15 @@ export default function WalletFolderCard({
               <p className="text-sm text-muted-foreground py-4">No wallets match &quot;{q}&quot;.</p>
             ) : (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {filtered.map(([k, ws]) => renderCard(k, ws))}
-                </div>
+                <WalletBalancesTable
+                  wallets={flatWallets}
+                  transactions={transactions}
+                  getPartyLabel={getPartyLabel}
+                  canOwn={canOwn}
+                  onWithdraw={onWithdraw}
+                  caption={`Wallets in the ${b.label} folder`}
+                  ariaLabel={`${b.label} wallets`}
+                />
 
                 <Collapsible className="mt-4">
                   <CollapsibleTrigger className="w-full group flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted/60">

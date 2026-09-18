@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Fuel, Plus, Pencil, CheckCircle2, XCircle, Clock, Trash2, Star } from 'lucide-react';
 import { format } from 'date-fns';
+import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface ExpenseType {
   id: string;
@@ -25,6 +26,136 @@ interface ExpenseType {
   is_active: boolean;
   amortize_over: number | null;
   is_maintenance: boolean;
+}
+
+interface FuelVariant {
+  id: string;
+  expense_type_id: string;
+  fuel_type: string;
+  price_per_litre: number | null;
+  cost_per_mile: number;
+  is_active: boolean;
+  is_default: boolean;
+}
+
+interface TypeRowProps {
+  type: ExpenseType;
+  variants: FuelVariant[];
+  isAdmin: boolean;
+  isAccountant: boolean;
+  onEdit: (t: ExpenseType) => void;
+  onDelete: (t: ExpenseType) => void;
+  onVariantEdit: (v: FuelVariant) => void;
+  onVariantDelete: (v: FuelVariant) => void;
+  onVariantCreate: (t: ExpenseType) => void;
+}
+
+function TypeRow({
+  type,
+  variants,
+  isAdmin,
+  isAccountant,
+  onEdit,
+  onDelete,
+  onVariantEdit,
+  onVariantDelete,
+  onVariantCreate,
+}: TypeRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const hasVariants = variants.length > 0;
+
+  return (
+    <>
+      <TableRow key={type.id}>
+        <TableCell className="font-medium flex items-center gap-2">
+          {type.is_fuel && <Fuel className="h-4 w-4 text-primary" aria-hidden="true" />}
+          {type.name}
+        </TableCell>
+        <TableCell>
+          <span className="flex items-center gap-1">
+            {type.is_fuel ? (
+              <Badge variant="outline" className="gap-1"><Fuel className="h-3 w-3" aria-hidden="true" />Fuel</Badge>
+            ) : type.is_maintenance ? (
+              <Badge variant="outline" className="text-xs">Maintenance</Badge>
+            ) : (
+              <Badge variant="secondary">General</Badge>
+            )}
+          </span>
+        </TableCell>
+        <TableCell>{type.applies_to}</TableCell>
+        <TableCell className="text-center">
+          {type.is_fuel ? '—' : type.amortize_over ? (
+            <Badge variant="outline" className="text-xs">over {type.amortize_over} deliveries</Badge>
+          ) : (
+            <Badge variant="secondary">immediate</Badge>
+          )}
+        </TableCell>
+        <TableCell>
+          {type.is_active ? (
+            <Badge className="bg-success/10 text-success border-success/30 gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Active</Badge>
+          ) : (
+            <Badge variant="secondary">Inactive</Badge>
+          )}
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="flex justify-end gap-1">
+            {hasVariants && (
+              <Button size="sm" variant="ghost" className="min-h-[44px] gap-1" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} variants for ${type.name}`}>
+                <Star className="h-3.5 w-3.5" aria-hidden="true" /> {expanded ? 'Hide' : 'Show'} variants
+              </Button>
+            )}
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => onEdit(type)} className="min-h-[44px] gap-1"><Pencil className="h-3 w-3 mr-1" aria-hidden="true" />Edit</Button>
+            )}
+            {isAdmin && (
+              <Button size="sm" variant="outline" className="text-destructive min-h-[44px] gap-1" onClick={() => onDelete(type)}><Trash2 className="h-3 w-3 mr-1" aria-hidden="true" />Delete</Button>
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+      {type.is_fuel && hasVariants && expanded && (
+        <TableRow>
+          <TableCell colSpan={6} className="py-0">
+            <div className="space-y-1 px-4 py-2 border-t bg-muted/20">
+              {variants.map(v => (
+                <div key={v.id} className="flex items-center justify-between gap-3 p-2 rounded border bg-background">
+                  <div className="grid grid-cols-5 gap-3 flex-1 text-sm">
+                    <div className="flex items-center gap-1 font-medium">
+                      {v.is_default && <Star className="h-3 w-3 fill-primary text-primary" aria-hidden="true" />}
+                      {v.fuel_type}
+                      {!v.is_active && <Badge variant="secondary" className="text-[11px] px-1">off</Badge>}
+                    </div>
+                    <div className="text-right tabular-nums"><span className="text-xs text-muted-foreground">D</span>{v.price_per_litre ?? '—'}<span className="text-xs text-muted-foreground">/L</span></div>
+                    <div className="text-right tabular-nums"><span className="text-xs text-muted-foreground">D</span>{v.cost_per_mile}<span className="text-xs text-muted-foreground">/mi</span></div>
+                    <div className="text-center text-xs text-muted-foreground">{v.is_default ? 'default' : '—'}</div>
+                    <div className="text-right">
+                      {(isAdmin || isAccountant) && (
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 min-h-[44px]" onClick={() => onVariantEdit(v)} aria-label={`Edit ${v.fuel_type} variant`}>
+                            <Pencil className="h-3 w-3" aria-hidden="true" />
+                          </Button>
+                          {isAdmin && (
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive min-h-[44px]" onClick={() => onVariantDelete(v)} aria-label={`Delete ${v.fuel_type} variant`}>
+                              <Trash2 className="h-3 w-3" aria-hidden="true" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {isAdmin && (
+                <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => onVariantCreate(type)}>
+                  <Plus className="h-3 w-3 mr-1" aria-hidden="true" />Add variant
+                </Button>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
 }
 
 interface FuelVariant {
@@ -81,9 +212,9 @@ export default function ExpenseTypesPage() {
       supabase.from('fuel_variants').select('*').order('is_default', { ascending: false }).order('fuel_type'),
       supabase.from('fuel_price_changes').select('*').order('created_at', { ascending: false }),
     ]);
-    setTypes((tRes.data as any[]) || []);
-    setVariants((vRes.data as any[]) || []);
-    setChanges((cRes.data as any[]) || []);
+    setTypes((tRes.data as ExpenseType[]) || []);
+    setVariants((vRes.data as FuelVariant[]) || []);
+    setChanges((cRes.data as FuelChange[]) || []);
     setLoading(false);
   };
 
@@ -101,7 +232,7 @@ export default function ExpenseTypesPage() {
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error('Name required'); return; }
-    const payload: any = {
+    const payload: Partial<ExpenseType> = {
       name: form.name.trim(), applies_to: form.applies_to,
       is_fuel: form.is_fuel, is_active: form.is_active,
       is_maintenance: form.is_maintenance,
@@ -142,7 +273,7 @@ export default function ExpenseTypesPage() {
 
   const submitVariant = async () => {
     if (!vForm.fuel_type.trim()) { toast.error('Fuel type name required'); return; }
-    const payload: any = {
+    const payload: Partial<FuelVariant> = {
       fuel_type: vForm.fuel_type.trim(),
       price_per_litre: vForm.price_per_litre ? parseFloat(vForm.price_per_litre) : null,
       cost_per_mile: parseFloat(vForm.cost_per_mile || '0'),
@@ -284,109 +415,109 @@ export default function ExpenseTypesPage() {
         </TabsList>
 
         <TabsContent value="types" className="space-y-3 mt-4">
-          {types.map(t => (
-            <Card key={t.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      {t.is_fuel && <Fuel className="h-4 w-4 text-primary" />}{t.name}
-                      {!t.is_active && <Badge variant="secondary">inactive</Badge>}
-                      {t.is_maintenance && <Badge variant="outline" className="text-xs">maintenance</Badge>}
-                      {!t.is_fuel && t.amortize_over && <Badge variant="outline" className="text-xs">amortized over {t.amortize_over}</Badge>}
-                    </CardTitle>
-                    <CardDescription>Applies to: {t.applies_to}</CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    {isAdmin && (
-                      <Button size="sm" variant="outline" onClick={() => openEdit(t)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
-                    )}
-                    {isAdmin && (
-                      <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeletingType(t)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              {t.is_fuel && (
-                <CardContent className="pt-0 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fuel variants</p>
-                    {isAdmin && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openVariantCreate(t)}>
-                        <Plus className="h-3 w-3 mr-1" />Add variant
-                      </Button>
-                    )}
-                  </div>
-                  {variantsByType(t.id).length === 0 && (
-                    <p className="text-xs text-muted-foreground italic">No variants yet. Add Petrol, Diesel, etc.</p>
-                  )}
-                  {variantsByType(t.id).map(v => (
-                    <div key={v.id} className="flex items-center justify-between gap-3 p-2 rounded border bg-muted/30">
-                      <div className="grid grid-cols-4 gap-3 flex-1 text-sm">
-                        <div className="flex items-center gap-1 font-medium">
-                          {v.is_default && <Star className="h-3 w-3 fill-primary text-primary" />}
-                          {v.fuel_type}
-                          {!v.is_active && <Badge variant="secondary" className="text-[11px] px-1">off</Badge>}
-                        </div>
-                        <div><span className="text-xs text-muted-foreground">D</span>{v.price_per_litre ?? '—'}<span className="text-xs text-muted-foreground">/L</span></div>
-                        <div><span className="text-xs text-muted-foreground">D</span>{v.cost_per_mile}<span className="text-xs text-muted-foreground">/mi</span></div>
-                        <div className="text-xs text-muted-foreground">
-                          {v.is_default ? 'default' : ''}
-                        </div>
-                      </div>
-                      {(isAdmin || isAccountant) && (
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openVariantEdit(v)}>
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                          {isAdmin && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive" onClick={() => setVariantDeleting(v)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+          {types.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Expense types">
+                <TableCaption className="sr-only">Expense type categories with fuel variants and management actions</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Applies To</TableHead>
+                    <TableHead>Amortization</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {types.map(t => (
+                    <TypeRow
+                      key={t.id}
+                      type={t}
+                      variants={variantsByType(t.id)}
+                      isAdmin={isAdmin}
+                      isAccountant={isAccountant}
+                      onEdit={openEdit}
+                      onDelete={setDeletingType}
+                      onVariantEdit={openVariantEdit}
+                      onVariantDelete={setVariantDeleting}
+                      onVariantCreate={openVariantCreate}
+                    />
                   ))}
-                </CardContent>
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground" role="status">
+              <p className="font-medium">No expense types yet</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                Create expense categories for riders and operations. The Fuel category supports multiple fuel variants.
+              </p>
+              {isAdmin && (
+                <Button className="mt-4" onClick={openCreate}><Plus className="h-4 w-4 mr-2" aria-hidden="true" />Create your first type</Button>
               )}
-            </Card>
-          ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="approvals" className="space-y-3 mt-4">
-          {changes.map(c => (
-            <Card key={c.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {c.status === 'pending' && <Badge className="gap-1 bg-warning/10 text-warning"><Clock className="h-3 w-3" />Pending</Badge>}
-                    {c.status === 'approved' && <Badge className="gap-1 bg-success/10 text-success"><CheckCircle2 className="h-3 w-3" />Approved</Badge>}
-                    {c.status === 'rejected' && <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>}
-                    {variantLabel(c) && <Badge variant="outline" className="gap-1"><Fuel className="h-3 w-3" />{variantLabel(c)}</Badge>}
-                    <span className="text-xs text-muted-foreground">{format(new Date(c.created_at), 'MMM d, yyyy HH:mm')}</span>
-                  </div>
-                  {isAdmin && (
-                    <div className="flex gap-2">
-                      {c.status === 'pending' && (
-                        <>
-                          <Button size="sm" variant="outline" className="text-success" onClick={() => approve(c)}><CheckCircle2 className="h-3 w-3 mr-1" />Approve</Button>
-                          <Button size="sm" variant="outline" className="text-destructive" onClick={() => reject(c)}><XCircle className="h-3 w-3 mr-1" />Reject</Button>
-                        </>
-                      )}
-                      <Button size="sm" variant="outline" className="text-destructive" onClick={() => setDeletingChange(c)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div><p className="text-xs text-muted-foreground">Fuel type</p><p>{c.old_fuel_type || '—'} → <strong>{c.new_fuel_type || '—'}</strong></p></div>
-                  <div><p className="text-xs text-muted-foreground">Price / litre</p><p>{c.old_price_per_litre ?? '—'} → <strong>{c.new_price_per_litre ?? '—'}</strong></p></div>
-                  <div><p className="text-xs text-muted-foreground">Cost / mile</p><p>{c.old_cost_per_mile ?? '—'} → <strong>{c.new_cost_per_mile ?? '—'}</strong></p></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {changes.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No fuel price changes yet.</p>}
+          {changes.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Fuel price change approvals">
+                <TableCaption className="sr-only">Fuel price change requests with approval actions and change details</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Variant</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Fuel Type Change</TableHead>
+                    <TableHead className="text-right">Price / Litre Change</TableHead>
+                    <TableHead className="text-right">Cost / Mile Change</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {changes.map(c => (
+                    <TableRow key={c.id}>
+                      <TableCell>
+                        {c.status === 'pending' && (
+                          <Badge className="gap-1 bg-warning/10 text-warning"><Clock className="h-3 w-3" aria-hidden="true" />Pending</Badge>
+                        )}
+                        {c.status === 'approved' && (
+                          <Badge className="gap-1 bg-success/10 text-success"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Approved</Badge>
+                        )}
+                        {c.status === 'rejected' && (
+                          <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" aria-hidden="true" />Rejected</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {variantLabel(c) && <Badge variant="outline" className="gap-1"><Fuel className="h-3 w-3" aria-hidden="true" />{variantLabel(c)}</Badge>}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={c.created_at}>{format(new Date(c.created_at), 'MMM d, yyyy HH:mm')}</time></TableCell>
+                      <TableCell>{c.old_fuel_type || '—'} → <strong>{c.new_fuel_type || '—'}</strong></TableCell>
+                      <TableCell className="text-right tabular-nums">{c.old_price_per_litre ?? '—'} → <strong>{c.new_price_per_litre ?? '—'}</strong></TableCell>
+                      <TableCell className="text-right tabular-nums">{c.old_cost_per_mile ?? '—'} → <strong>{c.new_cost_per_mile ?? '—'}</strong></TableCell>
+                      <TableCell className="text-right">
+                        {isAdmin && (
+                          <div className="flex justify-end gap-1">
+                            {c.status === 'pending' && (
+                              <>
+                                <Button size="sm" variant="outline" className="text-success min-h-[44px] gap-1" onClick={() => approve(c)}><CheckCircle2 className="h-3 w-3 mr-1" aria-hidden="true" />Approve</Button>
+                                <Button size="sm" variant="outline" className="text-destructive min-h-[44px] gap-1" onClick={() => reject(c)}><XCircle className="h-3 w-3 mr-1" aria-hidden="true" />Reject</Button>
+                              </>
+                            )}
+                            <Button size="sm" variant="outline" className="text-destructive min-h-[44px] gap-1" onClick={() => setDeletingChange(c)}><Trash2 className="h-3 w-3 mr-1" aria-hidden="true" />Delete</Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-10" role="status">No fuel price changes yet.</p>
+          )}
         </TabsContent>
       </Tabs>
 

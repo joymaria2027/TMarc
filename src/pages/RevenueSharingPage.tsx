@@ -1,14 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { PieChart, Plus, Percent, Trash2, Pencil } from 'lucide-react';
+import { PieChart, Plus, Percent, Trash2, Pencil, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { validateSharing } from '@/lib/finance';
@@ -223,48 +222,83 @@ export default function RevenueSharingPage() {
       </div>
 
       <div className="space-y-3">
-        {visibleShares.map((s: any) => (
-          <Card key={s.id} className={canManage ? 'hover:border-primary/50 transition-colors' : ''}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex-1">
-                  <p className="font-medium">{getMerchantName(s.merchant_id)}</p>
-                  {isRider && !canManage && (
-                    <p className="text-xs text-muted-foreground">
-                      {s.rider_id ? 'Personal rate assigned to you' : 'Default rate for this merchant'}
-                    </p>
-                  )}
+      <div className="overflow-x-auto rounded-md border">
+        <Table aria-label="Revenue sharing ratios">
+          <caption className="sr-only">Per-merchant revenue split ratios with live total check and edit actions</caption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Merchant</TableHead>
+              <TableHead className="text-right">Rider %</TableHead>
+              <TableHead className="text-right">Merchant %</TableHead>
+              <TableHead className="text-right">Platform %</TableHead>
+              <TableHead className="text-right">UCS %</TableHead>
+              <TableHead>Total check</TableHead>
+              {canManage && <TableHead className="text-right">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visibleShares.map((s: any) => {
+              const total = Number(s.rider_percentage) + Number(s.merchant_percentage) + Number(s.platform_percentage) + Number(s.ucs_rides_percentage);
+              const balanced = Math.abs(total - 100) < 0.01;
+              return (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <span className="font-medium">{getMerchantName(s.merchant_id)}</span>
+                    {isRider && !canManage && (
+                      <span className="block text-xs text-muted-foreground">
+                        {s.rider_id ? 'Personal rate assigned to you' : 'Default rate for this merchant'}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <span className="inline-flex items-center justify-end gap-1">
+                      <Percent className="h-3 w-3" aria-hidden="true" />
+                      {isRider && !canManage ? `Your share: ${s.rider_percentage}%` : `${s.rider_percentage}%`}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {(!isRider || canManage) ? (
+                      <span className="inline-flex items-center justify-end gap-1"><Percent className="h-3 w-3" aria-hidden="true" />{s.merchant_percentage}%</span>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {(!isRider || canManage) ? (
+                      <span className="inline-flex items-center justify-end gap-1"><Percent className="h-3 w-3" aria-hidden="true" />{s.platform_percentage}%</span>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {(!isRider || canManage) ? (
+                      <span className="inline-flex items-center justify-end gap-1"><Percent className="h-3 w-3" aria-hidden="true" />{s.ucs_rides_percentage}%</span>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {balanced ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-success"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />Σ 100%</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />Σ {total}%</span>
+                    )}
+                  </TableCell>
                   {canManage && (
-                    <Button variant="ghost" size="sm" className="mt-1 gap-1 px-2" onClick={() => editShare(s)} aria-label={`Edit sharing for ${getMerchantName(s.merchant_id)}`}>
-                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit ratio
-                    </Button>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="min-h-[44px] gap-1 px-2" onClick={() => editShare(s)} aria-label={`Edit sharing for ${getMerchantName(s.merchant_id)}`}>
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                        </Button>
+                        <Button size="icon" variant="ghost" className="min-h-[44px] min-w-[44px] text-destructive hover:text-destructive" onClick={() => setDeleteId(s.id)} aria-label={`Delete sharing for ${getMerchantName(s.merchant_id)}`}>
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                      </span>
+                    </TableCell>
                   )}
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge
-                    variant={isRider && !canManage ? 'default' : 'outline'}
-                    className={`gap-1 tabular-nums ${isRider && !canManage ? 'bg-primary text-primary-foreground' : ''}`}
-                  >
-                    <Percent className="h-3 w-3" aria-hidden="true" />
-                    {isRider && !canManage ? 'Your share' : 'Rider'}: <span className="tabular-nums">{s.rider_percentage}%</span>
-                  </Badge>
-                  {(!isRider || canManage) && (
-                    <>
-                      <Badge variant="outline" className="gap-1 tabular-nums"><Percent className="h-3 w-3" aria-hidden="true" />Merchant: {s.merchant_percentage}%</Badge>
-                      <Badge variant="outline" className="gap-1 tabular-nums"><Percent className="h-3 w-3" aria-hidden="true" />Platform: {s.platform_percentage}%</Badge>
-                      <Badge variant="outline" className="gap-1 bg-primary/5 tabular-nums"><Percent className="h-3 w-3" aria-hidden="true" />UCS Rides: {s.ucs_rides_percentage}%</Badge>
-                    </>
-                  )}
-                  {canManage && (
-                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(s.id)} aria-label={`Delete sharing for ${getMerchantName(s.merchant_id)}`}>
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      {visibleShares.length > 0 && (
+        <p className="text-xs text-muted-foreground" role="status">{visibleShares.length} {visibleShares.length === 1 ? 'ratio' : 'ratios'} shown</p>
+      )}
         {shares.length === 0 && (
           <div className="text-center py-10">
             <PieChart className="h-10 w-10 mx-auto mb-2 opacity-50" aria-hidden="true" />

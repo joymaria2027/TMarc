@@ -338,6 +338,7 @@ export type Database = {
           merchant_id: string | null
           message: string
           resolved_by: string | null
+          resolved_note: string | null
         }
         Insert: {
           alert_type: string
@@ -348,6 +349,7 @@ export type Database = {
           merchant_id?: string | null
           message: string
           resolved_by?: string | null
+          resolved_note?: string | null
         }
         Update: {
           alert_type?: string
@@ -358,6 +360,7 @@ export type Database = {
           merchant_id?: string | null
           message?: string
           resolved_by?: string | null
+          resolved_note?: string | null
         }
         Relationships: [
           {

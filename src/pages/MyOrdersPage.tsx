@@ -10,8 +10,10 @@ import LiveDeliveryMap from "@/components/LiveDeliveryMap";
 import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import OrderChat from "@/components/OrderChat";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ChevronDown, ChevronLeft, MessageCircle, RefreshCw } from "lucide-react";
 import { haptics } from "@/lib/haptics";
+import { filterOrders, type OrderTab } from "@/lib/orderGroups";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   pending_payment: "secondary",
@@ -45,6 +47,8 @@ export default function MyOrdersPage() {
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const [tab, setTab] = useState<OrderTab>("all");
+  const [query, setQuery] = useState("");
   const prevStatuses = useRef<Record<string, string>>({});
   const orderIdsRef = useRef<string[]>([]);
   const lastFetchRef = useRef(0);
@@ -174,9 +178,11 @@ export default function MyOrdersPage() {
     );
   if (!user) return <Navigate to="/auth?as=customer&next=/account/orders" replace />;
 
+  const visibleOrders = filterOrders(orders, { tab, query });
+
   return (
     <StorefrontLayout>
-      {/* Screen-reader announcements for realtime updates */}
+      {/* Single screen-reader announcer for realtime updates (per-card badges are plain, not live) */}
       <div aria-live="polite" role="status" className="sr-only">
         {announcement}
       </div>
@@ -208,9 +214,31 @@ export default function MyOrdersPage() {
           </Button>
         </div>
         {orders.length > 0 && (
-          <p className="text-base leading-relaxed text-muted-foreground" role="status">
-            {orders.length} {orders.length === 1 ? "order" : "orders"}
-          </p>
+          <>
+            <p className="text-base leading-relaxed text-muted-foreground">
+              {orders.length} {orders.length === 1 ? "order" : "orders"}
+            </p>
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter orders">
+              {(["all", "active", "past"] as OrderTab[]).map((t) => (
+                <Button
+                  key={t}
+                  variant={tab === t ? undefined : "outline"}
+                  size="sm"
+                  aria-pressed={tab === t}
+                  onClick={() => setTab(t)}
+                >
+                  {t === "all" ? "All" : t === "active" ? "Active" : "Past"}
+                </Button>
+              ))}
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search reference or merchant"
+                aria-label="Search orders by reference or merchant"
+                className="max-w-xs"
+              />
+            </div>
+          </>
         )}
         {orders.length === 0 ? (
           <div className="space-y-2">
@@ -219,8 +247,17 @@ export default function MyOrdersPage() {
               <Link to="/shop">Browse shop</Link>
             </Button>
           </div>
+        ) : visibleOrders.length === 0 ? (
+          <div className="space-y-2">
+            <p role="status" className="text-base leading-relaxed text-muted-foreground">
+              No orders match this filter.
+            </p>
+            <Button variant="outline" size="sm" onClick={() => { setTab("all"); setQuery(""); }}>
+              Clear filter
+            </Button>
+          </div>
         ) : (
-          orders.map((o) => (
+          visibleOrders.map((o) => (
             <OrderCard
               key={o.id}
               o={o}
@@ -264,15 +301,30 @@ function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChat
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           <PaymentStatusBadge status={o.payment_status} />
-          <Badge role="status" variant={statusVariant[o.status] || "default"}>
+          <Badge variant={statusVariant[o.status] || "default"}>
             {humanizeStatus(o.status)}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {o.status === "pending_payment" && (
+          <div className="rounded border border-warning/40 bg-warning/15 p-3 text-sm">
+            <p className="font-medium">Waiting for payment</p>
+            <p className="text-muted-foreground">Complete payment to notify the merchant.</p>
+            <Button asChild size="sm" className="mt-2">
+              <Link to={`/checkout/status/${o.id}`}>Pay now</Link>
+            </Button>
+          </div>
+        )}
         {!["pending_payment", "cancelled", "refunded"].includes(o.status) && (
           <OrderStatusTimeline status={o.status} fulfillmentType={o.fulfillment_type} className="py-2" />
         )}
+        {o.fulfillment_type === "delivery" &&
+          ["accepted", "preparing", "ready", "dispatched"].includes(o.status) && (
+            <p className="text-sm text-muted-foreground">
+              Rider not assigned yet — live map appears once your order is picked up.
+            </p>
+          )}
         {o.fulfillment_type === "delivery" && ["picked_up", "in_transit"].includes(o.status) && o.delivery_id && (
           <LiveDeliveryMap orderId={o.id} deliveryId={o.delivery_id} />
         )}
@@ -301,7 +353,7 @@ function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChat
             aria-expanded={chatOpen}
             aria-controls={chatRegionId}
             aria-describedby={unread > 0 ? unreadId : undefined}
-            aria-label="Message merchant"
+            aria-label={`Message merchant about order ${o.order_reference ?? ""}`.trim()}
             className="relative"
           >
             <MessageCircle className="h-5 w-5 mr-1" aria-hidden="true" />

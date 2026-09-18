@@ -128,7 +128,7 @@ export default function CheckoutStatusPage() {
                 <XCircle className="h-5 w-5 text-destructive shrink-0" aria-hidden="true" />
                 <div className="text-sm min-w-0">
                   <p className="font-medium">Payment failed</p>
-                  <p className="text-muted-foreground">Please try again from your cart or contact support.</p>
+                  <p className="text-muted-foreground">Your order is saved. Retry payment below or track it in My orders.</p>
                 </div>
               </div>
             )}
@@ -150,8 +150,14 @@ export default function CheckoutStatusPage() {
                   </Button>
                 </>
               )}
-              <Button asChild variant="outline" className="flex-1"><Link to="/account/orders">My orders</Link></Button>
-              {status !== "pending" && <Button asChild className="flex-1"><Link to="/shop">Keep shopping</Link></Button>}
+              {status === "failed" && (
+                <Button className="flex-1" onClick={openPayment} disabled={openingPayment}>
+                  {openingPayment ? <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" /> : <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />}
+                  Retry payment
+                </Button>
+              )}
+              <Button asChild variant={status === "paid" || status === "failed" ? undefined : "outline"} className="flex-1"><Link to="/account/orders">My orders</Link></Button>
+              {status !== "pending" && <Button asChild variant="outline" className="flex-1"><Link to="/shop">Keep shopping</Link></Button>}
             </div>
           </CardContent>
         </Card>

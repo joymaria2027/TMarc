@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { resolveDeliveryFee } from "@/lib/deliveryFee";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { validateCheckout, firstInvalidField, type CheckoutErrors } from "@/lib/checkoutValidation";
+import { decidePostOrderNavigation } from "@/lib/checkoutPostOrder";
 
 export default function CheckoutPage() {
   const { items, subtotal, clear, groups } = useCart();
@@ -134,6 +135,13 @@ export default function CheckoutPage() {
   };
 
   const submit = async () => {
+    if (!user) {
+      const msg = "Create an account or sign in above to continue — your details below are saved.";
+      toast.error(msg);
+      setAnnouncement(msg);
+      requestAnimationFrame(() => document.getElementById("checkout-account")?.focus());
+      return;
+    }
     const nextErrors = validateCheckout({ fullName, phone, fulfillment, address });
     setErrors(nextErrors);
     const firstId = firstInvalidField(nextErrors);
@@ -163,7 +171,7 @@ export default function CheckoutPage() {
 
       // Create one order per merchant
       const merchantIds = Object.keys(groups);
-      let firstRedirect: string | null = null;
+      const redirectUrls: (string | null)[] = [];
 
       const orderIdsCreated: string[] = [];
       for (const mid of merchantIds) {
@@ -196,16 +204,29 @@ export default function CheckoutPage() {
           body: { order_id: order.id, return_url: `${window.location.origin}/checkout/status/${order.id}` },
         });
         if (pErr) throw pErr;
-        if (!firstRedirect && pay?.redirect_url && !pay?.stub) firstRedirect = pay.redirect_url;
+        redirectUrls.push(pay?.stub ? null : (pay?.redirect_url ?? null));
       }
 
+      const decision = decidePostOrderNavigation({ merchantIds, orderIds: orderIdsCreated, redirectUrls });
       clear();
-      if (firstRedirect) {
-        toast.success("Orders placed — redirecting to payment");
-        window.location.href = firstRedirect;
+      if (decision.kind === "redirect") {
+        toast.success("Order placed — redirecting to payment");
+        window.location.href = decision.url;
+      } else if (decision.kind === "status") {
+        toast.success("Order placed");
+        navigate(`/checkout/status/${decision.orderId}`);
       } else {
-        toast.success(merchantIds.length > 1 ? `${merchantIds.length} orders placed` : "Order placed");
-        navigate(orderIdsCreated.length === 1 ? `/checkout/status/${orderIdsCreated[0]}` : "/account/orders");
+        toast.success(
+          merchantIds.length > 1
+            ? `${merchantIds.length} orders placed — pay each from My orders`
+            : "Order placed"
+        );
+        setAnnouncement(
+          merchantIds.length > 1
+            ? `${merchantIds.length} orders placed. Pay each from My orders.`
+            : "Order placed."
+        );
+        navigate("/account/orders");
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -242,7 +263,7 @@ export default function CheckoutPage() {
         </Card>
 
         {!user && (
-          <Card>
+          <Card id="checkout-account" tabIndex={-1}>
             <CardHeader>
               <CardTitle>Account</CardTitle>
               <p id="checkout-auth-hint" className="text-sm text-muted-foreground">Create an account or sign in to place your order. Your account lets you track orders and reorder faster.</p>
@@ -326,7 +347,7 @@ export default function CheckoutPage() {
           </CardContent>
         </Card>
 
-        <Button size="lg" className="w-full" disabled={submitting || !user} onClick={submit}
+        <Button size="lg" className="w-full" disabled={submitting} onClick={submit}
           aria-describedby={!user ? "checkout-auth-hint" : undefined}>
           {!user ? "Create an account or sign in above to continue" : submitting ? "Placing orders…" : `Pay D ${total.toFixed(2)} with ModemPay`}
         </Button>

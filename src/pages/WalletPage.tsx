@@ -21,6 +21,7 @@ import {
   rpcVerifyWithdrawalPin,
 } from '@/lib/rpcTypes';
 import type { HasWithdrawalPinResult } from '@/lib/rpcTypes';
+import { validateWithdrawal } from '@/lib/finance';
 
 interface WalletRow {
   id: string;
@@ -94,9 +95,10 @@ export default function WalletPage() {
   const [selectedWallet, setSelectedWallet] = useState<WalletRow | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawNotes, setWithdrawNotes] = useState('');
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Process dialog (accountant initial approval / merchant manager finalization)
+  // Process dialog (merchant manager initial approval / accountant finalization)
   const [processOpen, setProcessOpen] = useState(false);
   const [processMode, setProcessMode] = useState<'approve' | 'finalize'>('approve');
   const [selectedRequest, setSelectedRequest] = useState<WithdrawalRow | null>(null);
@@ -235,11 +237,10 @@ export default function WalletPage() {
 
   // Submit withdrawal after PIN verification
   const handleWithdraw = async () => {
-    if (!selectedWallet || !withdrawAmount || Number(withdrawAmount) <= 0) return;
-    if (Number(withdrawAmount) > selectedWallet.balance) {
-      toast.error('Amount exceeds wallet balance');
-      return;
-    }
+    if (!selectedWallet) return;
+    const amountError = validateWithdrawal(withdrawAmount, Number(selectedWallet.balance));
+    if (amountError) { setWithdrawError(amountError); return; }
+    setWithdrawError(null);
     // Open PIN verification
     setWithdrawOpen(false);
     setPinVerifyOpen(true);
@@ -467,11 +468,12 @@ export default function WalletPage() {
             <div>
               <Label htmlFor="withdraw-amount">Amount</Label>
               <div className="flex gap-2">
-                <Input id="withdraw-amount" type="number" min="0" max={selectedWallet?.balance} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="0.00" className="flex-1" />
-                <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setWithdrawAmount(String(selectedWallet?.balance ?? 0))}>
+                <Input id="withdraw-amount" type="number" min="0" max={selectedWallet?.balance} value={withdrawAmount} onChange={e => { setWithdrawAmount(e.target.value); setWithdrawError(null); }} placeholder="0.00" className="flex-1" aria-invalid={!!withdrawError} aria-describedby={withdrawError ? 'withdraw-amount-error' : undefined} />
+                <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={(selectedWallet?.balance ?? 0) <= 0} onClick={() => { setWithdrawAmount(String(selectedWallet?.balance ?? 0)); setWithdrawError(null); }}>
                   Withdraw All
                 </Button>
               </div>
+              {withdrawError && <p id="withdraw-amount-error" role="alert" className="text-sm text-destructive mt-1">{withdrawError}</p>}
             </div>
             <div>
               <Label htmlFor="withdraw-notes">Notes (optional)</Label>
@@ -501,7 +503,7 @@ export default function WalletPage() {
               {selectedRequest?.notes && <p className="text-xs text-muted-foreground mt-1">Notes: {selectedRequest.notes}</p>}
               <p className="text-xs text-muted-foreground mt-2">
                 {processMode === 'approve'
-                  ? 'After your approval, the request will be sent to the merchant manager for final approval. The wallet will only be debited after final approval.'
+                  ? 'After your approval, the request will be sent to the accountant for final approval. The wallet will only be debited after final approval.'
                   : 'Final approval will debit the wallet balance immediately and record the transaction.'}
               </p>
             </div>

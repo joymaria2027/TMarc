@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowDownToLine, CheckCircle2, Clock, Search, XCircle } from 'lucide-react';
 import type { WalletRow } from './WalletFolderCard';
+import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export interface WithdrawalRow {
   id: string;
@@ -128,42 +129,43 @@ export default function WithdrawalRequestsTable({
       </CardHeader>
       <CardContent>
         {filtered.length === 0 ? (
-          <p className="text-center text-muted-foreground py-6">No withdrawal requests match your search</p>
+          <p className="text-center text-muted-foreground py-6" role="status">No withdrawal requests match your search</p>
         ) : (
           <div className="space-y-3">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4">Date</th>
-                    <th className="pb-2 pr-4">Wallet</th>
-                    <th className="pb-2 pr-4 text-right">Amount</th>
-                    <th className="pb-2 pr-4">Status</th>
-                    <th className="pb-2 pr-4">Payout Method</th>
-                    <th className="pb-2 pr-4">Notes</th>
-                    {canProcess && <th className="pb-2">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Withdrawal requests">
+                <TableCaption className="sr-only">Withdrawal requests with status, amounts, and actions</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Wallet</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payout Method</TableHead>
+                    <TableHead>Notes</TableHead>
+                    {canProcess && <TableHead className="text-right">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {paged.map(wr => {
                     const wallet = wallets.find(w => w.id === wr.wallet_id);
                     return (
-                      <tr key={wr.id} className="border-b last:border-0">
-                        <td className="py-2 pr-4 whitespace-nowrap tabular-nums"><time dateTime={wr.created_at}>{new Date(wr.created_at).toLocaleDateString()}</time></td>
-                        <td className="py-2 pr-4">{wallet ? getPartyLabel(wallet) : '–'}</td>
-                        <td className="py-2 pr-4 font-medium tabular-nums text-right">D {Number(wr.amount).toFixed(2)}</td>
-                        <td className="py-2 pr-4"><StatusBadge status={wr.status} /></td>
-                        <td className="py-2 pr-4">{wr.payout_method || '–'}</td>
-                        <td className="py-2 pr-4 max-w-[200px] truncate">{wr.notes || '–'}</td>
+                      <TableRow key={wr.id}>
+                        <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={wr.created_at}>{new Date(wr.created_at).toLocaleDateString()}</time></TableCell>
+                        <TableCell>{wallet ? getPartyLabel(wallet) : '–'}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">D {Number(wr.amount).toFixed(2)}</TableCell>
+                        <TableCell><StatusBadge status={wr.status} /></TableCell>
+                        <TableCell>{wr.payout_method || '–'}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{wr.notes || '–'}</TableCell>
                         {canProcess && (
-                          <td className="py-2">
+                          <TableCell className="text-right">
                             {wr.status === 'pending' && canApprove && (
-                              <Button size="sm" variant="outline" onClick={() => onApprove(wr)}>
+                              <Button size="sm" variant="outline" className="min-h-[44px]" onClick={() => onApprove(wr)}>
                                 Approve
                               </Button>
                             )}
                             {wr.status === 'manager_approved' && canFinalize && (
-                              <Button size="sm" onClick={() => onFinalize(wr)}>
+                              <Button size="sm" className="min-h-[44px]" onClick={() => onFinalize(wr)}>
                                 Finalize
                               </Button>
                             )}
@@ -174,56 +176,62 @@ export default function WithdrawalRequestsTable({
                               <span className="text-xs text-muted-foreground">Awaiting accountant</span>
                             )}
                             {(wr.status === 'completed' || wr.status === 'rejected') && (
-                              <span className="flex items-center gap-1"><StatusIcon status={wr.status} /></span>
+                              <span className="flex items-center justify-end gap-1"><StatusIcon status={wr.status} /></span>
                             )}
-                          </td>
+                          </TableCell>
                         )}
-                      </tr>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 flex-wrap gap-2">
-              <span>Showing {start + 1}–{Math.min(start + pageSize, filtered.length)} of {filtered.length}</span>
-              {totalPages > 1 && (
-                <nav aria-label="Withdrawal requests pagination" className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={safePage <= 1}
-                    onClick={() => onPageChange(Math.max(1, safePage - 1))}
-                    aria-label="Go to previous page"
-                  >
-                    Previous
-                  </Button>
-                  {pageNumbers.map((p, idx) => (
-                    <span key={p} className="contents">
-                      {idx > 0 && pageNumbers[idx - 1] !== p - 1 && (
-                        <span className="px-1 text-muted-foreground" aria-hidden="true">…</span>
-                      )}
-                      <Button
-                        size="sm"
-                        variant={p === safePage ? 'default' : 'ghost'}
-                        aria-current={p === safePage ? 'page' : undefined}
-                        aria-label={`Go to page ${p}`}
-                        onClick={() => onPageChange(p)}
-                      >
-                        {p}
-                      </Button>
-                    </span>
-                  ))}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={safePage >= totalPages}
-                    onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
-                    aria-label="Go to next page"
-                  >
-                    Next
-                  </Button>
-                </nav>
-              )}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={canProcess ? 7 : 6} className="text-xs text-muted-foreground text-right py-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 flex-wrap gap-2">
+                        <span>Showing {start + 1}–{Math.min(start + pageSize, filtered.length)} of {filtered.length}</span>
+                        {totalPages > 1 && (
+                          <nav aria-label="Withdrawal requests pagination" className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={safePage <= 1}
+                              onClick={() => onPageChange(Math.max(1, safePage - 1))}
+                              aria-label="Go to previous page"
+                            >
+                              Previous
+                            </Button>
+                            {pageNumbers.map((p, idx) => (
+                              <span key={p} className="contents">
+                                {idx > 0 && pageNumbers[idx - 1] !== p - 1 && (
+                                  <span className="px-1 text-muted-foreground" aria-hidden="true">…</span>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant={p === safePage ? 'default' : 'ghost'}
+                                  aria-current={p === safePage ? 'page' : undefined}
+                                  aria-label={`Go to page ${p}`}
+                                  onClick={() => onPageChange(p)}
+                                >
+                                  {p}
+                                </Button>
+                              </span>
+                            ))}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={safePage >= totalPages}
+                              onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
+                              aria-label="Go to next page"
+                            >
+                              Next
+                            </Button>
+                          </nav>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
             </div>
           </div>
         )}

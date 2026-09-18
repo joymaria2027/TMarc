@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, Search, CheckCircle2, AlertCircle, Receipt, ArrowDownCircle, ArrowUpCircle, Scale } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { formatMoney } from '@/lib/finance';
 
@@ -42,23 +43,24 @@ export default function ReconciliationPage() {
   const [search, setSearch] = useState('');
   const [notesRow, setNotesRow] = useState<Recon | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
+  const [actionRow, setActionRow] = useState<{ row: Recon; action: 'matched' | 'disputed' } | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReload = () => {
+  const scheduleReload = useCallback(() => {
     if (reloadTimer.current) clearTimeout(reloadTimer.current);
     reloadTimer.current = setTimeout(() => load(), 600);
-  };
+  }, [load]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from('payment_reconciliations' as any)
+      .from('payment_reconciliations')
       .select('*')
       .order('occurred_at', { ascending: false })
       .limit(1000);
     if (error) toast.error(error.message);
-    setRows(((data as any) || []) as Recon[]);
+    setRows((data || []) as Recon[]);
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     if (!allowed) return;
@@ -71,7 +73,7 @@ export default function ReconciliationPage() {
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
       supabase.removeChannel(ch);
     };
-  }, [allowed]);
+  }, [allowed, load, scheduleReload]);
 
   const filtered = useMemo(() => rows.filter(r => {
     if (tab !== 'all' && r.entry_type !== tab) return false;
@@ -97,7 +99,7 @@ export default function ReconciliationPage() {
     const path = `recon/${ts.getFullYear()}/${String(ts.getMonth() + 1).padStart(2, '0')}/${row.id}-${file.name}`;
     const { error: upErr } = await supabase.storage.from('reconciliation-statements').upload(path, file, { upsert: true });
     if (upErr) { toast.error(upErr.message); return; }
-    const { error } = await supabase.from('payment_reconciliations' as any).update({ statement_url: path }).eq('id', row.id);
+    const { error } = await supabase.from('payment_reconciliations').update({ statement_url: path }).eq('id', row.id);
     if (error) toast.error(error.message); else toast.success('Statement attached');
   };
 
@@ -108,17 +110,18 @@ export default function ReconciliationPage() {
   };
 
   const setStatus = async (row: Recon, status: Recon['status']) => {
-    const { error } = await supabase.from('payment_reconciliations' as any).update({
+    const { error } = await supabase.from('payment_reconciliations').update({
       status,
       matched_at: status === 'matched' ? new Date().toISOString() : null,
     }).eq('id', row.id);
     if (error) toast.error(error.message);
     else toast.success(`Marked ${status}`);
+    setActionRow(null);
   };
 
   const saveNotes = async () => {
     if (!notesRow) return;
-    const { error } = await supabase.from('payment_reconciliations' as any).update({ notes: notesDraft }).eq('id', notesRow.id);
+    const { error } = await supabase.from('payment_reconciliations').update({ notes: notesDraft }).eq('id', notesRow.id);
     if (error) toast.error(error.message); else toast.success('Notes saved');
     setNotesRow(null);
   };
@@ -188,7 +191,7 @@ export default function ReconciliationPage() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'all' | 'delivery_payment' | 'payout')}>
         <TabsList>
           <TabsTrigger value="all">All ({rows.length})</TabsTrigger>
           <TabsTrigger value="delivery_payment"><Receipt className="h-3.5 w-3.5 mr-1" />Payments Received</TabsTrigger>
@@ -249,12 +252,12 @@ export default function ReconciliationPage() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           {r.status !== 'matched' && (
-                            <Button size="icon" variant="ghost" onClick={() => setStatus(r, 'matched')} aria-label="Mark matched">
+                            <Button size="icon" variant="ghost" onClick={() => setActionRow({ row: r, action: 'matched' })} aria-label="Mark matched">
                               <CheckCircle2 className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
                             </Button>
                           )}
                           {r.status !== 'disputed' && (
-                            <Button size="icon" variant="ghost" onClick={() => setStatus(r, 'disputed')} aria-label="Mark disputed">
+                            <Button size="icon" variant="ghost" onClick={() => setActionRow({ row: r, action: 'disputed' })} aria-label="Mark disputed">
                               <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
                             </Button>
                           )}
@@ -291,6 +294,25 @@ export default function ReconciliationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!actionRow} onOpenChange={(o) => !o && setActionRow(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{actionRow?.action === 'matched' ? 'Mark as matched?' : 'Mark as disputed?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {actionRow?.action === 'matched'
+                ? 'This will mark the reconciliation entry as matched against your bank statement.'
+                : 'This will mark the reconciliation entry as disputed. You can add notes explaining the discrepancy.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => actionRow && setStatus(actionRow.row, actionRow.action)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {actionRow?.action === 'matched' ? 'Mark Matched' : 'Mark Disputed'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

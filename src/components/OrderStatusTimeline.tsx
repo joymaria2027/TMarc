@@ -30,7 +30,7 @@ export default function OrderStatusTimeline({
   const currentIdx = ORDER[status] ?? -1;
 
   return (
-    <ol aria-label="Delivery progress" className={cn("w-full flex items-start justify-between gap-1", className)}>
+    <ol aria-label={fulfillmentType === "pickup" ? "Order progress" : "Delivery progress"} className={cn("w-full flex items-start justify-between gap-1", className)}>
         {steps.map((step, i) => {
           const stepIdx = STEPS.findIndex(s => s.key === step.key);
           const reached = currentIdx >= stepIdx;

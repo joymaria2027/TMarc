@@ -5,10 +5,12 @@ import { Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import SettlementSummaryCards from '@/components/settlements/SettlementSummaryCards';
 import MerchantSettlementCard from '@/components/settlements/MerchantSettlementCard';
 import RiderSettlementCard from '@/components/settlements/RiderSettlementCard';
 import DeliverySettlementRow from '@/components/settlements/DeliverySettlementRow';
+import { partitionPayoutDeliveries } from '@/lib/moneyGuards';
 
 interface SettlementRow {
   id: string;
@@ -74,6 +76,7 @@ export default function SettlementsPage() {
   const [riderExpenseItemsMap, setRiderExpenseItemsMap] = useState<Map<string, any[]>>(new Map());
   const [deliveryExpenseItemsMap, setDeliveryExpenseItemsMap] = useState<Map<string, any[]>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [payingRiderId, setPayingRiderId] = useState<string | null>(null);
 
   const isAdmin = hasRole('admin');
   const isRiderOnly = hasRole('rider') && !isAdmin && !hasRole('accountant') && !hasRole('business_owner') && !hasRole('company_manager');
@@ -309,15 +312,35 @@ export default function SettlementsPage() {
     merchantSummaries.find(r => r.merchant_id === merchantId)?.merchant_name || '';
 
   const handleIssuePayout = async (summary: RiderSummary) => {
-    const unapprovedIds = summary.deliveries.filter(d => !d.settlement_approved && d.sharing).map(d => d.id);
-    for (const id of unapprovedIds) {
-      await supabase.from('deliveries').update({
-        settlement_approved: true,
-        settlement_approved_by: user?.id,
-      }).eq('id', id);
+    if (payingRiderId) return;
+    const { approvable, skippedNoRatio } = partitionPayoutDeliveries(summary.deliveries);
+    if (approvable.length === 0) {
+      toast.error(
+        skippedNoRatio.length > 0
+          ? `${skippedNoRatio.length} ${skippedNoRatio.length === 1 ? 'delivery has' : 'deliveries have'} no sharing ratio — set it first`
+          : 'Nothing to pay out'
+      );
+      return;
     }
-    toast.success(`Net payout of D${summary.net_payout.toFixed(2)} issued to ${summary.rider_name} – wallet updated`);
-    load();
+    setPayingRiderId(summary.rider_id);
+    try {
+      for (const d of approvable) {
+        const { error } = await supabase.from('deliveries').update({
+          settlement_approved: true,
+          settlement_approved_by: user?.id,
+        }).eq('id', d.id);
+        if (error) throw error;
+      }
+      toast.success(
+        `Approved ${approvable.length} ${approvable.length === 1 ? 'settlement' : 'settlements'} for ${summary.rider_name} (net D${summary.net_payout.toFixed(2)})` +
+        (skippedNoRatio.length > 0 ? ` — ${skippedNoRatio.length} skipped (no sharing ratio)` : '')
+      );
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Payout failed — no changes were confirmed');
+    } finally {
+      setPayingRiderId(null);
+      load();
+    }
   };
 
   // Build a map of per-merchant expense totals for use in individual delivery breakdowns
@@ -386,17 +409,53 @@ export default function SettlementsPage() {
 
         {/* Merchant Summary Tab */}
         <TabsContent value="merchants" className="space-y-4">
-          {merchantSummaries.map(rs => (
-            <MerchantSettlementCard
-              key={rs.merchant_id}
-              summary={rs}
-              expenseItems={(restExpenseItemsMap.get(rs.merchant_id) || [])}
-              canApprove={canApprove}
-              onApprove={approveSettlement}
-              paymentLabel={paymentLabel}
-            />
-          ))}
-          {merchantSummaries.length === 0 && (
+          {merchantSummaries.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Merchant settlements">
+                <caption className="sr-only">Per-merchant settlement totals with expandable delivery details</caption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Deliveries</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Expenses</TableHead>
+                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead className="text-right">Merchant</TableHead>
+                    <TableHead className="text-right">Rider</TableHead>
+                    <TableHead className="text-right">Platform</TableHead>
+                    <TableHead className="text-right">UCS Rides</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {merchantSummaries.map(rs => (
+                    <MerchantSettlementCard
+                      key={rs.merchant_id}
+                      summary={rs}
+                      expenseItems={(restExpenseItemsMap.get(rs.merchant_id) || [])}
+                      canApprove={canApprove}
+                      onApprove={approveSettlement}
+                      paymentLabel={paymentLabel}
+                    />
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-semibold">Totals</TableCell>
+                    <TableCell className="tabular-nums">{merchantSummaries.reduce((s, r) => s + r.total_deliveries, 0)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.total_revenue, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.total_expenses, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.net_revenue, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.merchant_share, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.rider_share, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.platform_share, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.ucs_share, 0).toFixed(2)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
+          ) : (
             <div className="text-center py-10 text-muted-foreground">
               <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No merchant settlements to display</p>
@@ -406,20 +465,53 @@ export default function SettlementsPage() {
 
         {/* Rider Summary Tab */}
         <TabsContent value="riders" className="space-y-4">
-          {riderSummaries.map(rs => (
-            <RiderSettlementCard
-              key={rs.rider_id}
-              summary={rs}
-              expenseItems={(riderExpenseItemsMap.get(rs.rider_id) || [])}
-              merchantNameById={merchantNameById}
-              canApprove={canApprove}
-              onApprove={approveSettlement}
-              onIssuePayout={handleIssuePayout}
-              paymentLabel={paymentLabel}
-              payout={payout}
-            />
-          ))}
-          {riderSummaries.length === 0 && (
+          {riderSummaries.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Rider settlements">
+                <caption className="sr-only">Per-rider settlement totals with expandable delivery details</caption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Rider</TableHead>
+                    <TableHead>Deliveries</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Expenses</TableHead>
+                    <TableHead className="text-right">Net revenue</TableHead>
+                    <TableHead className="text-right">Rider share</TableHead>
+                    <TableHead className="text-right">Net payout</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {riderSummaries.map(rs => (
+                    <RiderSettlementCard
+                      key={rs.rider_id}
+                      summary={rs}
+                      expenseItems={(riderExpenseItemsMap.get(rs.rider_id) || [])}
+                      merchantNameById={merchantNameById}
+                      canApprove={canApprove}
+                      onApprove={approveSettlement}
+                      onIssuePayout={handleIssuePayout}
+                      issuing={payingRiderId === rs.rider_id}
+                      paymentLabel={paymentLabel}
+                      payout={payout}
+                    />
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell className="font-semibold">Totals</TableCell>
+                    <TableCell className="tabular-nums">{riderSummaries.reduce((s, r) => s + r.total_deliveries, 0)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.total_revenue, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.total_expenses, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.net_revenue, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.rider_share, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.net_payout, 0).toFixed(2)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
+          ) : (
             <div className="text-center py-10 text-muted-foreground">
               <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No rider settlements to display</p>
@@ -429,26 +521,51 @@ export default function SettlementsPage() {
 
         {/* All Deliveries Tab */}
         <TabsContent value="deliveries" className="space-y-3">
-          {rows.slice(0, deliveriesVisible).map(d => {
-            const netTariff = getNetTariff(d);
-            const deduction = d.tariff - netTariff;
-            const hasDeduction = (restExpenseMap.get(d.merchant_id) || 0) > 0;
-            return (
-              <DeliverySettlementRow
-                key={d.id}
-                delivery={d}
-                canApprove={canApprove}
-                onApprove={approveSettlement}
-                paymentLabel={paymentLabel}
-                payout={payout}
-                netTariff={netTariff}
-                expenseDeduction={deduction}
-                deliveryExpenses={(deliveryExpenseItemsMap.get(d.id) || [])}
-                hasExpenseDeduction={hasDeduction}
-              />
-            );
-          })}
-          {rows.length === 0 && (
+          {rows.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="All delivery settlements">
+                <caption className="sr-only">Per-delivery settlement rows with payout splits</caption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Route / Delivered</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead className="text-right">Tariff</TableHead>
+                    <TableHead className="text-right">Expense adj.</TableHead>
+                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead className="text-right">Rider</TableHead>
+                    <TableHead className="text-right">Merchant</TableHead>
+                    <TableHead className="text-right">Platform</TableHead>
+                    <TableHead className="text-right">UCS Rides</TableHead>
+                    <TableHead>Ratio / notes</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.slice(0, deliveriesVisible).map(d => {
+                    const netTariff = getNetTariff(d);
+                    const deduction = d.tariff - netTariff;
+                    const hasDeduction = (restExpenseMap.get(d.merchant_id) || 0) > 0;
+                    return (
+                      <DeliverySettlementRow
+                        key={d.id}
+                        delivery={d}
+                        canApprove={canApprove}
+                        onApprove={approveSettlement}
+                        paymentLabel={paymentLabel}
+                        payout={payout}
+                        netTariff={netTariff}
+                        expenseDeduction={deduction}
+                        deliveryExpenses={(deliveryExpenseItemsMap.get(d.id) || [])}
+                        hasExpenseDeduction={hasDeduction}
+                      />
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
             <div className="text-center py-10 text-muted-foreground">
               <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No delivered orders to settle</p>

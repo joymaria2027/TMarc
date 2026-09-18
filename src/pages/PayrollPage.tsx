@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,10 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Play, Wallet, Calendar } from 'lucide-react';
+import { Plus, Play, Wallet, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatMoney, paginate } from '@/lib/finance';
+import { validateRunPeriod } from '@/lib/moneyGuards';
 
 interface Assignment {
   id: string;
@@ -51,6 +52,7 @@ export default function PayrollPage() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
   const [runForm, setRunForm] = useState({ period_start: monthAgo, period_end: today });
   const [runsPage, setRunsPage] = useState(1);
   const RUNS_PAGE_SIZE = 10;
@@ -101,19 +103,24 @@ export default function PayrollPage() {
   };
 
   const runPayroll = async () => {
-    if (!runDialog) return;
-    if (!runForm.period_start || !runForm.period_end) { setRunError('Pick a start and end date.'); return; }
-    if (runForm.period_start > runForm.period_end) { setRunError('Period start must be before period end.'); return; }
+    if (!runDialog || running) return;
+    const periodError = validateRunPeriod(runForm.period_start, runForm.period_end);
+    if (periodError) { setRunError(periodError); return; }
     setRunError(null);
-    const { error } = await supabase.rpc('run_payroll', {
-      _assignment_id: runDialog.id,
-      _period_start: runForm.period_start,
-      _period_end: runForm.period_end,
-    });
-    if (error) { toast.error(error.message); return; }
-    toast.success('Payroll run completed');
-    setRunDialog(null);
-    load();
+    setRunning(true);
+    try {
+      const { error } = await supabase.rpc('run_payroll', {
+        _assignment_id: runDialog.id,
+        _period_start: runForm.period_start,
+        _period_end: runForm.period_end,
+      });
+      if (error) { toast.error(error.message); return; }
+      toast.success('Payroll run completed');
+      setRunDialog(null);
+      load();
+    } finally {
+      setRunning(false);
+    }
   };
 
   const profileMap = useMemo(() => {
@@ -228,52 +235,107 @@ export default function PayrollPage() {
         </TabsList>
 
         <TabsContent value="assignments" className="space-y-3 mt-4">
-          {assignments.map(a => (
-            <Card key={a.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base">{profileName(a.payee_user_id)}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Paid by <span className="font-medium">{a.payer_type}</span>
-                      {a.payer_type === 'merchant' && ` (${merchantName(a.payer_merchant_id)})`}
-                      {' • '}
-                      {a.basis === 'fixed' ? `Fixed D${a.fixed_amount}` : `${a.percent}% of payer wallet income`}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {!a.is_active && <Badge variant="secondary">inactive</Badge>}
-                    <Button size="sm" onClick={() => setRunDialog(a)} disabled={!a.is_active}>
-                      <Play className="h-3 w-3 mr-1" />Run payroll
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              {a.notes && <CardContent className="pt-0"><p className="text-xs text-muted-foreground">{a.notes}</p></CardContent>}
-            </Card>
-          ))}
-          {assignments.length === 0 && <div className="text-center py-10 text-muted-foreground"><Wallet className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No payroll assignments yet</p></div>}
+          {assignments.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Payroll assignments">
+                <caption className="sr-only">Payroll assignments with payer, basis, amount, status and run actions</caption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Payee</TableHead>
+                    <TableHead>Payer</TableHead>
+                    <TableHead>Basis</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignments.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        <span className="font-medium">{profileName(a.payee_user_id)}</span>
+                        {a.notes && <span className="block text-xs text-muted-foreground">{a.notes}</span>}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium">{a.payer_type}</span>
+                        {a.payer_type === 'merchant' && <span className="block text-xs text-muted-foreground">{merchantName(a.payer_merchant_id)}</span>}
+                      </TableCell>
+                      <TableCell>{a.basis === 'fixed' ? 'Fixed' : '% of payer wallet income'}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {a.basis === 'fixed' ? `D${Number(a.fixed_amount).toFixed(2)}` : `${a.percent}% of payer wallet income`}
+                      </TableCell>
+                      <TableCell>
+                        {a.is_active ? (
+                          <Badge className="gap-1 bg-success/10 text-success"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Active</Badge>
+                        ) : (
+                          <Badge variant="secondary">inactive</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" className="min-h-[44px]" onClick={() => setRunDialog(a)} disabled={!a.is_active}>
+                          <Play className="h-3 w-3 mr-1" aria-hidden="true" />Run payroll
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground"><Wallet className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No payroll assignments yet</p></div>
+          )}
         </TabsContent>
 
         <TabsContent value="runs" className="space-y-3 mt-4">
-          {runs.map(r => {
-            const a = assignments.find(x => x.id === r.assignment_id);
-            return (
-              <Card key={r.id}>
-                <CardContent className="p-4 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{a ? profileName(a.payee_user_id) : r.assignment_id.slice(0, 8)}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> {r.period_start} → {r.period_end}
-                      {' • '}{format(new Date(r.created_at), 'MMM d, yyyy HH:mm')}
-                    </p>
-                  </div>
-                  <Badge className="bg-success/10 text-success">D{Number(r.computed_amount).toLocaleString()}</Badge>
-                </CardContent>
-              </Card>
-            );
-          })}
-          {runs.length === 0 && <div className="text-center py-10 text-muted-foreground"><p>No payroll runs yet</p></div>}
+          {runsPaged.paged.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Payroll run history">
+                <caption className="sr-only">Payroll run history with period, computed amount and status</caption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Payee</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Run at</TableHead>
+                    <TableHead className="text-right">Computed amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {runsPaged.paged.map(r => {
+                    const a = assignments.find(x => x.id === r.assignment_id);
+                    return (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-medium">{a ? profileName(a.payee_user_id) : r.assignment_id.slice(0, 8)}</TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          <time dateTime={r.period_start}>{r.period_start}</time>
+                          {' → '}
+                          <time dateTime={r.period_end}>{r.period_end}</time>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          <time dateTime={r.created_at}>{format(new Date(r.created_at), 'MMM d, yyyy HH:mm')}</time>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <Badge className="bg-success/10 text-success gap-1 tabular-nums"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />D{Number(r.computed_amount).toFixed(2)}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.status}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            runs.length === 0 && <div className="text-center py-10 text-muted-foreground"><p>No payroll runs yet</p></div>
+          )}
+          {runsPaged.totalPages > 1 && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground" role="status">Page {runsPaged.page} of {runsPaged.totalPages} · {runsPaged.total} runs</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={runsPaged.page <= 1} aria-label="Previous runs page" onClick={() => setRunsPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="outline" disabled={runsPaged.page >= runsPaged.totalPages} aria-label="Next runs page" onClick={() => setRunsPage(p => p + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -296,10 +358,11 @@ export default function PayrollPage() {
                 ? `Will pay fixed D${runDialog?.fixed_amount}.`
                 : `Will compute ${runDialog?.percent}% of payer wallet credits in this period.`}
             </p>
+            {runError && <p role="alert" className="text-sm text-destructive">{runError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRunDialog(null)}>Cancel</Button>
-            <Button onClick={runPayroll}>Run</Button>
+            <Button onClick={runPayroll} disabled={running}>{running ? 'Running…' : 'Run'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

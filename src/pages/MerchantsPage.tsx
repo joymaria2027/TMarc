@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import {
   groupMerchants, paginateList, validateMerchantForm, validateDeliveryForm,
   validateTariffForm, type Errors,
 } from './merchantGroup.helpers';
+import { parseHighlightId } from '@/lib/deliveries';
 
 export const MERCHANT_PAGE_SIZE = 9;
 
@@ -134,6 +136,23 @@ export default function MerchantsPage() {
   }, [load, scheduleLoad]);
 
   useEffect(() => { setPage(0); }, [filterType]);
+
+  // Deep-link contract (mirrors DeliveriesPage): /merchants?highlight=<id>
+  // highlights the matching merchant card + scrolls it into view once per id.
+  // Unknown ids are ignored silently.
+  const [searchParams] = useSearchParams();
+  const highlightId = parseHighlightId(searchParams.get('highlight'));
+  const pageRef = useRef<HTMLDivElement>(null);
+  const scrolledHighlightRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightId) return;
+    if (scrolledHighlightRef.current === highlightId) return;
+    const el = pageRef.current?.querySelector(`[data-merchant-id="${CSS.escape(highlightId)}"]`);
+    if (el instanceof HTMLElement) {
+      scrolledHighlightRef.current = highlightId;
+      el.scrollIntoView({ block: 'center' });
+    }
+  }, [highlightId, merchants]);
 
   const createMerchant = async () => {
     const errs = validateMerchantForm(form);
@@ -360,7 +379,7 @@ export default function MerchantsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div ref={pageRef} className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Merchants</h1>
@@ -453,7 +472,11 @@ export default function MerchantsPage() {
                 {group.items.map(r => {
                   const rTariffs = merchantTariffs(r.id);
                   return (
-                    <Card key={r.id}>
+                    <Card
+                      key={r.id}
+                      data-merchant-id={r.id}
+                      className={highlightId !== null && r.id === highlightId ? 'ring-2 ring-primary' : undefined}
+                    >
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                           <span className="font-medium">{r.name}</span>

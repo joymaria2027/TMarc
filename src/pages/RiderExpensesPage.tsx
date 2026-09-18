@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { Upload, Plus, DollarSign, FileText, CheckCircle2, XCircle, Bell, Clock, History, Fuel, ChevronDown, ChevronUp, Eye, MapPin } from 'lucide-react';
+import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import DeliveryMap from '@/components/DeliveryMap';
 import ExpenseFormDialog from '@/components/expenses/ExpenseFormDialog';
 import ExpenseRow from '@/components/expenses/ExpenseRow';
@@ -20,21 +21,112 @@ import { format } from 'date-fns';
 
 export default function RiderExpensesPage() {
   const { user, hasRole } = useAuth();
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [expenseTypes, setExpenseTypes] = useState<any[]>([]);
-  const [riders, setRiders] = useState<any[]>([]);
-  const [merchants, setMerchants] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [consumptions, setConsumptions] = useState<any[]>([]);
-  const [deliveriesMap, setDeliveriesMap] = useState<Record<string, any>>({});
+
+  interface RiderWithProfile {
+    id: string;
+    user_id: string;
+    license_plate: string | null;
+    profile: { full_name?: string | null; email?: string | null } | null;
+  }
+
+  interface Merchant {
+    id: string;
+    name: string;
+    manager_user_id: string | null;
+    accountant_user_id: string | null;
+  }
+
+  interface ExpenseItem {
+    id: string;
+    rider_id: string;
+    merchant_id: string | null;
+    expense_type_id: string | null;
+    uploaded_by: string;
+    description: string;
+    amount: number;
+    consumed_amount: number | null;
+    receipt_url: string | null;
+    expense_date: string;
+    status: string;
+    created_at: string;
+    deducted_in_delivery_id: string | null;
+  }
+
+  interface ExpenseType {
+    id: string;
+    name: string;
+    is_fuel: boolean | null;
+  }
+
+  interface Alert {
+    id: string;
+    rider_id: string;
+    expense_id: string;
+    merchant_id: string;
+    alert_type: string;
+    message: string;
+    target_role: string;
+    is_read: boolean;
+    created_at: string;
+  }
+
+  interface Consumption {
+    id: string;
+    rider_expense_id: string;
+    delivery_id: string;
+    amount_consumed: number;
+    kind: string;
+    created_at: string;
+  }
+
+  interface Delivery {
+    id: string;
+    order_reference: string | null;
+    delivered_at: string | null;
+    created_at: string;
+    status: string;
+    pickup_address: string | null;
+    dropoff_address: string | null;
+    pickup_latitude: number | null;
+    pickup_longitude: number | null;
+    dropoff_latitude: number | null;
+    dropoff_longitude: number | null;
+    actual_distance_km: number | null;
+    estimated_distance_km: number | null;
+    estimated_tariff: number | null;
+    actual_tariff: number | null;
+    dispatched_at: string | null;
+    picked_up_at: string | null;
+    customer_name: string | null;
+    customer_phone: string | null;
+    payment_method: string | null;
+    payment_bank_name: string | null;
+    settlement_approved: boolean;
+  }
+
+  interface Waypoint {
+    id: string;
+    delivery_id: string;
+    latitude: number;
+    longitude: number;
+    recorded_at: string;
+  }
+
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
+  const [expenseTypes, setExpenseTypes] = useState<ExpenseType[]>([]);
+  const [riders, setRiders] = useState<RiderWithProfile[]>([]);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [consumptions, setConsumptions] = useState<Consumption[]>([]);
+  const [deliveriesMap, setDeliveriesMap] = useState<Record<string, Delivery>>({});
   const [highlighted, setHighlighted] = useState<Record<string, number>>({});
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const prevConsumedRef = useRef<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [expensesVisible, setExpensesVisible] = useState(20);
   const EXPENSES_PAGE_SIZE = 20;
-  const [selectedDelivery, setSelectedDelivery] = useState<any | null>(null);
-  const [selectedWaypoints, setSelectedWaypoints] = useState<any[]>([]);
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
+  const [selectedWaypoints, setSelectedWaypoints] = useState<Waypoint[]>([]);
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -57,13 +149,15 @@ export default function RiderExpensesPage() {
       supabase.from('rider_expense_consumptions').select('*').order('created_at', { ascending: false }).limit(500),
     ]);
 
-    const profileMap = Object.fromEntries(((profilesRes.data || []) as any[]).map((p: any) => [p.user_id, p]));
+    const profileMap = Object.fromEntries(
+      ((profilesRes.data || []) as { user_id: string; full_name?: string | null; email?: string | null }[]).map(p => [p.user_id, p])
+    );
     const ridersWithProfile = (ridersRes.data || []).map(r => ({ ...r, profile: profileMap[r.user_id] }));
     setRiders(ridersWithProfile);
     setMerchants(restRes.data || []);
 
     // Detect remaining-amount changes for highlight
-    const newExp = (expRes.data || []) as any[];
+    const newExp = (expRes.data || []) as ExpenseItem[];
     const newHi: Record<string, number> = {};
     const now = Date.now();
     newExp.forEach(e => {
@@ -81,9 +175,9 @@ export default function RiderExpensesPage() {
     }
 
     setExpenses(newExp);
-    setAlerts(alertsRes.data || []);
-    setExpenseTypes((typesRes.data as any[]) || []);
-    const cons = (consRes.data || []) as any[];
+    setAlerts((alertsRes.data || []) as Alert[]);
+    setExpenseTypes((typesRes.data || []) as ExpenseType[]);
+    const cons = (consRes.data || []) as Consumption[];
     setConsumptions(cons);
 
     // Fetch deliveries referenced by consumptions for labels
@@ -93,7 +187,7 @@ export default function RiderExpensesPage() {
         .from('deliveries')
         .select('id, order_reference, delivered_at, created_at, status, pickup_address, dropoff_address, pickup_latitude, pickup_longitude, dropoff_latitude, dropoff_longitude, actual_distance_km, estimated_distance_km, estimated_tariff, actual_tariff, dispatched_at, picked_up_at, customer_name, customer_phone, payment_method, payment_bank_name, settlement_approved')
         .in('id', deliveryIds);
-      setDeliveriesMap(Object.fromEntries(((delvs || []) as any[]).map(d => [d.id, d])));
+      setDeliveriesMap(Object.fromEntries(((delvs || []) as Delivery[]).map(d => [d.id, d])));
     }
     setLoading(false);
   };
@@ -110,12 +204,12 @@ export default function RiderExpensesPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => scheduleReload())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expense_alerts' }, () => scheduleReload())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rider_expense_consumptions' }, () => scheduleReload())
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'deliveries' }, (payload: any) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'deliveries' }, (payload: { new: { settlement_approved: boolean } }) => {
         if (payload?.new?.settlement_approved === true) scheduleReload();
       })
       .subscribe();
     return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(channel); };
-  }, []);
+  }, [load]);
 
   const getRiderName = (riderId: string) => {
     const r = riders.find(r => r.id === riderId);
@@ -149,7 +243,7 @@ export default function RiderExpensesPage() {
   };
 
   // Group consumptions by delivery
-  const consumptionsByDelivery = consumptions.reduce<Record<string, any[]>>((acc, c) => {
+  const consumptionsByDelivery = consumptions.reduce<Record<string, Consumption[]>>((acc, c) => {
     (acc[c.delivery_id] ||= []).push(c);
     return acc;
   }, {});
@@ -223,7 +317,7 @@ export default function RiderExpensesPage() {
     load();
   };
 
-  const verifyExpense = async (expense: any, action: 'verified' | 'rejected') => {
+  const verifyExpense = async (expense: ExpenseItem, action: 'verified' | 'rejected') => {
     const { error } = await supabase.from('rider_expenses').update({
       status: action,
       verified_by: user!.id,
@@ -321,86 +415,161 @@ export default function RiderExpensesPage() {
         </TabsList>
 
         <TabsContent value="expenses" className="space-y-3 mt-4">
-          {expenses.slice(0, expensesVisible).map(e => {
-            const rowCons = consumptions.filter(c => c.rider_expense_id === e.id);
-            const isHi = !!highlighted[e.id];
-            return (
-              <ExpenseRow
-                key={e.id}
-                expense={e}
-                riderName={getRiderName(e.rider_id)}
-                merchantName={e.merchant_id ? getMerchantName(e.merchant_id) : null}
-                consumptions={rowCons}
-                isHighlighted={isHi}
-                expanded={expandedRow === e.id}
-                onToggleExpand={(open) => setExpandedRow(open ? e.id : null)}
-                canVerify={canVerify}
-                onVerify={(exp) => verifyExpense(exp, 'verified')}
-                onReject={(exp) => verifyExpense(exp, 'rejected')}
-                onOpenReceipt={handleOpenReceipt}
-                onViewDelivery={viewDelivery}
-                deliveryLabel={deliveryLabel}
-              />
-            );
-          })}
-          {expenses.length === 0 && (
-            <div className="text-center py-10 text-muted-foreground">
+          {expensesVisible > 0 && expenses.length > 0 ? (
+            <>
+              <div className="overflow-x-auto rounded-md border">
+                <Table aria-label="Rider expenses">
+                  <TableCaption className="sr-only">Rider expense records with verification actions and receipt access</TableCaption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Rider</TableHead>
+                      <TableHead>Merchant</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Consumed</TableHead>
+                      <TableHead>Remaining</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Receipt</TableHead>
+                      {canVerify && <TableHead className="text-right">Actions</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {expenses.slice(0, expensesVisible).map(e => {
+                      const rowCons = consumptions.filter(c => c.rider_expense_id === e.id);
+                      const isHi = !!highlighted[e.id];
+                      const remaining = Math.max(Number(e.amount) - Number(e.consumed_amount || 0), 0);
+                      const showExpand = rowCons.length > 0;
+                      return (
+                        <>
+                          <TableRow key={e.id} className={isHi ? 'ring-2 ring-primary motion-safe:animate-pulse' : ''}>
+                            <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={e.expense_date}>{e.expense_date}</time></TableCell>
+                            <TableCell className="font-medium">{e.description}</TableCell>
+                            <TableCell>{getRiderName(e.rider_id)}</TableCell>
+                            <TableCell>{e.merchant_id ? getMerchantName(e.merchant_id) : '—'}</TableCell>
+                            <TableCell className="text-right tabular-nums">D{Number(e.amount).toFixed(2)}</TableCell>
+                            <TableCell className="text-right tabular-nums text-destructive">−D{Number(e.consumed_amount || 0).toFixed(2)}</TableCell>
+                            <TableCell className="text-right tabular-nums text-muted-foreground">D{remaining.toFixed(2)}</TableCell>
+                            <TableCell>
+                              {e.status === 'verified' ? (
+                                <Badge className="bg-success/10 text-success border-success/30 gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Verified</Badge>
+                              ) : e.status === 'rejected' ? (
+                                <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" aria-hidden="true" />Rejected</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" aria-hidden="true" />Pending</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {e.receipt_url ? (
+                                <Button variant="outline" size="sm" className="gap-1" onClick={() => handleOpenReceipt(e)} aria-label={`View receipt for ${e.description}`}>
+                                  <FileText className="h-3 w-3" aria-hidden="true" />View
+                                </Button>
+                              ) : (
+                                <Badge variant="secondary" className="text-xs">No receipt</Badge>
+                              )}
+                            </TableCell>
+                            {canVerify && e.status === 'pending' && (
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-success" onClick={() => verifyExpense(e, 'verified')}>
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />Verify
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-destructive" onClick={() => verifyExpense(e, 'rejected')}>
+                                    <XCircle className="h-3 w-3" aria-hidden="true" />Reject
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                          {showExpand && expandedRow === e.id && (
+                            <TableRow>
+                              <TableCell colSpan={canVerify ? 10 : 9} className="py-0">
+                                <div className="space-y-1 text-xs rounded border bg-muted/20 px-3 py-2">
+                                  {rowCons.map(c => (
+                                    <div key={c.id} className="flex justify-between gap-2 items-center">
+                                      <span className="text-muted-foreground">
+                                        {format(new Date(c.created_at), 'MMM d HH:mm')} • delivery {deliveryLabel(c.delivery_id)}
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        {c.kind === 'fuel' ? <Fuel className="h-3 w-3" aria-hidden="true" /> : null}
+                                        <Badge variant="outline" className="h-4 px-1 text-xs">{c.kind}</Badge>
+                                        <span className="font-medium tabular-nums">D{Number(c.amount_consumed).toFixed(2)}</span>
+                                        <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`View delivery ${c.delivery_id.slice(0, 8)}`} onClick={() => viewDelivery(c.delivery_id)}><Eye className="h-3 w-3" aria-hidden="true" /></Button>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {expensesVisible < expenses.length && (
+                <Button variant="outline" className="w-full" onClick={() => setExpensesVisible(v => v + EXPENSES_PAGE_SIZE)}>
+                  Show more ({expenses.length - expensesVisible} remaining)
+                </Button>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground" role="status">
               <Upload className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No expenses recorded yet</p>
             </div>
           )}
-          {expensesVisible < expenses.length && (
-            <Button variant="outline" className="w-full" onClick={() => setExpensesVisible(v => v + EXPENSES_PAGE_SIZE)}>
-              Show more ({expenses.length - expensesVisible} remaining)
-            </Button>
-          )}
         </TabsContent>
 
         <TabsContent value="history" className="space-y-3 mt-4">
-          {deliveryOrder.map(did => {
-            const rows = consumptionsByDelivery[did];
-            const total = rows.reduce((s, r) => s + Number(r.amount_consumed), 0);
-            const d = deliveriesMap[did];
-            return (
-              <Card key={did}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="font-medium text-sm">Delivery {deliveryLabel(did)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {d?.delivered_at ? format(new Date(d.delivered_at), 'MMM d, yyyy HH:mm') : '—'}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="gap-1"><DollarSign className="h-3 w-3" />D{total.toLocaleString()} deducted</Badge>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    {rows.map(c => {
+          {deliveryOrder.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Consumption history">
+                <TableCaption className="sr-only">Expense consumption history by delivery with deduction details</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Delivery</TableHead>
+                    <TableHead className="whitespace-nowrap">Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Expense</TableHead>
+                    <TableHead className="text-right">Consumed</TableHead>
+                    <TableHead className="text-right">Remaining</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deliveryOrder.map(did => {
+                    const rows = consumptionsByDelivery[did];
+                    const d = deliveriesMap[did];
+                    return rows.map(c => {
                       const exp = expenseById(c.rider_expense_id);
                       const remainingAfter = exp ? Math.max(Number(exp.amount) - Number(exp.consumed_amount || 0), 0) : null;
                       return (
-                        <div key={c.id} className="flex items-center justify-between gap-2 py-1 border-b last:border-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {c.kind === 'fuel' ? <Fuel className="h-3 w-3 text-primary" /> : <DollarSign className="h-3 w-3 text-muted-foreground" />}
-                            <Badge variant="outline" className="h-4 px-1 text-xs">{c.kind}</Badge>
-                            <span className="truncate">{exp?.description || c.rider_expense_id.slice(0, 8)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="font-medium">−D{Number(c.amount_consumed).toLocaleString()}</span>
-                            {remainingAfter != null && (
-                              <span className="text-muted-foreground">remaining D{remainingAfter.toLocaleString()}</span>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-6 w-6" aria-label={`View delivery ${did.slice(0, 8)}`} onClick={() => viewDelivery(did)}><Eye className="h-3.5 w-3.5" aria-hidden="true" /></Button>
-                          </div>
-                        </div>
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium">Delivery {deliveryLabel(did)}</TableCell>
+                          <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={c.created_at}>{format(new Date(c.created_at), 'MMM d, yyyy HH:mm')}</time></TableCell>
+                          <TableCell>
+                            <span className="flex items-center gap-1">
+                              {c.kind === 'fuel' ? <Fuel className="h-3 w-3 text-primary" aria-hidden="true" /> : <DollarSign className="h-3 w-3 text-muted-foreground" aria-hidden="true" />}
+                              <Badge variant="outline" className="h-4 px-1 text-xs">{c.kind}</Badge>
+                            </span>
+                          </TableCell>
+                          <TableCell className="truncate">{exp?.description || c.rider_expense_id.slice(0, 8)}</TableCell>
+                          <TableCell className="text-right font-medium tabular-nums text-destructive">−D{Number(c.amount_consumed).toFixed(2)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{remainingAfter != null ? `D${remainingAfter.toFixed(2)}` : '—'}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`View delivery ${did.slice(0, 8)}`} onClick={() => viewDelivery(did)}><Eye className="h-3.5 w-3.5" aria-hidden="true" /></Button>
+                          </TableCell>
+                        </TableRow>
                       );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-          {deliveryOrder.length === 0 && (
-            <div className="text-center py-10 text-muted-foreground">
+                    });
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground" role="status">
               <History className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No deductions yet</p>
             </div>
@@ -409,27 +578,38 @@ export default function RiderExpensesPage() {
 
 
         <TabsContent value="alerts" className="space-y-3 mt-4">
-          {alerts.map(a => (
-            <Card key={a.id}>
-              <CardContent className="p-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Bell className="h-4 w-4 text-primary shrink-0" />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <Badge variant={a.alert_type === 'expense_rejected' ? 'destructive' : a.alert_type === 'expense_verified' ? 'default' : 'secondary'}>
-                        {a.alert_type.replace(/_/g, ' ')}
-                      </Badge>
-                    </div>
-                    <p className="text-sm">{a.message}</p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(a.created_at), 'MMM d, yyyy HH:mm')}</p>
-                  </div>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => markAlertRead(a.id)} className="shrink-0">Dismiss</Button>
-              </CardContent>
-            </Card>
-          ))}
-          {alerts.length === 0 && (
-            <div className="text-center py-10 text-muted-foreground">
+          {alerts.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border">
+              <Table aria-label="Expense alerts">
+                <TableCaption className="sr-only">Unread expense alerts with dismiss actions</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead className="whitespace-nowrap">Created</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {alerts.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        <Badge variant={a.alert_type === 'expense_rejected' ? 'destructive' : a.alert_type === 'expense_verified' ? 'default' : 'secondary'}>
+                          {a.alert_type.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[400px] truncate">{a.message}</TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground"><time dateTime={a.created_at}>{format(new Date(a.created_at), 'MMM d, yyyy HH:mm')}</time></TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="ghost" onClick={() => markAlertRead(a.id)} className="min-h-[44px]">Dismiss</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-10 text-muted-foreground" role="status">
               <Bell className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No unread alerts</p>
             </div>
