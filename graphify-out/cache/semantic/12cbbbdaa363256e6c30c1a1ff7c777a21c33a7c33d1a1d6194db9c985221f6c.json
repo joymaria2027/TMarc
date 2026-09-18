@@ -1,1 +1,0 @@
-{"nodes": [{"author": null, "captured_at": null, "contributor": null, "file_type": "code", "id": "realtime_bulk_enablement", "label": "Realtime bulk enablement", "source_file": "supabase/migrations/20260414083306_09b5de84-e5f3-483b-a6e3-81c701b84a02.sql", "source_location": null, "source_url": null}], "edges": [], "hyperedges": []}

@@ -1,1 +1,0 @@
-{"nodes": [{"author": null, "captured_at": null, "contributor": null, "file_type": "code", "id": "receipts_storage_rls_policies", "label": "Receipts storage RLS policies", "source_file": "supabase/migrations/20260414081446_1ce689e9-8521-4909-9e74-1fc0e4d99ce8.sql", "source_location": null, "source_url": null}], "edges": [], "hyperedges": []}

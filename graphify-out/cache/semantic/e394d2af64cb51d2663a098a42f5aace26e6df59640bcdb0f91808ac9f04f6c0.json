@@ -1,1 +1,0 @@
-{"nodes": [{"author": null, "captured_at": null, "contributor": null, "file_type": "code", "id": "profiles_insert_own_policy_fix", "label": "Profiles insert own policy fix", "source_file": "supabase/migrations/20260412122356_bf3dbfe2-30c0-4550-8d32-f7f323037886.sql", "source_location": null, "source_url": null}], "edges": [], "hyperedges": []}

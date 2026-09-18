@@ -1,1 +1,0 @@
-{"nodes": [{"author": null, "captured_at": null, "contributor": null, "file_type": "code", "id": "integrations_supabase_database_schema", "label": "Database schema types deliveries merchants orders", "source_file": "src/integrations/supabase/types.ts", "source_location": null, "source_url": null}], "edges": [], "hyperedges": []}

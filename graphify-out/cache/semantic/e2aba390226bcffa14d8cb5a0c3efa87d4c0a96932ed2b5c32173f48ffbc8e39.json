@@ -1,1 +1,0 @@
-{"nodes": [{"author": null, "captured_at": null, "contributor": null, "file_type": "code", "id": "receipts_bucket_public_flag", "label": "Receipts bucket public flag", "source_file": "supabase/migrations/20260414001627_a15b241a-cb90-43f3-996c-14637b91f9de.sql", "source_location": null, "source_url": null}], "edges": [], "hyperedges": []}
