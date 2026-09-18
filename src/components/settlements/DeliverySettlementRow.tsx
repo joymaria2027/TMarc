@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { CheckCircle2, CreditCard } from 'lucide-react';
 import type { ExpenseItem, SettlementRow } from './MerchantSettlementCard';
@@ -18,6 +19,8 @@ interface DeliverySettlementRowProps {
   expenseDeduction: number;
   deliveryExpenses: ExpenseItem[];
   hasExpenseDeduction: boolean;
+  selected?: boolean;
+  onSelectChange?: () => void;
 }
 
 export default function DeliverySettlementRow({
@@ -30,9 +33,20 @@ export default function DeliverySettlementRow({
   expenseDeduction,
   deliveryExpenses,
   hasExpenseDeduction,
+  selected = false,
+  onSelectChange,
 }: DeliverySettlementRowProps) {
   return (
     <TableRow>
+      <TableCell className="w-12">
+        {canApprove && onSelectChange ? (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onSelectChange}
+            aria-label={`Select order ${d.order_reference || d.id.slice(0, 8)}`}
+          />
+        ) : null}
+      </TableCell>
       <TableCell className="font-medium">{d.order_reference || d.id.slice(0, 8)}</TableCell>
       <TableCell>{d.merchant_name}</TableCell>
       <TableCell className="text-xs text-muted-foreground">

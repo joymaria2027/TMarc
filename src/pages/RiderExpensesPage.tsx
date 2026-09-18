@@ -571,7 +571,7 @@ export default function RiderExpensesPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="expense-status">Status</Label>
-                <Select value={expenseStatusFilter.join(',')} onValueChange={v => setExpenseStatusFilter(v ? v.split(',') : [])} multiple>
+                <Select value={expenseStatusFilter.join(',')} onValueChange={v => setExpenseStatusFilter(v ? [v] : [])}>
                   <SelectTrigger id="expense-status" className="w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">Pending</SelectItem>

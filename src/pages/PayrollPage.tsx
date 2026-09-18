@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -383,7 +384,7 @@ export default function PayrollPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="assignment-status">Status</Label>
-            <Select value={assignmentStatusFilter.join(',')} onValueChange={v => setAssignmentStatusFilter(v ? v.split(',') : [])} multiple>
+            <Select value={assignmentStatusFilter.join(',')} onValueChange={v => setAssignmentStatusFilter(v ? [v] : [])}>
               <SelectTrigger id="assignment-status" className="w-36"><SelectValue placeholder="All" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
@@ -393,7 +394,7 @@ export default function PayrollPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="assignment-payer">Payer</Label>
-            <Select value={assignmentPayerFilter.join(',')} onValueChange={v => setAssignmentPayerFilter(v ? v.split(',') : [])} multiple>
+            <Select value={assignmentPayerFilter.join(',')} onValueChange={v => setAssignmentPayerFilter(v ? [v] : [])}>
               <SelectTrigger id="assignment-payer" className="w-36"><SelectValue placeholder="All" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="merchant">Merchant</SelectItem>
@@ -500,7 +501,7 @@ export default function PayrollPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="run-status">Status</Label>
-                <Select value={runStatusFilter.join(',')} onValueChange={v => setRunStatusFilter(v ? v.split(',') : [])} multiple>
+                <Select value={runStatusFilter.join(',')} onValueChange={v => setRunStatusFilter(v ? [v] : [])}>
                   <SelectTrigger id="run-status" className="w-36"><SelectValue placeholder="All" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">Pending</SelectItem>

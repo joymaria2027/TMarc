@@ -63,11 +63,6 @@ export default function ReconciliationPage() {
   // F2: bulk reject (destructive on money rows) confirms before firing.
   const [bulkConfirm, setBulkConfirm] = useState<{ action: 'matched' | 'disputed'; count: number } | null>(null);
 
-  const scheduleReload = useCallback(() => {
-    if (reloadTimer.current) clearTimeout(reloadTimer.current);
-    reloadTimer.current = setTimeout(() => load(), 600);
-  }, [load]);
-
   const load = useCallback(async () => {
     setLoading(true);
     // F11: single filter layer. All rows (up to 1000) are already client-side;
@@ -83,6 +78,11 @@ export default function ReconciliationPage() {
     setRows((data || []) as Recon[]);
     setLoading(false);
   }, []);
+
+  const scheduleReload = useCallback(() => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => load(), 600);
+  }, [load]);
 
   useEffect(() => {
     if (!allowed) return;

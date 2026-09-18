@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -49,10 +50,6 @@ export default function RevenueSharingPage() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReload = useCallback(() => {
-    if (reloadTimer.current) clearTimeout(reloadTimer.current);
-    reloadTimer.current = setTimeout(() => load(), 500);
-  }, [load]);
 
   // Filters
   const [shareSearch, setShareSearch] = useState('');
@@ -70,6 +67,11 @@ export default function RevenueSharingPage() {
     setMerchants(restRes.data || []);
     setLoading(false);
   }, []);
+
+  const scheduleReload = useCallback(() => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => load(), 500);
+  }, [load]);
 
   useEffect(() => {
     load();
@@ -327,7 +329,7 @@ export default function RevenueSharingPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="share-status">Status</Label>
-            <Select value={shareStatusFilter.join(',')} onValueChange={v => setShareStatusFilter(v ? v.split(',') : [])} multiple>
+            <Select value={shareStatusFilter.join(',')} onValueChange={v => setShareStatusFilter(v ? [v] : [])}>
               <SelectTrigger id="share-status" className="w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="balanced">Balanced</SelectItem>

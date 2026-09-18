@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Receipt } from 'lucide-react';
+import { Receipt, Download, X, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -145,6 +146,11 @@ export default function SettlementsPage() {
   const [deliveryExpenseItemsMap, setDeliveryExpenseItemsMap] = useState<Map<string, ExpenseItem[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [payingRiderId, setPayingRiderId] = useState<string | null>(null);
+  const _isAdmin = hasRole('admin');
+  const _isRiderOnly = hasRole('rider') && !_isAdmin && !hasRole('accountant') && !hasRole('business_owner') && !hasRole('company_manager');
+  const _isManagerOnly = hasRole('company_manager') && !_isAdmin;
+  const _isAccountantOnly = hasRole('accountant') && !_isAdmin;
+  const defaultTab = (_isManagerOnly || _isAccountantOnly) ? 'merchants' : 'riders';
   const [activeTab, setActiveTab] = useState(defaultTab);
 
   // Filters
@@ -159,10 +165,10 @@ export default function SettlementsPage() {
   const [deliverySelectedIds, setDeliverySelectedIds] = useState<Set<string>>(new Set());
   const [deliveryBulkActionPending, setDeliveryBulkActionPending] = useState<'approve' | null>(null);
 
-  const isAdmin = hasRole('admin');
-  const isRiderOnly = hasRole('rider') && !isAdmin && !hasRole('accountant') && !hasRole('business_owner') && !hasRole('company_manager');
-  const isManagerOnly = hasRole('company_manager') && !isAdmin;
-  const isAccountantOnly = hasRole('accountant') && !isAdmin;
+  const isAdmin = _isAdmin;
+  const isRiderOnly = _isRiderOnly;
+  const isManagerOnly = _isManagerOnly;
+  const isAccountantOnly = _isAccountantOnly;
 
   const load = useCallback(async () => {
     // Determine merchant scope for managers/accountants
@@ -598,9 +604,6 @@ export default function SettlementsPage() {
   const totalRevenue = rows.reduce((sum, r) => sum + r.tariff, 0);
   const approvedCount = rows.filter(r => r.settlement_approved).length;
 
-  // Determine default tab based on role
-  const defaultTab = (isManagerOnly || isAccountantOnly) ? 'merchants' : 'riders';
-
   if (loading) return (
     <div className="space-y-4" role="status" aria-label="Loading settlements" aria-busy="true">
       {[0, 1, 2].map(i => (
@@ -648,7 +651,7 @@ export default function SettlementsPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="settlement-status">Status</Label>
-            <Select value={settlementStatusFilter.join(',')} onValueChange={v => setSettlementStatusFilter(v ? v.split(',') : [])} multiple>
+            <Select value={settlementStatusFilter.join(',')} onValueChange={v => setSettlementStatusFilter(v ? [v] : [])}>
               <SelectTrigger id="settlement-status" className="w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="approved">Approved</SelectItem>
@@ -681,7 +684,7 @@ export default function SettlementsPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue={activeTab} className="w-full" onValueChange={setActiveTab}>
+      <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="merchants">By Merchant</TabsTrigger>
           {!isManagerOnly && !isAccountantOnly && <TabsTrigger value="riders">By Rider</TabsTrigger>}
@@ -841,7 +844,6 @@ export default function SettlementsPage() {
                       const deduction = d.tariff - netTariff;
                       const hasDeduction = (restExpenseMap.get(d.merchant_id) || 0) > 0;
                       return (
-                        <>
                           <DeliverySettlementRow
                             key={d.id}
                             delivery={d}
@@ -854,16 +856,15 @@ export default function SettlementsPage() {
                             deliveryExpenses={(deliveryExpenseItemsMap.get(d.id) || [])}
                             hasExpenseDeduction={hasDeduction}
                             selected={deliverySelectedIds.has(d.id)}
-                            onSelectChange={(selected) => toggleDeliveryRow(d.id)}
+                            onSelectChange={() => toggleDeliveryRow(d.id)}
                           />
-                        </>
                       );
                     })}
                   </TableBody>
                   {canApprove && deliverySelectedIds.size > 0 && (
                     <TableFooter>
                       <TableRow>
-                        <TableCell colSpan={2} />
+                        <TableCell colSpan={3} />
                         <TableCell colSpan={11} className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
