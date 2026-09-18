@@ -1,14 +1,38 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# https://www.robotstxt.org/robotstxt.html
 User-agent: *
+# Allow public storefront and marketing pages
 Allow: /
+Allow: /shop
+Allow: /wholesale
+Allow: /privacy
+Allow: /auth
+Allow: /s/
+
+# Disallow back-office admin, dispatch, finance, and user session pages
+Disallow: /admin/
+Disallow: /merchant/
+Disallow: /app/
+Disallow: /deliveries
+Disallow: /riders
+Disallow: /gps-tracker
+Disallow: /merchants
+Disallow: /alerts
+Disallow: /settlements
+Disallow: /revenue-sharing
+Disallow: /rider-expenses
+Disallow: /expense-types
+Disallow: /analytics
+Disallow: /fraud
+Disallow: /permissions
+Disallow: /wallet
+Disallow: /rejected-deliveries
+Disallow: /rls-verification
+Disallow: /settings
+Disallow: /payroll
+Disallow: /reconciliation
+Disallow: /cart
+Disallow: /checkout
+Disallow: /account/
+
+# Sitemap location
+Sitemap: https://t-marc.vercel.app/sitemap.xml
