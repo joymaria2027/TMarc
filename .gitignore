@@ -36,6 +36,9 @@ dist-ssr
 # Editor backups
 *~
 
+# Supabase CLI local link state
+supabase/.temp/
+
 # Local dev artifacts (tickets, knowledge graph cache)
 .scratch/
 graphify-out/
