@@ -1,7 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CHART_COLORS } from '@/lib/finance';
+import { CHART_COLORS, formatMoney } from '@/lib/finance';
 
 export type DailyDatum = { date: string; count: number };
 export type StatusDatum = { name: string; value: number };
@@ -116,7 +116,7 @@ export default function AnalyticsCharts(props: {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" fontSize={11} />
                   <YAxis fontSize={12} />
-                  <Tooltip formatter={(v: number) => {formatMoney(Number(v))}} />
+                  <Tooltip formatter={(v: number) => formatMoney(Number(v))} />
                   <Bar dataKey="revenue" fill={CHART_COLORS[0]} name="Revenue (D)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
