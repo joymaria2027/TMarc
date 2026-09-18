@@ -28,7 +28,7 @@ const BUILT_IN_ROLES = ['admin', 'rider', 'accountant', 'company_manager', 'busi
 const PERMISSIONS = ['can_view', 'can_edit', 'can_delete', 'can_add'] as const;
 
 export default function RolePermissionsPage() {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, loading: authLoading } = useAuth();
   const [perms, setPerms] = useState<any[]>([]);
   const [customRoles, setCustomRoles] = useState<any[]>([]);
   const [customResources, setCustomResources] = useState<any[]>([]);
@@ -62,11 +62,19 @@ export default function RolePermissionsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!authLoading) {
+      if (canManageRoles) {
+        load();
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [authLoading, canManageRoles]);
 
   // Auto-populate permissions for new roles/resources that don't have entries yet
   useEffect(() => {
-    if (loading) return;
+    if (loading || !canManageRoles) return;
     const missing: { role: string; resource: string }[] = [];
     allRoles.forEach(role => {
       RESOURCES.forEach(resource => {
@@ -155,12 +163,30 @@ export default function RolePermissionsPage() {
     setStatusMessage(`Custom resource ${name} removed.`);
   };
 
-  if (loading)
+  if (authLoading || (loading && canManageRoles))
     return (
       <div className="flex items-center justify-center py-20">
         <div role="status" aria-label="Loading role permissions" className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
+
+  if (!canManageRoles) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold">Role Permissions</h1>
+          <p className="text-muted-foreground">Assign view, edit, delete, and add rights per role</p>
+        </div>
+        <Card>
+          <CardContent className="p-8 text-center space-y-2">
+            <Shield className="h-8 w-8 mx-auto text-muted-foreground" aria-hidden="true" />
+            <p className="font-medium text-foreground">Access Restricted</p>
+            <p className="text-sm text-muted-foreground">Admins and app developers only.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

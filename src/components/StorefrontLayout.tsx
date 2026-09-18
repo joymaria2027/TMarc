@@ -7,6 +7,7 @@ import { useCart } from "@/lib/cart";
 import { usePrefersDark } from "@/hooks/usePrefersDark";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import UserNotificationBell from "@/components/UserNotificationBell";
 
 const tabs = [
   { to: "/shop", label: "Shop", Icon: ShoppingBag, end: true },
@@ -59,6 +60,7 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
             </Button>
             {user ? (
               <>
+                <UserNotificationBell />
                 <Button variant="ghost" size="sm" asChild>
                   <Link to="/account/orders" aria-current={location.pathname === "/account/orders" ? "page" : undefined}>
                     <Package className="h-5 w-5 mr-1" aria-hidden="true" />My Orders
@@ -79,6 +81,7 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
           </nav>
           {/* Compact mobile actions — full tab bar is at bottom */}
           <nav aria-label="Primary mobile" className="flex md:hidden items-center gap-1">
+            {user && <UserNotificationBell />}
             <Button variant="ghost" size="icon" asChild>
               <Link to="/cart" aria-label={count > 0 ? `Cart, ${count} items` : "Cart"} className="relative">
                 <ShoppingCart className="h-5 w-5" aria-hidden="true" />

@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,10 +44,35 @@ export default function WholesalersPage() {
       setReasonErrors(s => ({ ...s, [row.id]: "Add a reason so the applicant knows what to fix" }));
       return;
     }
-    const payload: any = { approval_status: status, rejection_reason: status === "rejected" ? (reason[row.id] || null) : null };
+    const rejectionReason = status === "rejected" ? (reason[row.id] || "").trim() : null;
+    const payload: any = { approval_status: status, rejection_reason: rejectionReason };
     if (status === "approved") payload.approved_at = new Date().toISOString();
     const { error } = await (supabase.from("wholesalers" as any).update(payload).eq("id", row.id) as any);
     if (error) { toast.error(error.message); return; }
+
+    // Fallback in-app notification insert in case database trigger is pending or in tests
+    try {
+      if (status === "approved") {
+        await (supabase.from("user_notifications" as any).insert({
+          user_id: row.user_id,
+          title: "Wholesale application approved",
+          message: `Congratulations! Your wholesale account for ${row.business_name} has been approved. Wholesale prices are now active across the shop.`,
+          type: "wholesale_approved",
+          metadata: { wholesaler_id: row.id, status: "approved" },
+        }) as any);
+      } else if (status === "rejected") {
+        await (supabase.from("user_notifications" as any).insert({
+          user_id: row.user_id,
+          title: "Wholesale application declined",
+          message: `Your wholesale application for ${row.business_name} was declined.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}`,
+          type: "wholesale_rejected",
+          metadata: { wholesaler_id: row.id, status: "rejected", rejection_reason: rejectionReason },
+        }) as any);
+      }
+    } catch {
+      // Handled by Postgres trigger in production
+    }
+
     toast.success(status === "approved" ? "Wholesaler approved" : "Application declined");
     load();
   };

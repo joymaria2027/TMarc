@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "@/lib/finance";
-import { useNavigate, Navigate } from "react-router-dom";
+import { useNavigate, Navigate, Link } from "react-router-dom";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/hooks/useAuth";
+import { useWholesale } from "@/lib/wholesale";
+import { validateWholesaleQuantities, getWholesaleQuantityErrors, type WholesaleViolation } from "@/lib/wholesaleValidation";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { resolveDeliveryFee } from "@/lib/deliveryFee";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -33,7 +36,23 @@ export default function CheckoutPage() {
   const [fees, setFees] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<CheckoutErrors>({});
   const [authError, setAuthError] = useState<string | null>(null);
+  const { isWholesaler, quote } = useWholesale();
+  const [wholesaleViolations, setWholesaleViolations] = useState<WholesaleViolation[]>([]);
   const [announcement, setAnnouncement] = useState("");
+
+  const wholesaleErrors = useMemo(() => {
+    if (!isWholesaler) return {};
+    return getWholesaleQuantityErrors(items, quote);
+  }, [isWholesaler, items, quote]);
+
+  useEffect(() => {
+    if (isWholesaler) {
+      setWholesaleViolations(validateWholesaleQuantities(items, quote));
+    } else {
+      setWholesaleViolations([]);
+    }
+  }, [isWholesaler, items, quote]);
+
   // inline auth at checkout
   const [authTab, setAuthTab] = useState<"signup" | "signin">("signup");
   const [authEmail, setAuthEmail] = useState("");
@@ -154,6 +173,17 @@ export default function CheckoutPage() {
       requestAnimationFrame(() => document.getElementById(firstId)?.focus());
       return;
     }
+
+    const violations = validateWholesaleQuantities(items, quote);
+    if (violations.length > 0) {
+      setWholesaleViolations(violations);
+      const firstMsg = violations[0].message;
+      toast.error(`Wholesale minimum not met: ${firstMsg}`);
+      setAnnouncement(firstMsg);
+      requestAnimationFrame(() => document.getElementById("checkout-wholesale-alert")?.focus());
+      return;
+    }
+
     setSubmitting(true);
     const merchantIds = Object.keys(groups);
     const orderIdsCreated: string[] = [];
@@ -359,12 +389,23 @@ export default function CheckoutPage() {
             <Card key={mid}>
               <CardHeader className="py-3"><CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap"><span className="min-w-0 truncate">{merchantName}</span></CardTitle></CardHeader>
               <CardContent className="p-4 pt-0 space-y-2 text-sm">
-                {gItems.map(i => (
-                  <div key={i.product_id} className="flex justify-between gap-3">
-                    <span className="flex-1 min-w-0 truncate">{i.quantity}× {i.name}</span>
-                    <span className="shrink-0 tabular-nums">{formatMoney((i.price * i.quantity))}</span>
-                  </div>
-                ))}
+                {gItems.map(i => {
+                  const itemError = wholesaleErrors[i.product_id];
+                  return (
+                    <div key={i.product_id} className="space-y-1">
+                      <div className="flex justify-between gap-3">
+                        <span className="flex-1 min-w-0 truncate">{i.quantity}× {i.name}</span>
+                        <span className="shrink-0 tabular-nums">{formatMoney((i.price * i.quantity))}</span>
+                      </div>
+                      {itemError && (
+                        <p role="alert" className="text-xs text-destructive font-medium flex items-center gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <span>{itemError}</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
                 <div className="border-t pt-2 space-y-1">
                   <Row label="Items subtotal" value={gSubtotal} />
                   <Row label={fulfillment === "delivery" ? "Delivery fee" : "Pickup"} value={gFee} />
@@ -375,6 +416,27 @@ export default function CheckoutPage() {
           );
         })}
 
+        {wholesaleViolations.length > 0 && (
+          <Card id="checkout-wholesale-alert" tabIndex={-1} className="border-destructive/30 bg-destructive/5">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2 text-destructive font-medium text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>Wholesale minimum order requirement not met</span>
+              </div>
+              <ul className="text-xs text-destructive space-y-1 list-disc list-inside">
+                {wholesaleViolations.map(v => (
+                  <li key={v.productId}>{v.message}</li>
+                ))}
+              </ul>
+              <p className="text-xs pt-1">
+                <Link to="/cart" className="underline font-medium text-foreground hover:text-primary">
+                  Return to cart to update item quantities
+                </Link>
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader><CardTitle>Grand total</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -384,9 +446,20 @@ export default function CheckoutPage() {
           </CardContent>
         </Card>
 
-        <Button size="lg" className="w-full" disabled={submitting} onClick={submit}
-          aria-describedby={!user ? "checkout-auth-hint" : undefined}>
-          {!user ? "Create an account or sign in above to continue" : submitting ? "Placing orders…" : `Pay D ${total.toFixed(2)} with ModemPay`}
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={submitting || wholesaleViolations.length > 0}
+          onClick={submit}
+          aria-describedby={!user ? "checkout-auth-hint" : wholesaleViolations.length > 0 ? "checkout-wholesale-alert" : undefined}
+        >
+          {!user
+            ? "Create an account or sign in above to continue"
+            : wholesaleViolations.length > 0
+            ? "Fix wholesale quantities to continue"
+            : submitting
+            ? "Placing orders…"
+            : `Pay D ${total.toFixed(2)} with ModemPay`}
         </Button>
       </div>
     </StorefrontLayout>
