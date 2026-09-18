@@ -8,6 +8,7 @@ import Auth from "@/pages/Auth";
 import Index from "@/pages/Index";
 import RiderDashboard from "@/pages/RiderDashboard";
 import DeliveriesPage from "@/pages/DeliveriesPage";
+import NewDeliveryPage from "@/pages/NewDeliveryPage";
 import RidersPage from "@/pages/RidersPage";
 import MerchantsPage from "@/pages/MerchantsPage";
 import BusinessTypesPage from "@/pages/BusinessTypesPage";
@@ -67,9 +68,11 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/reset" element={<Auth resetMode />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/rider" element={<ProtectedRoute><RiderDashboard /></ProtectedRoute>} />
             <Route path="/deliveries" element={<ProtectedRoute><DeliveriesPage /></ProtectedRoute>} />
+            <Route path="/deliveries/new" element={<ProtectedRoute><NewDeliveryPage /></ProtectedRoute>} />
             <Route path="/riders" element={<ProtectedRoute><RidersPage /></ProtectedRoute>} />
             <Route path="/gps-tracker" element={<ProtectedRoute><GpsTrackerPage /></ProtectedRoute>} />
             <Route path="/merchants" element={<ProtectedRoute><MerchantsPage /></ProtectedRoute>} />

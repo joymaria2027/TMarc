@@ -93,7 +93,12 @@ export default function RevenueSharingPage() {
 
       const deliveryId = deliveryData?.[0]?.id;
       if (!deliveryId) {
-        toast.error('No deliveries found for this merchant. Create a delivery first.');
+        // Ratio rules attach to the merchant's first delivery — say so plainly
+        // instead of leaving the admin to guess why the form can't save.
+        toast.error(
+          "This store has no deliveries yet, so there's nothing to attach the ratio to. Dispatch its first delivery, then set the ratio — it will apply to this and all future deliveries.",
+          { duration: 8000 },
+        );
         return;
       }
 
@@ -166,7 +171,7 @@ export default function RevenueSharingPage() {
   );
 
   return (
-    <div className="space-y-6" aria-busy={false}>
+    <div className="space-y-6" aria-busy={loading}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Revenue Sharing</h1>

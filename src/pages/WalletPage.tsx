@@ -101,6 +101,9 @@ export default function WalletPage() {
   // Process dialog (merchant manager initial approval / accountant finalization)
   const [processOpen, setProcessOpen] = useState(false);
   const [processMode, setProcessMode] = useState<'approve' | 'finalize'>('approve');
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectError, setRejectError] = useState<string | null>(null);
+  const [rejectArmed, setRejectArmed] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<WithdrawalRow | null>(null);
   const [payoutMethod, setPayoutMethod] = useState('');
   const [payoutRef, setPayoutRef] = useState('');
@@ -278,10 +281,15 @@ export default function WalletPage() {
       toast.error('Please select a payout method');
       return;
     }
+    if (action === 'rejected' && !rejectReason.trim()) {
+      setRejectError('A reason is required so the requester knows why the withdrawal was rejected.');
+      return;
+    }
+    setRejectError(null);
     setProcessing(true);
     const finalMethod = payoutMethod === 'Bank Transfer' ? `Bank Transfer (${bankName})` : payoutMethod;
 
-    let updatePayload: any = {
+    const updatePayload: any = {
       processed_by: user!.id,
       processed_at: new Date().toISOString(),
     };
@@ -293,6 +301,7 @@ export default function WalletPage() {
       updatePayload.payout_reference = payoutRef || null;
     } else {
       updatePayload.status = 'rejected';
+      updatePayload.notes = rejectReason.trim();
     }
 
     const { error } = await supabase
@@ -328,8 +337,7 @@ export default function WalletPage() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div className="space-y-1">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-2"><Wallet className="h-3.5 w-3.5" />Treasury</p>
-          <h1 className="font-display text-4xl tracking-tight">Wallets.</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Wallets</h1>
           <p className="text-muted-foreground">Balances, withdrawals, and transaction history.</p>
         </div>
         <Button variant={hasPin ? 'outline' : 'default'} size="sm" className="gap-1" onClick={() => { setPinSetupOpen(true); setPinStep('new'); setNewPin(''); setConfirmPin(''); }}>
@@ -463,7 +471,7 @@ export default function WalletPage() {
             <div>
               <p className="text-xs text-muted-foreground">Wallet</p>
               <p className="text-sm font-medium">{selectedWallet ? getPartyLabel(selectedWallet) : ''}</p>
-              <p className="text-xs text-muted-foreground">Available: D {selectedWallet ? Number(selectedWallet.balance).toFixed(2) : '0.00'}</p>
+              <p className="text-xs text-muted-foreground tabular-nums">Available: {formatMoney(selectedWallet ? Number(selectedWallet.balance) : 0)}</p>
             </div>
             <div>
               <Label htmlFor="withdraw-amount">Amount</Label>
@@ -499,7 +507,7 @@ export default function WalletPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-muted rounded p-3">
-              <p className="text-sm">Amount: <span className="font-bold">D {selectedRequest ? Number(selectedRequest.amount).toFixed(2) : ''}</span></p>
+              <p className="text-sm">Amount: <span className="font-bold tabular-nums">{formatMoney(selectedRequest ? Number(selectedRequest.amount) : 0)}</span></p>
               {selectedRequest?.notes && <p className="text-xs text-muted-foreground mt-1">Notes: {selectedRequest.notes}</p>}
               <p className="text-xs text-muted-foreground mt-2">
                 {processMode === 'approve'
@@ -531,8 +539,32 @@ export default function WalletPage() {
               </>
             )}
           </div>
+          {rejectError && <p id="reject-reason-error" role="alert" className="text-sm text-destructive px-1">{rejectError}</p>}
           <DialogFooter className="gap-2">
-            <Button variant="destructive" onClick={() => handleProcess('rejected')} disabled={processing}>Reject</Button>
+            <div className="mr-auto flex-1 min-w-[200px]">
+              <Label htmlFor="reject-reason">Rejection reason</Label>
+              <Input
+                id="reject-reason"
+                value={rejectReason}
+                onChange={e => { setRejectReason(e.target.value); setRejectError(null); }}
+                placeholder="Required — shown to the requester"
+                aria-invalid={!!rejectError}
+                aria-describedby={rejectError ? 'reject-reason-error' : undefined}
+                autoComplete="off"
+              />
+            </div>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                // Two-step destructive: first press arms the button with explicit copy.
+                if (!rejectArmed) { setRejectArmed(true); return; }
+                handleProcess('rejected');
+              }}
+              disabled={processing}
+              onBlur={() => setRejectArmed(false)}
+            >
+              {rejectArmed ? 'Confirm rejection' : 'Reject'}
+            </Button>
             {processMode === 'approve' ? (
               <Button onClick={() => handleProcess('approve')} disabled={processing}>
                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Approve & Forward'}
@@ -589,7 +621,7 @@ export default function WalletPage() {
           </DialogHeader>
           <div className="space-y-4 flex flex-col items-center">
             <p className="text-sm text-muted-foreground text-center">
-              Enter your PIN to confirm withdrawal of <span className="font-bold text-foreground">D {Number(withdrawAmount).toFixed(2)}</span>
+              Enter your PIN to confirm withdrawal of <span className="font-bold text-foreground tabular-nums">{formatMoney(Number(withdrawAmount))}</span>
             </p>
             <InputOTP maxLength={6} value={verifyPin} onChange={setVerifyPin}>
               <InputOTPGroup>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { UserPlus, Users, Search, Bike, Car, MoreVertical, Plus, X } from 'lucide-react';
+import { guardedWrite } from '@/lib/guardedWrite';
 
 export const RIDERS_PAGE_SIZE = 24;
 
@@ -26,6 +27,12 @@ export default function RidersPage() {
   const [licensePlate, setLicensePlate] = useState('');
   const [selectedMerchant, setSelectedMerchant] = useState('');
   const [visibleCount, setVisibleCount] = useState(RIDERS_PAGE_SIZE);
+  // Debounced realtime reload — bursts of events trigger one fetch, not one per event.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     const { data: ridersData } = await supabase.from('riders').select('*');
@@ -55,10 +62,10 @@ export default function RidersPage() {
     load();
     const channel = supabase
       .channel('riders-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_riders' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_riders' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(channel); };
   }, []);
 
   const createRider = async () => {
@@ -68,9 +75,11 @@ export default function RidersPage() {
       user_id: profile.user_id, vehicle_type: vehicleType, license_plate: licensePlate,
     } as any).select('id').single());
     if (error) { toast.error(error.message); return; }
-    await supabase.from('user_roles').insert({ user_id: profile.user_id, role: 'rider' as any });
+    const { error: roleError } = await supabase.from('user_roles').insert({ user_id: profile.user_id, role: 'rider' as any });
+    if (roleError) toast.error('Rider created, but assigning the rider role failed — retry in Permissions.');
     if (selectedMerchant && newRider) {
-      await supabase.from('merchant_riders').insert({ merchant_id: selectedMerchant, rider_id: newRider.id });
+      const { error: mrError } = await supabase.from('merchant_riders').insert({ merchant_id: selectedMerchant, rider_id: newRider.id });
+      if (mrError) toast.error('Rider created, but merchant assignment failed — assign them on the merchant card.');
     }
     toast.success('Rider created');
     setOpen(false);
@@ -90,7 +99,11 @@ export default function RidersPage() {
   };
 
   const unassignMerchant = async (riderId: string, merchantId: string) => {
-    await supabase.from('merchant_riders').delete().eq('rider_id', riderId).eq('merchant_id', merchantId);
+    const { error } = await guardedWrite(
+      supabase.from('merchant_riders').delete().eq('rider_id', riderId).eq('merchant_id', merchantId),
+      { context: 'Remove merchant failed' },
+    );
+    if (error) return;
     toast.success('Merchant removed');
     load();
   };
@@ -167,6 +180,9 @@ export default function RidersPage() {
         </div>
       </div>
 
+      <p className="text-xs text-muted-foreground" role="status">
+        Showing {Math.min(visibleCount, filtered.length)} of {filtered.length} riders
+      </p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filtered.slice(0, visibleCount).map(r => {
           const unassignedMerchants = merchants.filter(rest => !r.assignedMerchantIds.includes(rest.id));
@@ -257,7 +273,11 @@ export default function RidersPage() {
                 )}
                 <div className="mt-3">
                   <Button size="sm" variant={r.is_active ? 'destructive' : 'default'} className="min-h-[44px]" aria-label={`${r.is_active ? 'Deactivate' : 'Activate'} rider ${riderLabel}`} onClick={async () => {
-                    await supabase.from('riders').update({ is_active: !r.is_active }).eq('id', r.id);
+                    const { error } = await guardedWrite(
+                      supabase.from('riders').update({ is_active: !r.is_active }).eq('id', r.id),
+                      { context: r.is_active ? 'Deactivate failed' : 'Activate failed' },
+                    );
+                    if (error) return;
                     setRiders(prev => prev.map(x => x.id === r.id ? { ...x, is_active: !r.is_active } : x));
                     toast.success(r.is_active ? 'Rider deactivated' : 'Rider activated');
                   }}>

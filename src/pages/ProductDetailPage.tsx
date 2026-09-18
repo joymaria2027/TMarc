@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import StorefrontLayout from "@/components/StorefrontLayout";
@@ -58,9 +59,9 @@ export default function ProductDetailPage() {
   if (!product) return (
     <StorefrontLayout>
       <div className="max-w-md mx-auto rounded-lg border bg-card p-8 text-center space-y-2">
-        <p role="status" className="font-medium">Dish not found</p>
+        <p role="status" className="font-medium">Product not found</p>
         <p className="text-sm text-muted-foreground">It may have sold out or the link is stale.</p>
-        <Button asChild><Link to="/shop">Browse dishes</Link></Button>
+        <Button asChild><Link to="/shop">Browse stores</Link></Button>
       </div>
     </StorefrontLayout>
   );
@@ -97,14 +98,14 @@ export default function ProductDetailPage() {
             {q.isWholesale ? (
               <div className="space-y-1">
                 <div className="flex items-baseline gap-3 flex-wrap">
-                  <p className="font-display text-3xl tabular-nums">D {q.price.toFixed(2)}</p>
-                  <p className="text-base text-muted-foreground line-through tabular-nums">D {q.retailPrice.toFixed(2)}</p>
+                  <p className="font-display text-3xl tabular-nums">{formatMoney(q.price)}</p>
+                  <p className="text-base text-muted-foreground line-through tabular-nums">{formatMoney(q.retailPrice)}</p>
                   <Badge>Wholesale</Badge>
                 </div>
                 <p id="pdp-wholesale-min" className="text-xs text-muted-foreground">Minimum {q.minQty} unit{q.minQty > 1 ? "s" : ""} for this price.</p>
               </div>
             ) : (
-              <p className="font-display text-3xl tabular-nums">D {Number(product.price).toFixed(2)}</p>
+              <p className="font-display text-3xl tabular-nums">{formatMoney(Number(product.price))}</p>
             )}
             <div>
               {!product.available_today

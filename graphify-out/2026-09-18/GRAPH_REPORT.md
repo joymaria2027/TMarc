@@ -1,16 +1,16 @@
 # Graph Report - download  (2026-09-18)
 
 ## Corpus Check
-- 362 files · ~240,625 words
+- 421 files · ~588,837 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2905 nodes · 5037 edges · 355 communities (209 shown, 146 thin omitted)
+- 3305 nodes · 5661 edges · 394 communities (248 shown, 146 thin omitted)
 - Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 274 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8a0d9c80`
+- Built from commit: `b5b67d23`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -358,18 +358,57 @@
 - [[_COMMUNITY_Community 351|Community 351]]
 - [[_COMMUNITY_Community 352|Community 352]]
 - [[_COMMUNITY_Community 353|Community 353]]
+- [[_COMMUNITY_Community 354|Community 354]]
+- [[_COMMUNITY_Community 355|Community 355]]
+- [[_COMMUNITY_Community 356|Community 356]]
+- [[_COMMUNITY_Community 357|Community 357]]
+- [[_COMMUNITY_Community 358|Community 358]]
+- [[_COMMUNITY_Community 359|Community 359]]
+- [[_COMMUNITY_Community 360|Community 360]]
+- [[_COMMUNITY_Community 361|Community 361]]
+- [[_COMMUNITY_Community 362|Community 362]]
+- [[_COMMUNITY_Community 363|Community 363]]
+- [[_COMMUNITY_Community 364|Community 364]]
+- [[_COMMUNITY_Community 365|Community 365]]
+- [[_COMMUNITY_Community 366|Community 366]]
+- [[_COMMUNITY_Community 367|Community 367]]
+- [[_COMMUNITY_Community 368|Community 368]]
+- [[_COMMUNITY_Community 369|Community 369]]
+- [[_COMMUNITY_Community 370|Community 370]]
+- [[_COMMUNITY_Community 371|Community 371]]
+- [[_COMMUNITY_Community 372|Community 372]]
+- [[_COMMUNITY_Community 373|Community 373]]
+- [[_COMMUNITY_Community 374|Community 374]]
+- [[_COMMUNITY_Community 375|Community 375]]
+- [[_COMMUNITY_Community 376|Community 376]]
+- [[_COMMUNITY_Community 377|Community 377]]
+- [[_COMMUNITY_Community 378|Community 378]]
+- [[_COMMUNITY_Community 379|Community 379]]
+- [[_COMMUNITY_Community 380|Community 380]]
+- [[_COMMUNITY_Community 381|Community 381]]
+- [[_COMMUNITY_Community 382|Community 382]]
+- [[_COMMUNITY_Community 383|Community 383]]
+- [[_COMMUNITY_Community 384|Community 384]]
+- [[_COMMUNITY_Community 385|Community 385]]
+- [[_COMMUNITY_Community 386|Community 386]]
+- [[_COMMUNITY_Community 387|Community 387]]
+- [[_COMMUNITY_Community 388|Community 388]]
+- [[_COMMUNITY_Community 389|Community 389]]
+- [[_COMMUNITY_Community 390|Community 390]]
+- [[_COMMUNITY_Community 391|Community 391]]
+- [[_COMMUNITY_Community 393|Community 393]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `cn()` - 75 edges
 2. `useAuth()` - 69 edges
-3. `Button` - 66 edges
+3. `Button` - 67 edges
 4. `supabase` - 62 edges
 5. `_()` - 55 edges
 6. `Card` - 55 edges
 7. `CardContent` - 55 edges
-8. `Badge()` - 50 edges
+8. `Badge()` - 51 edges
 9. `Table orders` - 43 edges
-10. `Input` - 37 edges
+10. `Input` - 39 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Merchant naming rule` --semantically_similar_to--> `UX copy clarity principles`  [INFERRED] [semantically similar]
@@ -431,11 +470,11 @@
 - **Merchant approval and audit log** — mig_f1010_merchant_audit_log, mig_f1010_fn_log_merchant_audit, mig_f1010_trg_merchants_audit_log, mig_f1010_pol_admins_view_audit, mig_f1010_pol_managers_view_audit [EXTRACTED 1.00]
 - **Wholesaler onboarding and pricing** — mig_f1313_wholesalers, mig_f1313_product_wholesale_pricing, mig_f1313_merchant_wholesale_settings, mig_f1313_fn_sync_wholesaler_role, mig_f1313_fn_is_approved_wholesaler [EXTRACTED 1.00]
 
-## Communities (355 total, 146 thin omitted)
+## Communities (394 total, 146 thin omitted)
 
 ### Community 0 - "Rider Dispatch Payments"
-Cohesion: 0.05
-Nodes (59): navItems, ProductCard(), ProductCardProduct, ProductCardQuote, Props, stockBadge(), Offer, TxData (+51 more)
+Cohesion: 0.14
+Nodes (17): AlertEvent, alertGroup, AlertRow, alertSeverity, CRITICAL, FilterableAlert, filterAlerts(), GROUP_OF (+9 more)
 
 ### Community 1 - "Screenshot Helper Bundle"
 Cohesion: 0.09
@@ -443,7 +482,7 @@ Nodes (56): QueueState, removeDeliveryFromQueue(), _(), ae(), be(), bt(), Ce(), 
 
 ### Community 2 - "NPM Dependencies"
 Cohesion: 0.03
-Nodes (58): dependencies, @capacitor/android, @capacitor/cli, @capacitor/core, class-variance-authority, clsx, cmdk, date-fns (+50 more)
+Nodes (59): dependencies, @capacitor/android, @capacitor/cli, @capacitor/core, @capacitor/haptics, class-variance-authority, clsx, cmdk (+51 more)
 
 ### Community 3 - "Design Parser Tooling"
 Cohesion: 0.07
@@ -458,24 +497,24 @@ Cohesion: 0.07
 Nodes (40): detectCsp(), INLINE_HEADER_SIGNALS, LAYOUT_EXTS, MONOREPO_HELPER_SIGNALS, NUXT_ROUTE_RULES_SIGNALS, NUXT_SECURITY_SIGNALS, SCAN_EXTS, SKIP_DIRS (+32 more)
 
 ### Community 6 - "Merchant Operations Pages"
-Cohesion: 0.11
-Nodes (42): Props, PAYMENT_METHODS, PaymentMethodSelectProps, ReceiptUploadProps, Props, ExpenseFormDialogProps, ExpenseFormMerchant, ExpenseFormRider (+34 more)
+Cohesion: 0.12
+Nodes (41): ExpenseFormDialogProps, ExpenseFormMerchant, ExpenseFormRider, ExpenseFormState, ExpenseFormType, AnalyticsCharts, PAYMENT_LABELS, BusinessType (+33 more)
 
 ### Community 7 - "Checkout Auth Payments"
-Cohesion: 0.11
-Nodes (23): AppRole, AuthContext, AuthContextType, AuthProvider(), Assignment, Run, MerchantSummary, RiderSummary (+15 more)
+Cohesion: 0.21
+Nodes (14): buildDeliverySearchOr(), DELIVERY_SEARCH_COLUMNS, DeliverySearchCandidate, describeDeliveryResultCount(), escapePostgrestLikePattern(), isDeliverySearchActive(), normalizeDeliverySearchQuery(), rowMatchesDeliverySearch() (+6 more)
 
 ### Community 8 - "Order Capture Dialogs"
-Cohesion: 0.12
-Nodes (22): EVENT_LABELS, money(), PaymentBackfillPage(), ReportRow, ResultRow, RunRow, Recon, ReconciliationPage() (+14 more)
+Cohesion: 0.08
+Nodes (38): EVENT_LABELS, MerchantSummary, RiderSummary, SettlementRow, PAYOUT_METHODS, TransactionRow, WalletPage(), WalletRow (+30 more)
 
 ### Community 9 - "Sidebar Sheet UI"
 Cohesion: 0.07
 Nodes (34): useIsMobile(), useIsMobile, Separator, Sheet, Sidebar, SidebarContent, SidebarContext, SidebarFooter (+26 more)
 
 ### Community 10 - "Live Browser Capture"
-Cohesion: 0.09
-Nodes (28): buildAnnotationsForCapture(), buildDesignHeader(), buildPinElement(), captureAndEmit(), captureElementToBlob(), collectFontCssText(), compileShader(), copyToClipboard() (+20 more)
+Cohesion: 0.08
+Nodes (30): buildAnnotationsForCapture(), buildDesignHeader(), buildPinElement(), captureAndEmit(), captureElementToBlob(), collectFontCssText(), compileShader(), copyToClipboard() (+22 more)
 
 ### Community 11 - "Wallet Settlement Policies"
 Cohesion: 0.05
@@ -486,16 +525,16 @@ Cohesion: 0.11
 Nodes (35): hasGeneratedHeader(), HEADER_MARKERS, isGeneratedFile(), isGitIgnored(), acceptCli(), argVal(), deindentContent(), detectCommentSyntax() (+27 more)
 
 ### Community 13 - "App Shell Layout"
-Cohesion: 0.07
-Nodes (33): Layout(), Msg, OrderChat(), useAuth(), useGpsTracking(), haptics, AccountantDashboard(), AdminDashboard() (+25 more)
+Cohesion: 0.13
+Nodes (16): ExpenseType, FuelChange, FuelVariant, TypeRowProps, money(), PaymentBackfillPage(), ReportRow, ResultRow (+8 more)
 
 ### Community 14 - "Dev Dependencies"
 Cohesion: 0.09
 Nodes (23): devDependencies, autoprefixer, eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, jsdom (+15 more)
 
 ### Community 15 - "Storefront Cart Wholesale"
-Cohesion: 0.09
-Nodes (30): StorefrontLayout(), tabs, GpsPosition, usePrefersDark(), CartItem, groupByMerchant(), useCart(), resolveDeliveryFee() (+22 more)
+Cohesion: 0.33
+Nodes (7): ACTIVE_STATUSES, FilterableOrder, filterOrders(), isActiveOrder(), OrderTab, orders, TestOrder
 
 ### Community 16 - "Core Schema Wallets"
 Cohesion: 0.11
@@ -506,20 +545,20 @@ Cohesion: 0.12
 Nodes (26): Action, ActionType, actionTypes, addToRemoveQueue(), dispatch(), genId(), listeners, memoryState (+18 more)
 
 ### Community 18 - "Live Script Utilities"
-Cohesion: 0.16
-Nodes (28): cleanup(), clearScrollY(), clearSession(), closeTunePopover(), desc(), handleAccept(), handleClick(), handleDiscard() (+20 more)
+Cohesion: 0.17
+Nodes (27): cleanup(), clearAnnotations(), clearScrollY(), clearSession(), closeTunePopover(), desc(), handleAccept(), handleClick() (+19 more)
 
 ### Community 19 - "Auth Roles Permissions"
-Cohesion: 0.13
-Nodes (16): WalletWidget(), formatMoney(), AnalyticsCharts, AnalyticsPage(), PAYMENT_LABELS, SelectContent, SelectLabel, SelectScrollDownButton (+8 more)
+Cohesion: 0.33
+Nodes (6): isAcquireTimeoutError(), LockFn, NavigatorLocks, resilientNavigatorLock(), sleep(), webLocks()
 
 ### Community 20 - "Order Timeline Utilities"
-Cohesion: 0.12
-Nodes (21): ORDER, OrderStatusTimeline(), STEPS, cn(), ButtonProps, buttonVariants, Calendar(), CalendarProps (+13 more)
+Cohesion: 0.09
+Nodes (28): ORDER, OrderStatusTimeline(), STEPS, cn(), Breadcrumb, BreadcrumbEllipsis(), BreadcrumbItem, BreadcrumbLink (+20 more)
 
 ### Community 21 - "Accordion UI Primitives"
-Cohesion: 0.08
-Nodes (16): Avatar, AvatarFallback, AvatarImage, Checkbox, HoverCardContent, InputOTP, InputOTPGroup, InputOTPSeparator (+8 more)
+Cohesion: 0.07
+Nodes (19): AccordionContent, AccordionItem, AccordionTrigger, Avatar, AvatarFallback, AvatarImage, Checkbox, HoverCardContent (+11 more)
 
 ### Community 22 - "Live Component Builders"
 Cohesion: 0.16
@@ -614,8 +653,8 @@ Cohesion: 0.30
 Nodes (11): buildTargetNames(), cleanSkillsLock(), cleanup(), DEPRECATED_NAMES, findProjectRoot(), findSkillsDirs(), HARNESS_DIRS, isImpeccableSkill() (+3 more)
 
 ### Community 45 - "Begineditpin Canceleditingpin"
-Cohesion: 0.26
-Nodes (12): beginEditPin(), cancelEditingPin(), clearAnnotations(), finalizeEditingPin(), localCoords(), onAnnotDown(), onAnnotInputKey(), onAnnotMove() (+4 more)
+Cohesion: 0.27
+Nodes (11): beginEditPin(), cancelEditingPin(), finalizeEditingPin(), localCoords(), onAnnotDown(), onAnnotInputKey(), onAnnotMove(), onAnnotUp() (+3 more)
 
 ### Community 46 - "Tsconfig Json"
 Cohesion: 0.17
@@ -642,8 +681,8 @@ Cohesion: 0.25
 Nodes (9): __dirname, findHarnessDirs(), generatePinnedSkill(), HARNESS_DIRS, loadCommandMetadata(), pin(), root, unpin() (+1 more)
 
 ### Community 52 - "Types Compositetypes"
-Cohesion: 0.20
-Nodes (9): CompositeTypes, Constants, DatabaseWithoutInternals, DefaultSchema, Enums, Json, Tables, TablesInsert (+1 more)
+Cohesion: 0.25
+Nodes (7): 01-tracer-alerts-filter-patch, After merge, Blast-radius rule, Comments, Done when, TDD slices, Ticket
 
 ### Community 53 - "Command Commanddialog"
 Cohesion: 0.20
@@ -683,7 +722,7 @@ Nodes (8): Function audit_delivery_status_change, Function audit_order_status_ch
 
 ### Community 62 - "Breadcrumb Breadcrumbellipsis"
 Cohesion: 0.07
-Nodes (32): applyRealtimePatch(), RealtimeEventType, RealtimePayload, RealtimeRow, useRealtimeTable(), UseRealtimeTableOptions, DeliveriesPage(), DispatchAuditPage() (+24 more)
+Nodes (35): DeliveriesTableProps, DeliveryMerchantNameRow, DeliveryRowCells(), merchantDisplayName(), DeliveryAssignmentRow, deliveryClaimLabel(), deliveryDeleteLabel(), deliveryFlagLabel() (+27 more)
 
 ### Community 63 - "Drawer Drawercontent"
 Cohesion: 0.29
@@ -774,8 +813,8 @@ Cohesion: 0.50
 Nodes (4): update_updated_at_column function reference, mws_updated_at trigger, pwp_updated_at trigger, wholesalers_updated_at trigger
 
 ### Community 86 - "Confirmreject Performreject"
-Cohesion: 0.40
-Nodes (6): rpcCancelDeliveryAcceptance(), rpcRejectDelivery(), confirmReject, performReject, removeDeliveryFromQueue, reject_delivery RPC contract test
+Cohesion: 0.06
+Nodes (34): useDebouncedValue(), applyRealtimePatch(), RealtimeEventType, RealtimePayload, RealtimeRow, useRealtimeTable(), UseRealtimeTableOptions, parseHighlightId() (+26 more)
 
 ### Community 87 - "Shoppage Storelandingpage"
 Cohesion: 0.50
@@ -818,8 +857,8 @@ Cohesion: 0.67
 Nodes (3): localStorage cart store loadCart saveCart groupByMerchant, useCart reactive cart with add remove setQty, CartPage merchant groups checkout
 
 ### Community 98 - "handleClaimDelivery RiderDashboard"
-Cohesion: 0.40
-Nodes (5): rpcClaimDelivery(), rpcGetUnassignedDeliveriesForRider(), handleClaimDelivery, loadDeliveries, loadUnassigned
+Cohesion: 0.29
+Nodes (7): allGroupSrc, byName(), compDir, GROUP, read(), srcDir, widgetSrc
 
 ### Community 99 - "Typeset Improvement Guide"
 Cohesion: 1.00
@@ -942,8 +981,12 @@ Cohesion: 0.10
 Nodes (20): Animate complex properties, Assess What "Extraordinary" Means Here, For data-heavy interfaces, For functional UI, For performance-critical UI, For visual/marketing surfaces, Implement with Discipline, Interact with the device (+12 more)
 
 ### Community 145 - "createShare RevenueSharingPage"
-Cohesion: 0.09
-Nodes (21): CHART_COLORS, entityIdOf(), paginate(), validateServiceArea(), validateSharing(), validateWithdrawal(), DailyDatum, MerchantDatum (+13 more)
+Cohesion: 0.18
+Nodes (7): CHART_COLORS, DailyDatum, MerchantDatum, PaymentDatum, PaymentRevenueDatum, RiderDatum, StatusDatum
+
+### Community 152 - "handleProcess withdrawal approve finalize"
+Cohesion: 0.05
+Nodes (51): Layout(), StorefrontLayout(), tabs, useAuth(), usePrefersDark(), CartItem, groupByMerchant(), useCart() (+43 more)
 
 ### Community 160 - "WCAG Contrast Requirements"
 Cohesion: 0.11
@@ -1171,7 +1214,7 @@ Nodes (7): capacitorHaptics(), impact(), ImpactStyle, NotificationType, notify()
 
 ### Community 337 - "Community 337"
 Cohesion: 0.25
-Nodes (7): Breadcrumb, BreadcrumbEllipsis(), BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator()
+Nodes (7): 01-tracer-myorders-checkout, After merge, Blast-radius rule, Comments, Done when, TDD slices, Ticket
 
 ### Community 338 - "Community 338"
 Cohesion: 0.29
@@ -1182,12 +1225,12 @@ Cohesion: 0.29
 Nodes (6): 01-fix-all-to-20-20, After merge, Blast-radius rule, Done when, TDD slices, Ticket
 
 ### Community 340 - "Community 340"
-Cohesion: 0.23
-Nodes (10): pageRange(), DeliveriesPageParams, DeliveryRow, fetchDeliveriesCount(), fetchDeliveriesPage(), fetchUnassignedPage(), QueryClient, UnassignedPageParams (+2 more)
+Cohesion: 0.17
+Nodes (14): pageRange(), fetchDeliveriesPage(), fetchUnassignedPage(), ExpenseRow, ExpensesPageParams, fetchExpensesCount(), fetchExpensesPage(), QueryClient (+6 more)
 
 ### Community 341 - "Community 341"
-Cohesion: 0.60
-Nodes (4): Auth(), getEmailAutocomplete(), getPasswordAutocomplete(), validateAuthField()
+Cohesion: 0.29
+Nodes (6): Done when, Graph orientation (2-query budget spent), Non-goals, PRD: MyOrders + Checkout friction (tracer bullet), Problem (from UX friction audit, 5 subagents), Scope (tracer — small, reversible)
 
 ### Community 342 - "Community 342"
 Cohesion: 0.60
@@ -1206,20 +1249,172 @@ Cohesion: 0.70
 Nodes (3): hasSensitiveLeak(), maskPhone(), maskPhonesInSample()
 
 ### Community 347 - "Community 347"
-Cohesion: 0.33
-Nodes (5): ExpenseRow, ExpensesPageParams, fetchExpensesCount(), QueryClient, Database
+Cohesion: 0.29
+Nodes (6): Done when, Graph orientation (1 query spent), Non-goals, PRD: Ops alerts triage tracer, Problem (from UX friction audit, ops subagent — verified in code 2026-09-18), Scope (tracer — small, reversible)
+
+### Community 348 - "Community 348"
+Cohesion: 0.25
+Nodes (7): 01-guarded-writes-and-recovery, After merge, Blast-radius rule, Comments, Done when, TDD slices, Ticket
 
 ### Community 349 - "Community 349"
+Cohesion: 0.20
+Nodes (9): CompositeTypes, Constants, DatabaseWithoutInternals, DefaultSchema, Enums, Json, Tables, TablesInsert (+1 more)
+
+### Community 350 - "Community 350"
+Cohesion: 0.17
+Nodes (11): A. Unchecked optimistic money/state writes (~14 instances, one systemic fix), B. Destructive actions without confirmation (3), C. Money actions without preview/confirm (2), D. Named anti-references from PRODUCT.md (4), E. Missing user-recovery paths (2), F. Data integrity surfaced as UI (2), P1 findings (26) — grouped by theme, P2 highlights (systemic) (+3 more)
+
+### Community 351 - "Community 351"
+Cohesion: 0.07
+Nodes (48): navItems, Msg, OrderChat(), ProductCard(), ProductCardProduct, ProductCardQuote, Props, stockBadge() (+40 more)
+
+### Community 352 - "Community 352"
+Cohesion: 0.60
+Nodes (3): decidePostOrderNavigation(), firstRealUrl(), PostOrderDecision
+
+### Community 353 - "Community 353"
+Cohesion: 0.25
+Nodes (7): 01-tracer-bulk-resolve-undo, After merge, Blast-radius rule, Comments, Done when, TDD slices, Ticket
+
+### Community 354 - "Community 354"
+Cohesion: 0.18
+Nodes (10): CartPage.tsx, CheckoutPage.tsx, CheckoutStatusPage.tsx, Lane 08 — Customer storefront (Agent H, "Customer-auditor"), Lane 8 verdict, MyOrdersPage.tsx, ProductDetailPage.tsx, ShopPage.tsx (+2 more)
+
+### Community 355 - "Community 355"
+Cohesion: 0.25
+Nodes (7): 01-tracer-money-guards, After merge, Blast-radius rule, Comments, Done when, TDD slices, Ticket
+
+### Community 356 - "Community 356"
+Cohesion: 0.29
+Nodes (6): Done when, Graph orientation (1 query spent), Non-goals, PRD: Finance money-safety tracer, Problem (from UX friction audit, finance subagent — verified in code 2026-09-18), Scope (tracer — small, reversible)
+
+### Community 357 - "Community 357"
+Cohesion: 0.60
+Nodes (4): Auth(), getEmailAutocomplete(), getPasswordAutocomplete(), validateAuthField()
+
+### Community 358 - "Community 358"
+Cohesion: 0.60
+Nodes (3): partitionPayoutDeliveries(), PayoutDelivery, validateRunPeriod()
+
+### Community 359 - "Community 359"
+Cohesion: 0.25
+Nodes (7): Done when, Graph orientation (no new queries — carries over), Non-goals, PRD: Ops alerts bulk-resolve + session undo tracer, Problem (from UX friction audit, ops subagent), Schema finding (2026-09-18, verified in `src/integrations/supabase/types.ts:331-341`), Scope (tracer — small, reversible)
+
+### Community 360 - "Community 360"
+Cohesion: 0.18
+Nodes (10): AccountantDashboard.tsx, AdminDashboard.tsx, AppDeveloperDashboard.tsx, BusinessOwnerDashboard.tsx, Index.tsx, Lane 09 — Shell & admin (Agent I, "Shell-auditor"), Lane 9 verdict, Layout.tsx (+2 more)
+
+### Community 361 - "Community 361"
 Cohesion: 0.80
 Nodes (3): clampPage(), pageCount(), paginate()
 
-### Community 350 - "Community 350"
-Cohesion: 0.40
-Nodes (4): fetchRidersCount(), QueryClient, RiderRow, RidersPageParams
+### Community 362 - "Community 362"
+Cohesion: 0.31
+Nodes (8): applyBulkResolve(), applyBulkUnresolve(), normalizeResolveNote(), ResolvableAlert, ResolvedSnapshot, toggleSelected(), visibleIds(), rows
 
-### Community 351 - "Community 351"
-Cohesion: 0.50
-Nodes (3): AccordionContent, AccordionItem, AccordionTrigger
+### Community 363 - "Community 363"
+Cohesion: 0.07
+Nodes (27): Props, PAYMENT_METHODS, PaymentMethodSelectProps, ReceiptUploadProps, Props, GpsPosition, useGpsTracking(), rpcClaimDelivery() (+19 more)
+
+### Community 364 - "Community 364"
+Cohesion: 0.22
+Nodes (8): Lane 06 — Merchant (Agent F, "Merchant-auditor"), Lane 6 verdict, MerchantManagerDashboard.tsx, MerchantOrdersPage.tsx, MerchantProductsPage.tsx, MerchantStorefrontPage.tsx, ProductApprovalsPage.tsx, WholesalersPage.tsx
+
+### Community 366 - "Community 366"
+Cohesion: 0.29
+Nodes (6): Conventions (violations will fail review), Done when, Non-goals, Ownership (parallel-safe), PRD: Finance cards→tables epic (tracer-batched), Scope (per-page slices — preserve EVERY action, only change presentation)
+
+### Community 367 - "Community 367"
+Cohesion: 0.25
+Nodes (7): 01-tracer-deliveries-table, After finishing, Blast-radius rule, Comments, Done when, TDD slices, Ticket
+
+### Community 368 - "Community 368"
+Cohesion: 0.25
+Nodes (7): 01-tracer-resolve-note, After finishing, Blast-radius rule, Comments, Done when, TDD slices, Ticket
+
+### Community 369 - "Community 369"
+Cohesion: 0.25
+Nodes (7): Conventions, Done when, Non-goals, Ownership (parallel-safe), PRD: Alerts resolve-note (migration + UI) tracer, Problem, Scope (tracer — small, reversible; DB push is HUMAN-applied, not agent-applied)
+
+### Community 370 - "Community 370"
+Cohesion: 0.25
+Nodes (7): Conventions, Done when, Non-goals, Ownership (parallel-safe), PRD: Deliveries queue table + highlight tracer, Problem (from UX friction audit, ops subagent), Scope (tracer — behavior-preserving rewrite of the list UI)
+
+### Community 371 - "Community 371"
+Cohesion: 0.29
+Nodes (6): 01-tracer-links-keys, After finishing, Comments, Done when, TDD slices, Ticket
+
+### Community 372 - "Community 372"
+Cohesion: 0.33
+Nodes (5): Conventions + Done-when, Non-goals, Ownership, PRD: Alerts deep-links + keyboard tracer (runs AFTER note + table tracers merge), Scope
+
+### Community 373 - "Community 373"
+Cohesion: 0.25
+Nodes (7): AnalyticsPage.tsx + AnalyticsCharts.tsx, Lane 10 — Platform data (Agent J, "Platform-auditor"), Lane 10 verdict, PaymentBackfillPage.tsx, RlsVerificationPage.tsx, RolePermissionsPage.tsx, WebhookEventsPage.tsx
+
+### Community 374 - "Community 374"
+Cohesion: 0.29
+Nodes (6): 01-epic-finance-tables, After finishing, Comments, Done when, TDD slices, Ticket
+
+### Community 375 - "Community 375"
+Cohesion: 0.29
+Nodes (6): 01-tracer-server-search, After finishing, Comments, Done when, TDD slices, Ticket
+
+### Community 376 - "Community 376"
+Cohesion: 0.29
+Nodes (6): 01-tracer-sort-links, After finishing, Comments, Done when, TDD slices, Ticket
+
+### Community 377 - "Community 377"
+Cohesion: 0.29
+Nodes (6): Conventions + Done-when, Non-goals, Ownership (parallel-safe), PRD: Deliveries server-side search tracer, Problem, Scope
+
+### Community 378 - "Community 378"
+Cohesion: 0.33
+Nodes (5): Conventions + Done-when, Non-goals, Ownership (parallel-safe), PRD: Deliveries sortable columns + merchant deep-links tracer, Scope (two small slices, one owner — both live in/around the table component)
+
+### Community 379 - "Community 379"
+Cohesion: 0.33
+Nodes (5): Criteria, Lanes (pages per lane), Report format (per lane), Severity scale, UI Audit — All Pages
+
+### Community 381 - "Community 381"
+Cohesion: 0.29
+Nodes (6): AlertsPage.tsx, DispatchAuditPage.tsx, FraudPage.tsx, Lane 02 — Ops alerts & audit (Agent B, "Triage-auditor"), Lane 2 verdict, MerchantAuditLogPage.tsx
+
+### Community 382 - "Community 382"
+Cohesion: 0.29
+Nodes (6): ExpenseTypesPage.tsx, Lane 05 — Finance money (Agent E, "Treasury-auditor"), Lane 5 verdict, RevenueSharingPage.tsx, RiderExpensesPage.tsx, WalletPage.tsx
+
+### Community 383 - "Community 383"
+Cohesion: 0.40
+Nodes (6): rpcCancelDeliveryAcceptance(), rpcRejectDelivery(), confirmReject, performReject, removeDeliveryFromQueue, reject_delivery RPC contract test
+
+### Community 384 - "Community 384"
+Cohesion: 0.33
+Nodes (5): DeliveriesPage.tsx, GpsTrackerPage.tsx, Lane 01 — Ops deliveries (Agent A, "Dispatcher-auditor"), Lane 1 verdict, RejectedDeliveriesPage.tsx
+
+### Community 385 - "Community 385"
+Cohesion: 0.33
+Nodes (5): BusinessTypesPage.tsx, Lane 03 — Ops directories (Agent C, "Directory-auditor"), Lane 3 verdict, MerchantsPage.tsx, RidersPage.tsx
+
+### Community 386 - "Community 386"
+Cohesion: 0.33
+Nodes (5): Lane 04 — Finance settlements (Agent D, "Accountant-auditor"), Lane 4 verdict, PayrollPage.tsx, ReconciliationPage.tsx, SettlementsPage.tsx
+
+### Community 387 - "Community 387"
+Cohesion: 0.33
+Nodes (5): Auth.tsx, Lane 07 — Rider mobile (Agent G, "Rider-auditor"), Lane 7 verdict, rider/QueueCard.tsx + rider/OfferCard.tsx, RiderDashboard.tsx
+
+### Community 389 - "Community 389"
+Cohesion: 0.25
+Nodes (7): Coordination (parallel agent on same checkout), Done when, Graph orientation (1 query spent), Non-goals, PRD: UI-audit correctness slice (Theme A/B/E1/E2 + copy purge), Problem (verified in code 2026-09-18), Scope
+
+### Community 390 - "Community 390"
+Cohesion: 0.11
+Nodes (19): WalletWidget(), entityIdOf(), formatMoney(), paginate(), validateServiceArea(), validateSharing(), validateWithdrawal(), GuardedResult (+11 more)
+
+### Community 391 - "Community 391"
+Cohesion: 0.67
+Nodes (3): handleClaimDelivery, loadDeliveries, loadUnassigned
 
 ## Ambiguous Edges - Review These
 - `Delivery Guardian` → `DeliveryAce HTML entry`  [AMBIGUOUS]
@@ -1228,7 +1423,7 @@ Nodes (3): AccordionContent, AccordionItem, AccordionTrigger
   capacitor.config.ts · relation: references
 
 ## Knowledge Gaps
-- **1457 isolated node(s):** `DEPRECATED_NAMES`, `HARNESS_DIRS`, `SKILL_FINGERPRINTS`, `description`, `argumentHint` (+1452 more)
+- **1684 isolated node(s):** `DEPRECATED_NAMES`, `HARNESS_DIRS`, `SKILL_FINGERPRINTS`, `description`, `argumentHint` (+1679 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **146 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -1239,13 +1434,13 @@ _Questions this graph is uniquely positioned to answer:_
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **What is the exact relationship between `Capacitor Config delivery-ace-insight` and `Vite React shadcn TS project`?**
   _Edge tagged AMBIGUOUS (relation: references) - confidence is low._
-- **Why does `cn()` connect `Order Timeline Utilities` to `Rider Dispatch Payments`, `Merchant Operations Pages`, `Checkout Auth Payments`, `Order Capture Dialogs`, `Sidebar Sheet UI`, `App Shell Layout`, `Storefront Cart Wholesale`, `Toast Notification System`, `Auth Roles Permissions`, `Accordion UI Primitives`, `Context Menu UI`, `Navlink Alert`, `Carousel Carouselapi`, `Getpayloadconfigfrompayload Chart`, `Form Formcontrol`, `Menubar Menubarcheckboxitem`, `Command Commanddialog`, `Sheet Sheetcontent`, `Drawer Drawercontent`, `Navigation Menu`, `Toggle Group`, `Community 337`, `Community 351`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **Why does `cn()` connect `Order Timeline Utilities` to `Merchant Operations Pages`, `Order Capture Dialogs`, `Sidebar Sheet UI`, `App Shell Layout`, `Toast Notification System`, `Accordion UI Primitives`, `handleProcess withdrawal approve finalize`, `Context Menu UI`, `Navlink Alert`, `Carousel Carouselapi`, `Getpayloadconfigfrompayload Chart`, `Form Formcontrol`, `Menubar Menubarcheckboxitem`, `Command Commanddialog`, `Sheet Sheetcontent`, `Drawer Drawercontent`, `Navigation Menu`, `Toggle Group`, `Community 351`, `Community 363`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
 - **What connects `DEPRECATED_NAMES`, `HARNESS_DIRS`, `SKILL_FINGERPRINTS` to the rest of the system?**
-  _1472 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1699 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Rider Dispatch Payments` be split into smaller, more focused modules?**
-  _Cohesion score 0.05009481668773704 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.14035087719298245 - nodes in this community are weakly interconnected._
 - **Should `Screenshot Helper Bundle` be split into smaller, more focused modules?**
   _Cohesion score 0.09322033898305085 - nodes in this community are weakly interconnected._
 - **Should `NPM Dependencies` be split into smaller, more focused modules?**
-  _Cohesion score 0.034482758620689655 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.03389830508474576 - nodes in this community are weakly interconnected._

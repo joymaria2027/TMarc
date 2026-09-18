@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -136,10 +137,13 @@ export default function MerchantProductsPage() {
     await supabase.from("products").update({ is_active: val }).eq("id", p.id); load();
   };
   const toggleToday = async (p: Product, val: boolean) => {
-    await supabase.from("products").update({ available_today: val }).eq("id", p.id); load();
+    const { error } = await supabase.from("products").update({ available_today: val }).eq("id", p.id);
+    if (error) { toast.error(error.message); return; }
+    load();
   };
   const remove = async (p: Product) => {
-    await supabase.from("products").delete().eq("id", p.id);
+    const { error } = await supabase.from("products").delete().eq("id", p.id);
+    if (error) { toast.error(error.message); return; }
     setDeleteTarget(null);
     toast.success("Product deleted");
     load();
@@ -191,20 +195,20 @@ export default function MerchantProductsPage() {
                 <div className="space-y-1">
                   <CardTitle className="text-base">{p.name}</CardTitle>
                   <div className="flex gap-1 flex-wrap">
-                    <Badge className="text-xs" variant={p.approval_status === "approved" ? "default" : p.approval_status === "rejected" ? "destructive" : "secondary"}>
+                    <Badge className="text-xs capitalize" variant={p.approval_status === "approved" ? "default" : p.approval_status === "rejected" ? "destructive" : "secondary"}>
                       {p.approval_status}
                     </Badge>
                     {!p.is_active && <Badge className="text-xs" variant="outline">archived</Badge>}
                   </div>
                 </div>
-                <span className="text-lg font-semibold tabular-nums">D {Number(p.price).toFixed(2)}</span>
+                <span className="text-lg font-semibold tabular-nums">{formatMoney(Number(p.price))}</span>
               </CardHeader>
               <CardContent className="space-y-2">
                 {p.description && <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>}
                 {p.rejection_reason && <p className="text-xs text-destructive">Rejected: {p.rejection_reason}</p>}
                 {wholesale[p.id]?.wholesale_price != null && (
                   <p className="text-xs text-primary tabular-nums">
-                    Wholesale: D {Number(wholesale[p.id].wholesale_price).toFixed(2)} (min {wholesale[p.id].min_quantity})
+                    Wholesale: {formatMoney(Number(wholesale[p.id].wholesale_price))} (min {wholesale[p.id].min_quantity})
                   </p>
                 )}
                 {isRestaurant ? (

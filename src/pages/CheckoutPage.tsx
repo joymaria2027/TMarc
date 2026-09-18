@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { useNavigate, Navigate } from "react-router-dom";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { useCart } from "@/lib/cart";
@@ -18,7 +19,7 @@ import { validateCheckout, firstInvalidField, type CheckoutErrors } from "@/lib/
 import { decidePostOrderNavigation } from "@/lib/checkoutPostOrder";
 
 export default function CheckoutPage() {
-  const { items, subtotal, clear, groups } = useCart();
+  const { items, subtotal, clear, groups, removeMerchant } = useCart();
   const { user, loading, signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("delivery");
@@ -154,6 +155,9 @@ export default function CheckoutPage() {
       return;
     }
     setSubmitting(true);
+    const merchantIds = Object.keys(groups);
+    const orderIdsCreated: string[] = [];
+    const orderMerchant = new Map<string, { id: string; name: string }>();
     try {
       // ensure customer row
       let { data: customer } = await supabase.from("customers").select("id").eq("user_id", user.id).maybeSingle();
@@ -163,17 +167,16 @@ export default function CheckoutPage() {
         if (cErr) throw cErr;
         customer = created;
       } else {
-        await supabase.from("customers").update({
+        const { error: uErr } = await supabase.from("customers").update({
           full_name: fullName, phone, default_address: address,
           default_lat: lat, default_lng: lng,
         }).eq("id", customer.id);
+        if (uErr) throw uErr;
       }
 
       // Create one order per merchant
-      const merchantIds = Object.keys(groups);
       const redirectUrls: (string | null)[] = [];
 
-      const orderIdsCreated: string[] = [];
       for (const mid of merchantIds) {
         const gItems = groups[mid];
         const gSubtotal = gItems.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -191,6 +194,7 @@ export default function CheckoutPage() {
         }).select().single();
         if (oErr) throw oErr;
         orderIdsCreated.push(order.id);
+        orderMerchant.set(order.id, { id: mid, name: gItems[0]?.merchant_name || 'Store' });
 
         const { error: iErr } = await supabase.from("order_items").insert(
           gItems.map(i => ({
@@ -229,7 +233,40 @@ export default function CheckoutPage() {
         navigate("/account/orders");
       }
     } catch (err: any) {
-      toast.error(err.message);
+      // Merchants whose orders were created are done — drop only the rest from
+      // the cart so a retry can't duplicate the already-created orders.
+      const createdMerchantIds = new Set(
+        orderIdsCreated.map(oid => orderMerchant.get(oid)?.id).filter(Boolean) as string[],
+      );
+      if (orderIdsCreated.length === 0) {
+        // Nothing was created — cart stays fully intact for a clean retry.
+        toast.error(err.message ?? 'Could not place your order. Please try again.');
+      } else {
+        // Partial failure: keep the created orders reachable and send the user
+        // to complete payment from My orders.
+        for (const mid of merchantIds) {
+          if (!createdMerchantIds.has(mid)) removeMerchant(mid);
+        }
+        const decision = decidePostOrderNavigation({
+          merchantIds,
+          orderIds: orderIdsCreated,
+          redirectUrls: [],
+        });
+        const firstName = orderMerchant.get(orderIdsCreated[0])?.name ?? 'Store';
+        if (decision.kind === "status") {
+          toast.error(
+            `Your ${firstName} order was placed, but payment could not start. Complete it from My orders.`,
+          );
+          navigate(`/checkout/status/${decision.orderId}`);
+        } else {
+          toast.error(
+            orderIdsCreated.length === 1
+              ? 'Your order was placed, but payment could not start. Complete it from My orders.'
+              : `${orderIdsCreated.length} of ${merchantIds.length} orders were placed — the rest stay in your cart to retry.`,
+          );
+          navigate('/account/orders');
+        }
+      }
     } finally {
       setSubmitting(false);
     }
@@ -306,7 +343,7 @@ export default function CheckoutPage() {
                     autoComplete="street-address" aria-invalid={!!errors.address} aria-describedby={errors.address ? "checkout-address-error" : undefined} />
                   {errors.address && <p id="checkout-address-error" role="alert" className="text-sm text-destructive">{errors.address}</p>}
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={useGps}>Use current GPS location</Button>
+                <Button type="button" variant="outline" className="min-h-[44px]" onClick={useGps}>Use current GPS location</Button>
                 {lat && lng && <p className="text-xs text-muted-foreground tabular-nums">{lat.toFixed(5)}, {lng.toFixed(5)}</p>}
               </>
             )}
@@ -317,7 +354,7 @@ export default function CheckoutPage() {
         {Object.entries(groups).map(([mid, gItems]) => {
           const gSubtotal = gItems.reduce((s, i) => s + i.price * i.quantity, 0);
           const gFee = fees[mid] ?? 0;
-          const merchantName = gItems[0].merchant_name || "Restaurant";
+          const merchantName = gItems[0].merchant_name || "Store";
           return (
             <Card key={mid}>
               <CardHeader className="py-3"><CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap"><span className="min-w-0 truncate">{merchantName}</span></CardTitle></CardHeader>
@@ -325,7 +362,7 @@ export default function CheckoutPage() {
                 {gItems.map(i => (
                   <div key={i.product_id} className="flex justify-between gap-3">
                     <span className="flex-1 min-w-0 truncate">{i.quantity}× {i.name}</span>
-                    <span className="shrink-0 tabular-nums">D {(i.price * i.quantity).toFixed(2)}</span>
+                    <span className="shrink-0 tabular-nums">{formatMoney((i.price * i.quantity))}</span>
                   </div>
                 ))}
                 <div className="border-t pt-2 space-y-1">
@@ -359,7 +396,7 @@ export default function CheckoutPage() {
 function Row({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
     <div className={`flex justify-between gap-3 ${bold ? "font-semibold text-base" : ""}`}>
-      <span className="min-w-0 truncate">{label}</span><span className="shrink-0 tabular-nums">D {value.toFixed(2)}</span>
+      <span className="min-w-0 truncate">{label}</span><span className="shrink-0 tabular-nums">{formatMoney(value)}</span>
     </div>
   );
 }

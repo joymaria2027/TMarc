@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,11 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { ArrowRight, MapPin, Receipt, Wallet } from 'lucide-react';
+import { ArrowRight, KeyRound, MapPin, Receipt, Wallet } from 'lucide-react';
 import { validateAuthField, getEmailAutocomplete, getPasswordAutocomplete } from './auth.helpers';
 
-export default function Auth() {
+export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const asCustomer = params.get('as') === 'customer';
   const asWholesaler = params.get('as') === 'wholesaler';
@@ -22,7 +23,18 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
+  const [showReset, setShowReset] = useState(resetMode);
+  const [resetSent, setResetSent] = useState(false);
   const { signIn, signUp } = useAuth();
+
+  // A Supabase recovery link lands back on /auth with type=recovery and an active
+  // session; show the set-new-password form instead of bouncing to the app.
+  const isRecovery =
+    window.location.hash.includes('type=recovery') ||
+    window.location.search.includes('type=recovery');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   if (loading)
     return (
@@ -30,7 +42,26 @@ export default function Auth() {
         <div role="status" aria-label="Loading sign-in page" className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
-  if (user) return <Navigate to={next} replace />;
+  if (user && !isRecovery) return <Navigate to={next} replace />;
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pwErr = validateAuthField('password', newPassword, 'signup');
+    const confirmErr = newPassword !== confirmPassword ? 'Passwords do not match.' : null;
+    setFieldErrors((p) => ({ ...p, 'pass-new': pwErr, 'pass-confirm': confirmErr }));
+    if (pwErr || confirmErr) return;
+    setResetting(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast.success('Password updated — you are signed in.');
+      navigate(next, { replace: true });
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Could not update the password.');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const validateSignIn = () => {
     const errs: Record<string, string | null> = {
@@ -88,6 +119,30 @@ export default function Auth() {
     } catch (err: any) {
       const msg = err?.message ?? 'Sign-up failed.';
       setFieldErrors((p) => ({ ...p, 'email-up': msg }));
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Password recovery: sends a Supabase reset email that redirects back to /auth.
+  const handleReset = async () => {
+    const emailErr = validateAuthField('email', email, 'signin');
+    if (emailErr) {
+      setFieldErrors((p) => ({ ...p, 'email-in': emailErr }));
+      toast.error('Enter your email above first.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
+      });
+      if (error) throw error;
+      setResetSent(true);
+      toast.success('Reset link sent — check your email.');
+    } catch (err: any) {
+      const msg = err?.message ?? 'Could not send the reset email.';
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -185,8 +240,86 @@ export default function Auth() {
                     </>
                   )}
                 </Button>
+                {showReset ? (
+                  resetSent ? (
+                    <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+                      If an account exists for {email}, a reset link is on its way. It can take a
+                      few minutes to arrive — check your spam folder if it's not there.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        We'll email a sign-in reset link to the address above.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        disabled={submitting}
+                        onClick={handleReset}
+                      >
+                        {submitting ? 'Sending…' : 'Send reset link'}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setShowReset(false)}
+                        className="w-full min-h-[44px] text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowReset(true)}
+                    className="mx-auto flex min-h-[44px] items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                    Forgot password?
+                  </button>
+                )}
               </form>
             </TabsContent>
+
+            {isRecovery && (
+              <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4">
+                <h3 className="font-display text-lg">Set a new password</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose a new password for your account.
+                </p>
+                <form onSubmit={handleUpdatePassword} className="mt-4 space-y-4" noValidate>
+                  <Field
+                    id="pass-new"
+                    label="New password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(v) => {
+                      setNewPassword(v);
+                      setFieldErrors((p) => ({ ...p, 'pass-new': null }));
+                    }}
+                    autoComplete="new-password"
+                    error={fieldErrors['pass-new']}
+                  />
+                  <Field
+                    id="pass-confirm"
+                    label="Confirm new password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(v) => {
+                      setConfirmPassword(v);
+                      setFieldErrors((p) => ({ ...p, 'pass-confirm': null }));
+                    }}
+                    autoComplete="new-password"
+                    error={fieldErrors['pass-confirm']}
+                  />
+                  <Button type="submit" className="w-full" size="lg" disabled={resetting}>
+                    {resetting ? 'Updating…' : 'Update password'}
+                  </Button>
+                </form>
+              </div>
+            )}
 
             <TabsContent value="signup" className="mt-6">
               <form onSubmit={handleSignUp} className="space-y-4" noValidate>

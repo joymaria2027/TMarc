@@ -10,7 +10,7 @@ import AppDeveloperDashboard from './AppDeveloperDashboard';
 export default function Index() {
   const { user, roles, loading } = useAuth();
 
-  if (loading) return <div className="flex min-h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return <div className="flex min-h-screen items-center justify-center" role="status" aria-label="Loading"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" aria-hidden="true" /><span className="sr-only">Loading…</span></div>;
   if (!user) return <Navigate to="/auth" replace />;
 
   // Admin always gets admin dashboard

@@ -115,6 +115,7 @@ export default function RiderExpensesPage() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [expenseTypes, setExpenseTypes] = useState<ExpenseType[]>([]);
   const [riders, setRiders] = useState<RiderWithProfile[]>([]);
+  const [merchantRiderPairs, setMerchantRiderPairs] = useState<Set<string>>(new Set());
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [consumptions, setConsumptions] = useState<Consumption[]>([]);
@@ -139,7 +140,7 @@ export default function RiderExpensesPage() {
   const canVerify = hasRole('company_manager') || hasRole('admin');
 
   const load = async () => {
-    const [ridersRes, restRes, profilesRes, expRes, alertsRes, typesRes, consRes] = await Promise.all([
+    const [ridersRes, restRes, profilesRes, expRes, alertsRes, typesRes, consRes, mrRes] = await Promise.all([
       supabase.from('riders').select('id, user_id, license_plate'),
       supabase.from('merchants').select('id, name, manager_user_id, accountant_user_id'),
       supabase.rpc('get_public_profiles'),
@@ -147,6 +148,7 @@ export default function RiderExpensesPage() {
       supabase.from('expense_alerts').select('*').eq('is_read', false).order('created_at', { ascending: false }),
       supabase.from('expense_types').select('*').eq('is_active', true).order('name'),
       supabase.from('rider_expense_consumptions').select('*').order('created_at', { ascending: false }).limit(500),
+      supabase.from('merchant_riders').select('merchant_id, rider_id'),
     ]);
 
     const profileMap = Object.fromEntries(
@@ -155,6 +157,11 @@ export default function RiderExpensesPage() {
     const ridersWithProfile = (ridersRes.data || []).map(r => ({ ...r, profile: profileMap[r.user_id] }));
     setRiders(ridersWithProfile);
     setMerchants(restRes.data || []);
+    // merchant_id:rider_id pairs — used to scope the expense form's rider picker
+    // (was a `return true` stub: any rider could be attributed to any merchant).
+    setMerchantRiderPairs(new Set(
+      ((mrRes.data || []) as { merchant_id: string; rider_id: string }[]).map(p => `${p.merchant_id}:${p.rider_id}`),
+    ));
 
     // Detect remaining-amount changes for highlight
     const newExp = (expRes.data || []) as ExpenseItem[];
@@ -296,7 +303,7 @@ export default function RiderExpensesPage() {
         expense_id: expenseData.id,
         merchant_id: form.merchant_id,
         alert_type: 'new_expense',
-        message: `New expense of D${amt.toLocaleString()} for ${riderName} (${form.description}) at ${restName} – awaiting verification`,
+        message: `New expense of ${formatMoney(amt)} for ${riderName} (${form.description}) at ${restName} – awaiting verification`,
         target_role: 'company_manager',
       },
       {
@@ -304,7 +311,7 @@ export default function RiderExpensesPage() {
         expense_id: expenseData.id,
         merchant_id: form.merchant_id,
         alert_type: 'new_expense',
-        message: `An expense of D${amt.toLocaleString()} (${form.description}) has been recorded for you at ${restName}`,
+        message: `An expense of ${formatMoney(amt)} (${form.description}) has been recorded for you at ${restName}`,
         target_role: 'rider',
       },
     ]);
@@ -336,7 +343,7 @@ export default function RiderExpensesPage() {
       expense_id: expense.id,
       merchant_id: expense.merchant_id,
       alert_type: action === 'verified' ? 'expense_verified' : 'expense_rejected',
-      message: `Your expense of D${Number(expense.amount).toLocaleString()} (${expense.description}) at ${restName} has been ${label}`,
+      message: `Your expense of ${formatMoney(Number(expense.amount))} (${expense.description}) at ${restName} has been ${label}`,
       target_role: 'rider',
     });
 
@@ -354,7 +361,8 @@ export default function RiderExpensesPage() {
   };
 
   const markAlertRead = async (alertId: string) => {
-    await supabase.from('expense_alerts').update({ is_read: true }).eq('id', alertId);
+    const { error } = await supabase.from('expense_alerts').update({ is_read: true }).eq('id', alertId);
+    if (error) { toast.error(error.message); return; } // keep the alert visible on failure
     setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
@@ -364,12 +372,10 @@ export default function RiderExpensesPage() {
     return <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" />Pending</Badge>;
   };
 
-  // Filter riders by selected merchant
+  // Only riders actually assigned to the selected merchant (via merchant_riders).
+  // Prevents mis-attributing an expense to a rider who doesn't work for that store.
   const ridersForMerchant = form.merchant_id
-    ? riders.filter(r => {
-        // Check merchant_riders assignment
-        return true; // We'll filter client-side if needed; for now show all
-      })
+    ? riders.filter(r => merchantRiderPairs.has(`${form.merchant_id}:${r.id}`))
     : riders;
 
   if (loading) return (
@@ -447,8 +453,8 @@ export default function RiderExpensesPage() {
                             <TableCell className="font-medium">{e.description}</TableCell>
                             <TableCell>{getRiderName(e.rider_id)}</TableCell>
                             <TableCell>{e.merchant_id ? getMerchantName(e.merchant_id) : '—'}</TableCell>
-                            <TableCell className="text-right tabular-nums">D{Number(e.amount).toFixed(2)}</TableCell>
-                            <TableCell className="text-right tabular-nums text-destructive">−D{Number(e.consumed_amount || 0).toFixed(2)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{formatMoney(Number(e.amount))}</TableCell>
+                            <TableCell className="text-right tabular-nums text-destructive">−{formatMoney(Number(e.consumed_amount || 0))}</TableCell>
                             <TableCell className="text-right tabular-nums text-muted-foreground">D{remaining.toFixed(2)}</TableCell>
                             <TableCell>
                               {e.status === 'verified' ? (
@@ -557,7 +563,7 @@ export default function RiderExpensesPage() {
                           </TableCell>
                           <TableCell className="truncate">{exp?.description || c.rider_expense_id.slice(0, 8)}</TableCell>
                           <TableCell className="text-right font-medium tabular-nums text-destructive">−D{Number(c.amount_consumed).toFixed(2)}</TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">{remainingAfter != null ? `D${remainingAfter.toFixed(2)}` : '—'}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{remainingAfter != null ? formatMoney(remainingAfter) : '—'}</TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`View delivery ${did.slice(0, 8)}`} onClick={() => viewDelivery(did)}><Eye className="h-3.5 w-3.5" aria-hidden="true" /></Button>
                           </TableCell>

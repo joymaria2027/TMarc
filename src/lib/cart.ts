@@ -56,8 +56,11 @@ export function useCart() {
     saveCart(cur);
   };
   const clear = () => saveCart([]);
+  // Removes all items belonging to one merchant (used by checkout partial-failure recovery
+  // so already-created orders can't be duplicated on retry).
+  const removeMerchant = (merchant_id: string) => saveCart(loadCart().filter(c => c.merchant_id !== merchant_id));
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const groups = groupByMerchant(items);
 
-  return { items, add, remove, setQty, clear, subtotal, groups };
+  return { items, add, remove, setQty, clear, removeMerchant, subtotal, groups };
 }

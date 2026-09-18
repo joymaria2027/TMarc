@@ -16,39 +16,45 @@ interface NavItem {
   href: string;
   icon: ReactNode;
   roles: string[];
+  /** Optional sidebar group heading (lane-09: 29 flat items → 4 labeled groups). */
+  group?: string;
+  groupOrder?: number;
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/', icon: <LayoutDashboard className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer', 'rider', 'company_manager', 'accountant'] },
-  { label: 'My Deliveries', href: '/rider', icon: <Truck className="h-4 w-4" />, roles: ['rider'] },
-  { label: 'Deliveries', href: '/deliveries', icon: <MapPin className="h-4 w-4" />, roles: ['admin', 'accountant', 'company_manager', 'business_owner', 'app_developer', 'rider'] },
-  { label: 'Rejected Deliveries', href: '/rejected-deliveries', icon: <PackageX className="h-4 w-4" />, roles: ['admin', 'accountant', 'company_manager', 'business_owner', 'app_developer', 'rider'] },
-  { label: 'Riders', href: '/riders', icon: <Users className="h-4 w-4" />, roles: ['admin'] },
-  { label: 'GPS Tracker', href: '/gps-tracker', icon: <Navigation className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'] },
-  { label: 'Merchants', href: '/merchants', icon: <Building2 className="h-4 w-4" />, roles: ['admin', 'company_manager'] },
-  { label: 'My Products', href: '/merchant/products', icon: <ShoppingBag className="h-4 w-4" />, roles: ['admin', 'company_manager'] },
-  { label: 'Shop Orders', href: '/merchant/orders', icon: <Package className="h-4 w-4" />, roles: ['admin', 'company_manager'] },
-  { label: 'Wholesalers', href: '/admin/wholesalers', icon: <Users className="h-4 w-4" />, roles: ['admin'] },
-  { label: 'Product Approvals', href: '/admin/product-approvals', icon: <CheckSquare className="h-4 w-4" />, roles: ['admin'] },
-  { label: 'Webhook Events', href: '/admin/webhook-events', icon: <Webhook className="h-4 w-4" />, roles: ['admin', 'app_developer'] },
-  { label: 'Dispatch Audit', href: '/admin/dispatch-audit', icon: <ScrollText className="h-4 w-4" />, roles: ['admin', 'business_owner', 'accountant', 'app_developer'] },
-  { label: 'Payment Backfill', href: '/admin/payment-backfill', icon: <Scale className="h-4 w-4" />, roles: ['admin', 'accountant', 'business_owner', 'app_developer'] },
-  { label: 'Merchant Audit', href: '/admin/merchant-audit', icon: <ScrollText className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'] },
-
-  { label: 'Business Types', href: '/business-types', icon: <Tag className="h-4 w-4" />, roles: ['admin'] },
-  { label: 'Alerts', href: '/alerts', icon: <AlertTriangle className="h-4 w-4" />, roles: ['admin', 'accountant', 'business_owner', 'app_developer', 'company_manager'] },
-  { label: 'Settlements', href: '/settlements', icon: <Receipt className="h-4 w-4" />, roles: ['admin', 'accountant', 'company_manager', 'rider', 'business_owner', 'app_developer'] },
-  { label: 'Revenue Sharing', href: '/revenue-sharing', icon: <PieChart className="h-4 w-4" />, roles: ['admin', 'company_manager', 'rider', 'business_owner', 'app_developer'] },
-  { label: 'Rider Expenses', href: '/rider-expenses', icon: <Upload className="h-4 w-4" />, roles: ['admin', 'accountant', 'app_developer', 'rider'] },
-  { label: 'Expense Types', href: '/expense-types', icon: <Tag className="h-4 w-4" />, roles: ['admin', 'accountant'] },
-  { label: 'Wallet', href: '/wallet', icon: <Wallet className="h-4 w-4" />, roles: ['admin', 'accountant', 'business_owner', 'app_developer', 'rider', 'company_manager'] },
-  { label: 'Analytics', href: '/analytics', icon: <BarChart3 className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'] },
-  { label: 'Fraud Prevention', href: '/fraud', icon: <Shield className="h-4 w-4" />, roles: ['admin'] },
-  { label: 'Permissions', href: '/permissions', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer'] },
-  { label: 'RLS Verification', href: '/rls-verification', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer', 'business_owner', 'company_manager', 'accountant', 'rider'] },
-  { label: 'Payroll', href: '/payroll', icon: <Wallet className="h-4 w-4" />, roles: ['admin'] },
-  { label: 'Reconciliation', href: '/reconciliation', icon: <Scale className="h-4 w-4" />, roles: ['admin', 'accountant'] },
-  { label: 'Settings', href: '/settings', icon: <Settings className="h-4 w-4" />, roles: ['admin'] },
+  // Operations
+  { label: 'Dashboard', href: '/', icon: <LayoutDashboard className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer', 'rider', 'company_manager', 'accountant'], group: 'Operations', groupOrder: 1 },
+  { label: 'My Deliveries', href: '/rider', icon: <Truck className="h-4 w-4" />, roles: ['rider'], group: 'Operations', groupOrder: 1 },
+  { label: 'Deliveries', href: '/deliveries', icon: <MapPin className="h-4 w-4" />, roles: ['admin', 'accountant', 'company_manager', 'business_owner', 'app_developer', 'rider'], group: 'Operations', groupOrder: 1 },
+  { label: 'Rejected Deliveries', href: '/rejected-deliveries', icon: <PackageX className="h-4 w-4" />, roles: ['admin', 'accountant', 'company_manager', 'business_owner', 'app_developer', 'rider'], group: 'Operations', groupOrder: 1 },
+  { label: 'Riders', href: '/riders', icon: <Users className="h-4 w-4" />, roles: ['admin'], group: 'Operations', groupOrder: 1 },
+  { label: 'GPS Tracker', href: '/gps-tracker', icon: <Navigation className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'], group: 'Operations', groupOrder: 1 },
+  { label: 'Alerts', href: '/alerts', icon: <AlertTriangle className="h-4 w-4" />, roles: ['admin', 'accountant', 'business_owner', 'app_developer', 'company_manager'], group: 'Operations', groupOrder: 1 },
+  // Finance
+  { label: 'Settlements', href: '/settlements', icon: <Receipt className="h-4 w-4" />, roles: ['admin', 'accountant', 'company_manager', 'rider', 'business_owner', 'app_developer'], group: 'Finance', groupOrder: 2 },
+  { label: 'Revenue Sharing', href: '/revenue-sharing', icon: <PieChart className="h-4 w-4" />, roles: ['admin', 'company_manager', 'rider', 'business_owner', 'app_developer'], group: 'Finance', groupOrder: 2 },
+  { label: 'Rider Expenses', href: '/rider-expenses', icon: <Upload className="h-4 w-4" />, roles: ['admin', 'accountant', 'app_developer', 'rider'], group: 'Finance', groupOrder: 2 },
+  { label: 'Expense Types', href: '/expense-types', icon: <Tag className="h-4 w-4" />, roles: ['admin', 'accountant'], group: 'Finance', groupOrder: 2 },
+  { label: 'Wallet', href: '/wallet', icon: <Wallet className="h-4 w-4" />, roles: ['admin', 'accountant', 'business_owner', 'app_developer', 'rider', 'company_manager'], group: 'Finance', groupOrder: 2 },
+  { label: 'Payroll', href: '/payroll', icon: <Wallet className="h-4 w-4" />, roles: ['admin'], group: 'Finance', groupOrder: 2 },
+  { label: 'Reconciliation', href: '/reconciliation', icon: <Scale className="h-4 w-4" />, roles: ['admin', 'accountant'], group: 'Finance', groupOrder: 2 },
+  // Merchant
+  { label: 'Merchants', href: '/merchants', icon: <Building2 className="h-4 w-4" />, roles: ['admin', 'company_manager'], group: 'Merchant', groupOrder: 3 },
+  { label: 'Business Types', href: '/business-types', icon: <Tag className="h-4 w-4" />, roles: ['admin'], group: 'Merchant', groupOrder: 3 },
+  { label: 'My Products', href: '/merchant/products', icon: <ShoppingBag className="h-4 w-4" />, roles: ['admin', 'company_manager'], group: 'Merchant', groupOrder: 3 },
+  { label: 'Shop Orders', href: '/merchant/orders', icon: <Package className="h-4 w-4" />, roles: ['admin', 'company_manager'], group: 'Merchant', groupOrder: 3 },
+  { label: 'Wholesalers', href: '/admin/wholesalers', icon: <Users className="h-4 w-4" />, roles: ['admin'], group: 'Merchant', groupOrder: 3 },
+  { label: 'Product Approvals', href: '/admin/product-approvals', icon: <CheckSquare className="h-4 w-4" />, roles: ['admin'], group: 'Merchant', groupOrder: 3 },
+  // Admin & Developer
+  { label: 'Webhook Events', href: '/admin/webhook-events', icon: <Webhook className="h-4 w-4" />, roles: ['admin', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Dispatch Audit', href: '/admin/dispatch-audit', icon: <ScrollText className="h-4 w-4" />, roles: ['admin', 'business_owner', 'accountant', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Payment Backfill', href: '/admin/payment-backfill', icon: <Scale className="h-4 w-4" />, roles: ['admin', 'accountant', 'business_owner', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Merchant Audit', href: '/admin/merchant-audit', icon: <ScrollText className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Analytics', href: '/analytics', icon: <BarChart3 className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Fraud Prevention', href: '/fraud', icon: <Shield className="h-4 w-4" />, roles: ['admin'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Permissions', href: '/permissions', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'RLS Verification', href: '/rls-verification', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer', 'business_owner', 'company_manager', 'accountant', 'rider'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'Settings', href: '/settings', icon: <Settings className="h-4 w-4" />, roles: ['admin'], group: 'Admin & Developer', groupOrder: 4 },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -159,26 +165,39 @@ export default function Layout({ children }: { children: ReactNode }) {
           )}
         </div>
         <nav aria-label="Primary" className="flex-1 space-y-0.5 p-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 14rem)' }}>
-          {visibleNav.map(item => (
-            <Link
-              key={item.href}
-              to={item.href}
-              aria-current={location.pathname === item.href ? 'page' : undefined}
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                location.pathname === item.href
-                  ? "bg-primary/15 text-primary"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          {visibleNav
+            .slice()
+            .sort((a, b) => (a.groupOrder ?? 9) - (b.groupOrder ?? 9))
+            .map((item, i, sorted) => (
+            <div key={item.href}>
+              {item.group && (i === 0 || sorted[i - 1].group !== item.group) && (
+                <p
+                  id={`nav-group-${item.group}`}
+                  className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50 first:pt-0"
+                >
+                  {item.group}
+                </p>
               )}
-            >
+              <Link
+                to={item.href}
+                aria-current={location.pathname === item.href ? 'page' : undefined}
+                aria-describedby={item.group ? `nav-group-${item.group}` : undefined}
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  location.pathname === item.href
+                    ? "bg-primary/15 text-primary"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
               {item.icon}
               {item.label}
               {item.href === '/alerts' && unreadAlerts > 0 && (
                 <Badge variant="destructive" className="ml-auto text-xs h-5 px-1.5 tabular-nums">{unreadAlerts}</Badge>
               )}
             </Link>
-          ))}
+            </div>
+            ))}
         </nav>
         <div className="border-t border-sidebar-border p-3">
           <a
@@ -204,7 +223,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Overlay */}
-      {sidebarOpen && <div className="fixed inset-0 z-20 bg-foreground/40 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <div className="fixed inset-0 z-20 bg-foreground/40 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Main */}
       <main id="main-content" tabIndex={-1} className="flex-1 pt-14 md:pt-0">

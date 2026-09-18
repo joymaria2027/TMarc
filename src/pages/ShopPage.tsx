@@ -122,10 +122,9 @@ export default function ShopPage() {
       </div>
       <div className="space-y-8">
         <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Marketplace</p>
-          <h1 className="font-display text-4xl tracking-tight">Good food, close by</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Order from stores near you</h1>
           <p className="text-muted-foreground max-w-xl">
-            Order from approved neighborhood kitchens — pickup or delivery, tracked to your door.
+            Approved local businesses — pickup or delivery, tracked to your door.
           </p>
           {isWholesaler && (
             <Badge className="mt-1">Wholesale pricing active</Badge>
@@ -207,8 +206,8 @@ export default function ShopPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-lg border bg-card p-8 text-center space-y-2">
-            <p role="status" className="font-medium">No dishes match those filters</p>
-            <p className="text-sm text-muted-foreground">Try clearing the search or choosing a different category — new kitchens open daily.</p>
+            <p role="status" className="font-medium">No products match those filters</p>
+            <p className="text-sm text-muted-foreground">Try clearing the search or choosing a different category — new stores open regularly.</p>
             <Button variant="outline" onClick={() => { setSearch(""); setBtFilter("all"); setCatFilter("all"); setSort("newest"); }}>
               Clear filters
             </Button>
@@ -216,7 +215,7 @@ export default function ShopPage() {
         ) : (
           <>
             <p role="status" className="text-sm text-muted-foreground">
-              Showing {visible.length} of {filtered.length} {filtered.length === 1 ? "dish" : "dishes"}
+              Showing {visible.length} of {filtered.length} {filtered.length === 1 ? "product" : "products"}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {visible.map(p => {

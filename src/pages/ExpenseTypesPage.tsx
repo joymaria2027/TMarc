@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { formatMoney } from '@/lib/finance';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Fuel, Plus, Pencil, CheckCircle2, XCircle, Clock, Trash2, Star } from 'lucide-react';
 import { format } from 'date-fns';
@@ -119,14 +121,14 @@ function TypeRow({
             <div className="space-y-1 px-4 py-2 border-t bg-muted/20">
               {variants.map(v => (
                 <div key={v.id} className="flex items-center justify-between gap-3 p-2 rounded border bg-background">
-                  <div className="grid grid-cols-5 gap-3 flex-1 text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 flex-1 text-sm">
                     <div className="flex items-center gap-1 font-medium">
                       {v.is_default && <Star className="h-3 w-3 fill-primary text-primary" aria-hidden="true" />}
                       {v.fuel_type}
                       {!v.is_active && <Badge variant="secondary" className="text-[11px] px-1">off</Badge>}
                     </div>
-                    <div className="text-right tabular-nums"><span className="text-xs text-muted-foreground">D</span>{v.price_per_litre ?? '—'}<span className="text-xs text-muted-foreground">/L</span></div>
-                    <div className="text-right tabular-nums"><span className="text-xs text-muted-foreground">D</span>{v.cost_per_mile}<span className="text-xs text-muted-foreground">/mi</span></div>
+                    <div className="text-right tabular-nums">{v.price_per_litre != null ? formatMoney(v.price_per_litre) : '—'}<span className="text-xs text-muted-foreground">/L</span></div>
+                    <div className="text-right tabular-nums">{formatMoney(v.cost_per_mile)}<span className="text-xs text-muted-foreground">/mi</span></div>
                     <div className="text-center text-xs text-muted-foreground">{v.is_default ? 'default' : '—'}</div>
                     <div className="text-right">
                       {(isAdmin || isAccountant) && (
@@ -351,16 +353,24 @@ export default function ExpenseTypesPage() {
       }).eq('id', c.expense_type_id);
       if (upErr) { toast.error(upErr.message); return; }
     }
-    await supabase.from('fuel_price_changes').update({
+    const { error: stErr } = await supabase.from('fuel_price_changes').update({
       status: 'approved', reviewed_by: user!.id, reviewed_at: new Date().toISOString(),
     }).eq('id', c.id);
+    if (stErr) {
+      // Two-phase failure: price already applied but request still pending.
+      // Tell the admin exactly that so they don't re-apply (double-apply risk).
+      toast.error('Price applied, but marking the request approved failed — reload before retrying.');
+      load();
+      return;
+    }
     toast.success('Approved & applied');
     load();
   };
   const reject = async (c: FuelChange) => {
-    await supabase.from('fuel_price_changes').update({
+    const { error } = await supabase.from('fuel_price_changes').update({
       status: 'rejected', reviewed_by: user!.id, reviewed_at: new Date().toISOString(),
     }).eq('id', c.id);
+    if (error) { toast.error(error.message); return; }
     toast.success('Rejected');
     load();
   };
@@ -556,14 +566,14 @@ export default function ExpenseTypesPage() {
               </Select>
             </div>
             {creating && (
-              <div className="flex items-center gap-2">
-                <input id="isfuel" type="checkbox" checked={form.is_fuel} onChange={e => setForm(p => ({ ...p, is_fuel: e.target.checked }))} />
+              <div className="flex min-h-[44px] items-center gap-2">
+                <Checkbox id="isfuel" checked={form.is_fuel} onCheckedChange={c => setForm(p => ({ ...p, is_fuel: c === true }))} />
                 <Label htmlFor="isfuel">This is a Fuel category (will have variants)</Label>
               </div>
             )}
             {!creating && (
-              <div className="flex items-center gap-2">
-                <input id="active" type="checkbox" checked={form.is_active} onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))} />
+              <div className="flex min-h-[44px] items-center gap-2">
+                <Checkbox id="active" checked={form.is_active} onCheckedChange={c => setForm(p => ({ ...p, is_active: c === true }))} />
                 <Label htmlFor="active">Active</Label>
               </div>
             )}
@@ -577,7 +587,7 @@ export default function ExpenseTypesPage() {
               return (
               <>
                 <div className="flex items-center gap-2">
-                  <input id="ismaint" type="checkbox" checked={form.is_maintenance} onChange={e => setForm(p => ({ ...p, is_maintenance: e.target.checked, amortize_over: e.target.checked ? '100' : (['', '100'].includes(p.amortize_over) ? '50' : p.amortize_over) }))} />
+                  <Checkbox id="ismaint" checked={form.is_maintenance} onCheckedChange={c => setForm(p => ({ ...p, is_maintenance: c === true, amortize_over: c === true ? '100' : (['', '100'].includes(p.amortize_over) ? '50' : p.amortize_over) }))} />
                   <Label htmlFor="ismaint">Maintenance expense (defaults to spread over 100 deliveries)</Label>
                 </div>
                 <div className="space-y-2">
@@ -626,11 +636,11 @@ export default function ExpenseTypesPage() {
             {isAdmin && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <input id="vactive" type="checkbox" checked={vForm.is_active} onChange={e => setVForm(p => ({ ...p, is_active: e.target.checked }))} />
+                  <Checkbox id="vactive" checked={vForm.is_active} onCheckedChange={c => setVForm(p => ({ ...p, is_active: c === true }))} />
                   <Label htmlFor="vactive">Active</Label>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input id="vdefault" type="checkbox" checked={vForm.is_default} onChange={e => setVForm(p => ({ ...p, is_default: e.target.checked }))} />
+                  <Checkbox id="vdefault" checked={vForm.is_default} onCheckedChange={c => setVForm(p => ({ ...p, is_default: c === true }))} />
                   <Label htmlFor="vdefault">Default for riders without an assigned fuel</Label>
                 </div>
               </div>

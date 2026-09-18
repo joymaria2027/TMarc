@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { formatMoney } from '@/lib/finance';
 import { Plus, Play, Wallet, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatMoney, paginate } from '@/lib/finance';
@@ -102,6 +103,14 @@ export default function PayrollPage() {
     load();
   };
 
+  const runPreview = () => {
+    if (!runDialog) return null;
+    if (runDialog.basis === 'fixed') {
+      return formatMoney(Number(runDialog.fixed_amount ?? 0));
+    }
+    return null; // percent basis: amount is computed server-side at run time
+  };
+
   const runPayroll = async () => {
     if (!runDialog || running) return;
     const periodError = validateRunPeriod(runForm.period_start, runForm.period_end);
@@ -147,7 +156,7 @@ export default function PayrollPage() {
   );
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto" aria-busy={false}>
+    <div className="space-y-6 max-w-5xl mx-auto" aria-busy={loading}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Payroll</h1>
@@ -262,7 +271,7 @@ export default function PayrollPage() {
                       </TableCell>
                       <TableCell>{a.basis === 'fixed' ? 'Fixed' : '% of payer wallet income'}</TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
-                        {a.basis === 'fixed' ? `D${Number(a.fixed_amount).toFixed(2)}` : `${a.percent}% of payer wallet income`}
+                        {a.basis === 'fixed' ? formatMoney(Number(a.fixed_amount)) : `${a.percent}% of payer wallet income`}
                       </TableCell>
                       <TableCell>
                         {a.is_active ? (
@@ -315,7 +324,7 @@ export default function PayrollPage() {
                           <time dateTime={r.created_at}>{format(new Date(r.created_at), 'MMM d, yyyy HH:mm')}</time>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          <Badge className="bg-success/10 text-success gap-1 tabular-nums"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />D{Number(r.computed_amount).toFixed(2)}</Badge>
+                          <Badge variant="secondary" className="gap-1 tabular-nums"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />{formatMoney(Number(r.computed_amount))}</Badge>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.status}</TableCell>
                       </TableRow>
@@ -350,19 +359,28 @@ export default function PayrollPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="run-end">Period end</Label>
-                <Input id="run-end" type="date" value={runForm.period_end} onChange={e => setRunForm(p => ({ ...p, period_end: e.target.value }))} />
+                <Input id="run-end" type="date" max={today} value={runForm.period_end} onChange={e => setRunForm(p => ({ ...p, period_end: e.target.value }))} />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {runDialog?.basis === 'fixed'
-                ? `Will pay fixed D${runDialog?.fixed_amount}.`
-                : `Will compute ${runDialog?.percent}% of payer wallet credits in this period.`}
-            </p>
+            {runDialog?.basis === 'fixed' ? (
+              <p className="text-sm" role="status">
+                This run pays <span className="font-semibold tabular-nums">{formatMoney(Number(runDialog?.fixed_amount ?? 0))}</span> for
+                {' '}{runDialog && profileName(runDialog.payee_user_id)}.
+              </p>
+            ) : (
+              <p className="text-sm" role="status">
+                This run computes <span className="font-semibold tabular-nums">{runDialog?.percent}%</span> of the payer's wallet
+                credits between <time dateTime={runForm.period_start}>{runForm.period_start}</time> and{' '}<time dateTime={runForm.period_end}>{runForm.period_end}</time>.
+                The exact amount is calculated at run time.
+              </p>
+            )}
             {runError && <p role="alert" className="text-sm text-destructive">{runError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRunDialog(null)}>Cancel</Button>
-            <Button onClick={runPayroll} disabled={running}>{running ? 'Running…' : 'Run'}</Button>
+            <Button onClick={runPayroll} disabled={running}>
+              {running ? 'Running…' : runDialog?.basis === 'fixed' ? `Run payroll — pay ${runPreview()}` : 'Run payroll'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

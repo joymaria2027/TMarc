@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {
   validateTariffForm, type Errors,
 } from './merchantGroup.helpers';
 import { parseHighlightId } from '@/lib/deliveries';
+import { guardedWrite } from '@/lib/guardedWrite';
 
 export const MERCHANT_PAGE_SIZE = 9;
 
@@ -41,7 +42,6 @@ export default function MerchantsPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [tariffOpen, setTariffOpen] = useState(false);
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [editTariffOpen, setEditTariffOpen] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState<any>(null);
   const [editingTariff, setEditingTariff] = useState<any>(null);
@@ -49,11 +49,6 @@ export default function MerchantsPage() {
   const [formErrors, setFormErrors] = useState<Errors>({});
   const [tariffForm, setTariffForm] = useState({ location_name: '', tariff_amount: '' });
   const [tariffErrors, setTariffErrors] = useState<Errors>({});
-  const [deliveryForm, setDeliveryForm] = useState({
-    pickup_address: '', dropoff_address: '', order_reference: '',
-    rider_id: '', tariff_id: '', customer_name: '', customer_phone: '',
-  });
-  const [deliveryErrors, setDeliveryErrors] = useState<Errors>({});
   const [qrMerchant, setQrMerchant] = useState<any>(null);
   const [subOpen, setSubOpen] = useState(false);
   const [subParent, setSubParent] = useState<any>(null);
@@ -260,35 +255,6 @@ export default function MerchantsPage() {
     setEditingTariff(null);
     setTariffForm({ location_name: '', tariff_amount: '' });
     setTariffErrors({});
-    load();
-  };
-
-  const createDelivery = async () => {
-    if (!selectedMerchant) return;
-    const errs = validateDeliveryForm(deliveryForm);
-    if (!deliveryForm.dropoff_address.trim()) errs.dropoff_address = 'Drop-off address is required';
-    setDeliveryErrors(errs);
-    if (Object.keys(errs).length) return;
-    const selectedTariff = tariffs.find(t => t.id === deliveryForm.tariff_id);
-    const { error } = await supabase.from('deliveries').insert({
-      merchant_id: selectedMerchant.id,
-      pickup_address: deliveryForm.pickup_address || selectedMerchant.address,
-      dropoff_address: deliveryForm.dropoff_address,
-      order_reference: deliveryForm.order_reference || null,
-      rider_id: deliveryForm.rider_id,
-      customer_name: deliveryForm.customer_name.trim(),
-      customer_phone: deliveryForm.customer_phone.trim(),
-      status: 'dispatched',
-      dispatched_at: new Date().toISOString(),
-      estimated_tariff: selectedTariff ? selectedTariff.tariff_amount : null,
-      pickup_latitude: selectedMerchant.latitude,
-      pickup_longitude: selectedMerchant.longitude,
-    });
-    if (error) { toast.error(error.message); return; }
-    toast.success('Delivery created & dispatched to rider');
-    setDeliveryOpen(false);
-    setDeliveryForm({ pickup_address: '', dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
-    setDeliveryErrors({});
     load();
   };
 
@@ -621,7 +587,7 @@ export default function MerchantsPage() {
                           {isAdmin && riders.length > 0 && (
                             <div className="space-y-1">
                               <Label htmlFor={`rider-${r.id}`} className="sr-only">Assign rider to {r.name}</Label>
-                              <Select onValueChange={v => assignRiderToMerchant(r.id, v)}>
+                              <Select key={`${r.id}-${(merchantRiders[r.id] || []).length}`} onValueChange={v => assignRiderToMerchant(r.id, v)}>
                                 <SelectTrigger id={`rider-${r.id}`} className="min-h-[44px] text-xs">
                                   <SelectValue placeholder="Assign rider..." />
                                 </SelectTrigger>
@@ -684,19 +650,18 @@ export default function MerchantsPage() {
                               }}>
                                 <DollarSign className="h-3 w-3 mr-1" aria-hidden="true" />Set Tariff
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => {
-                                setSelectedMerchant(r);
-                                setDeliveryForm({ pickup_address: r.address, dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
-                                setDeliveryErrors({});
-                                setDeliveryOpen(true);
-                              }}>
+                              <Button size="sm" variant="outline" onClick={() => navigate(`/deliveries/new?merchant=${r.id}`)}>
                                 <Truck className="h-3 w-3 mr-1" aria-hidden="true" />Create Delivery
                               </Button>
                             </>
                           )}
                           {isAdmin && (
                             <Button size="sm" variant={r.is_active ? 'destructive' : 'default'} aria-label={`${r.is_active ? 'Deactivate' : 'Activate'} ${r.name}`} onClick={async () => {
-                              await supabase.from('merchants').update({ is_active: !r.is_active }).eq('id', r.id);
+                              const { error: deactErr } = await guardedWrite(
+                                supabase.from('merchants').update({ is_active: !r.is_active }).eq('id', r.id),
+                                { context: r.is_active ? 'Deactivate failed' : 'Activate failed' },
+                              );
+                              if (deactErr) return;
                               setMerchants(prev => prev.map(x => x.id === r.id ? { ...x, is_active: !r.is_active } : x));
                               toast.success(r.is_active ? 'Deactivated' : 'Activated');
                             }}>
@@ -760,86 +725,6 @@ export default function MerchantsPage() {
               {tariffErrors.tariff_amount && <p id="tariff-edit-amount-error" className="text-xs text-destructive">{tariffErrors.tariff_amount}</p>}
             </div>
             <Button onClick={updateTariff} className="w-full">Update Tariff</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Delivery Dialog */}
-      <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Delivery – {selectedMerchant?.name}</DialogTitle>
-            <DialogDescription>Dispatch a delivery to a rider assigned to this store.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="delivery-pickup">Pickup Address</Label>
-              <Input id="delivery-pickup" value={deliveryForm.pickup_address} onChange={e => setDeliveryForm(p => ({ ...p, pickup_address: e.target.value }))} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="delivery-dropoff">Drop-off Address *</Label>
-              <Input id="delivery-dropoff" required aria-required="true" aria-invalid={!!deliveryErrors.dropoff_address} aria-describedby={deliveryErrors.dropoff_address ? 'delivery-dropoff-error' : undefined} value={deliveryForm.dropoff_address} onChange={e => setDeliveryForm(p => ({ ...p, dropoff_address: e.target.value }))} />
-              {deliveryErrors.dropoff_address && <p id="delivery-dropoff-error" className="text-xs text-destructive">{deliveryErrors.dropoff_address}</p>}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="delivery-customer">Customer Name *</Label>
-                <Input id="delivery-customer" required aria-required="true" autoComplete="name" aria-invalid={!!deliveryErrors.customer_name} aria-describedby={deliveryErrors.customer_name ? 'delivery-customer-error' : undefined} value={deliveryForm.customer_name} onChange={e => setDeliveryForm(p => ({ ...p, customer_name: e.target.value }))} />
-                {deliveryErrors.customer_name && <p id="delivery-customer-error" className="text-xs text-destructive">{deliveryErrors.customer_name}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="delivery-phone">Customer Phone *</Label>
-                <Input id="delivery-phone" required aria-required="true" type="tel" inputMode="tel" autoComplete="tel" maxLength={20} placeholder="+220…" aria-invalid={!!deliveryErrors.customer_phone} aria-describedby={deliveryErrors.customer_phone ? 'delivery-phone-error' : undefined} value={deliveryForm.customer_phone} onChange={e => setDeliveryForm(p => ({ ...p, customer_phone: e.target.value }))} />
-                {deliveryErrors.customer_phone && <p id="delivery-phone-error" className="text-xs text-destructive">{deliveryErrors.customer_phone}</p>}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="delivery-ref">Order Reference</Label>
-              <Input id="delivery-ref" value={deliveryForm.order_reference} onChange={e => setDeliveryForm(p => ({ ...p, order_reference: e.target.value }))} />
-            </div>
-
-            {/* Tariff selection */}
-            {selectedMerchant && merchantTariffs(selectedMerchant.id).length > 0 && (
-              <div className="space-y-2">
-                <Label htmlFor="delivery-tariff">Delivery Tariff</Label>
-                <Select value={deliveryForm.tariff_id} onValueChange={v => setDeliveryForm(p => ({ ...p, tariff_id: v }))}>
-                  <SelectTrigger id="delivery-tariff" className="min-h-[44px]"><SelectValue placeholder="Select tariff zone" /></SelectTrigger>
-                  <SelectContent>
-                    {merchantTariffs(selectedMerchant.id).map(t => (
-                      <SelectItem key={t.id} value={t.id}>{t.location_name} – D{Number(t.tariff_amount).toLocaleString()}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Rider assignment — only riders assigned to this merchant */}
-            <div className="space-y-2">
-              <Label htmlFor="delivery-rider">Assign Rider *</Label>
-              {selectedMerchant && (merchantRiders[selectedMerchant.id] || []).length === 0 ? (
-                <p className="text-xs text-muted-foreground border rounded-md p-2">
-                  No riders are assigned to this merchant yet. Ask an admin to assign riders.
-                </p>
-              ) : (
-                <>
-                  <Select value={deliveryForm.rider_id} onValueChange={v => setDeliveryForm(p => ({ ...p, rider_id: v }))}>
-                    <SelectTrigger id="delivery-rider" className="min-h-[44px]" aria-required="true" aria-invalid={!!deliveryErrors.rider_id} aria-describedby={deliveryErrors.rider_id ? 'delivery-rider-error' : undefined}><SelectValue placeholder="Select rider" /></SelectTrigger>
-                    <SelectContent>
-                      {riders
-                        .filter(r => selectedMerchant ? (merchantRiders[selectedMerchant.id] || []).includes(r.id) : true)
-                        .map(r => (
-                          <SelectItem key={r.id} value={r.id}>
-                            {riderProfiles[r.user_id]?.full_name || r.id.slice(0, 8)} – {r.vehicle_type}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {deliveryErrors.rider_id && <p id="delivery-rider-error" className="text-xs text-destructive">{deliveryErrors.rider_id}</p>}
-                </>
-              )}
-            </div>
-
-            <Button onClick={createDelivery} className="w-full">Create Delivery</Button>
           </div>
         </DialogContent>
       </Dialog>

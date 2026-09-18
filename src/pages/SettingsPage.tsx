@@ -38,6 +38,11 @@ export default function SettingsPage() {
   useEffect(() => { loadRoles(); }, []);
 
   const assignRole = async () => {
+    if (!email.trim() || !email.includes('@')) {
+      toast.error('Enter the user\'s email first.');
+      setStatusMessage('Enter a valid email to assign a role.');
+      return;
+    }
     const { data: profile } = await supabase.from('profiles').select('user_id').eq('email', email).single();
     if (!profile) {
       toast.error('User not found');

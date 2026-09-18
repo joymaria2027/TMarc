@@ -385,8 +385,7 @@ export default function SettlementsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Finance</p>
-        <h1 className="font-display text-4xl tracking-tight">Settlements & payouts</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Settlements & payouts</h1>
         <p className="text-muted-foreground max-w-2xl">
           {isManagerOnly ? 'Settlements for your merchant.' : isAccountantOnly ? 'Settlements for your assigned merchants.' : 'Auto-calculated from merchant tariffs, sharing ratios and rider expenses.'}
         </p>
@@ -443,13 +442,13 @@ export default function SettlementsPage() {
                   <TableRow>
                     <TableCell className="font-semibold">Totals</TableCell>
                     <TableCell className="tabular-nums">{merchantSummaries.reduce((s, r) => s + r.total_deliveries, 0)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.total_revenue, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.total_expenses, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.net_revenue, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.merchant_share, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.rider_share, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.platform_share, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{merchantSummaries.reduce((s, r) => s + r.ucs_share, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.total_revenue, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.total_expenses, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.net_revenue, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.merchant_share, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.rider_share, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.platform_share, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(merchantSummaries.reduce((s, r) => s + r.ucs_share, 0))}</TableCell>
                     <TableCell />
                   </TableRow>
                 </TableFooter>
@@ -501,11 +500,11 @@ export default function SettlementsPage() {
                   <TableRow>
                     <TableCell className="font-semibold">Totals</TableCell>
                     <TableCell className="tabular-nums">{riderSummaries.reduce((s, r) => s + r.total_deliveries, 0)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.total_revenue, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.total_expenses, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.net_revenue, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.rider_share, 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right tabular-nums">D{riderSummaries.reduce((s, r) => s + r.net_payout, 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(riderSummaries.reduce((s, r) => s + r.total_revenue, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(riderSummaries.reduce((s, r) => s + r.total_expenses, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(riderSummaries.reduce((s, r) => s + r.net_revenue, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(riderSummaries.reduce((s, r) => s + r.rider_share, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatMoney(riderSummaries.reduce((s, r) => s + r.net_payout, 0))}</TableCell>
                     <TableCell />
                   </TableRow>
                 </TableFooter>

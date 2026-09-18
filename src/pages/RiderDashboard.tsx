@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { formatMoney } from '@/lib/finance';
 import { useAuth } from '@/hooks/useAuth';
 import { useGpsTracking } from '@/hooks/useGpsTracking';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,6 +16,8 @@ import { Play, Square, Navigation, Clock, MapPin, Truck, CheckCircle2, DollarSig
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import WalletWidget from '@/components/WalletWidget';
+import { Switch } from '@/components/ui/switch';
+import { guardedWrite } from '@/lib/guardedWrite';
 import RiderDispatchOffers from '@/components/RiderDispatchOffers';
 import { removeDeliveryFromQueue } from './riderDashboard.helpers';
 import {
@@ -87,6 +90,10 @@ export default function RiderDashboard() {
   const [pendingReject, setPendingReject] = useState<{ delivery: Delivery; kind: 'decline' | 'reject' | 'cancel' } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [submittingReject, setSubmittingReject] = useState(false);
+  // Riders start online when they open the dashboard; the header toggle keeps
+  // this state visible and controllable (previously silent and forced).
+  const [isOnline, setIsOnline] = useState(true);
+  const [onlineUpdating, setOnlineUpdating] = useState(false);
   // Recently rejected ids (TTL ~5s) — prevents realtime refetch from re-adding them
   const recentlyRejectedRef = useRef<Map<string, number>>(new Map());
   const isRecentlyRejected = (id: string) => {
@@ -287,7 +294,11 @@ export default function RiderDashboard() {
   }, [riderId]);
 
   const handleAcceptDelivery = async (delivery: Delivery) => {
-    await supabase.from('deliveries').update({ status: 'accepted' }).eq('id', delivery.id);
+    const { error } = await guardedWrite(
+      supabase.from('deliveries').update({ status: 'accepted' }).eq('id', delivery.id).eq('rider_id', riderId ?? ''),
+      { context: 'Accept failed' },
+    );
+    if (error) return;
     toast.success('Delivery accepted! You can now start it.');
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'accepted' } : d));
   };
@@ -520,11 +531,29 @@ export default function RiderDashboard() {
   };
 
   const handleMarkCompleted = async (delivery: Delivery) => {
-    await supabase.from('deliveries').update({
-      status: 'delivered', delivered_at: new Date().toISOString(), gps_confirmed: false,
-    }).eq('id', delivery.id);
+    const { error } = await guardedWrite(
+      supabase.from('deliveries').update({
+        status: 'delivered', delivered_at: new Date().toISOString(), gps_confirmed: false,
+      }).eq('id', delivery.id).eq('rider_id', riderId ?? ''),
+      { context: 'Complete failed' },
+    );
+    if (error) return;
     toast.success('Delivery marked as completed');
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'delivered' } : d));
+  };
+
+  const toggleOnline = async (next: boolean) => {
+    if (!riderId || onlineUpdating) return;
+    setOnlineUpdating(true);
+    setIsOnline(next); // optimistic
+    const { error } = await supabase.from('riders').update({ is_online: next, is_active: next }).eq('id', riderId);
+    setOnlineUpdating(false);
+    if (error) {
+      setIsOnline(!next); // revert
+      toast.error(describeError(error));
+      return;
+    }
+    toast.success(next ? 'You are online — new jobs can reach you' : 'You are offline');
   };
 
   const statusColor = (s: string) => {
@@ -561,10 +590,28 @@ export default function RiderDashboard() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="space-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">On the road</p>
-        <h1 className="font-display text-4xl tracking-tight">My deliveries.</h1>
-        <p className="text-muted-foreground">Track, accept, and complete your runs.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">My deliveries</h1>
+          <p className="text-muted-foreground">Track, accept, and complete your runs.</p>
+        </div>
+        <div
+          className="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2"
+          role="status"
+          aria-label={`You are ${isOnline ? 'online' : 'offline'}`}
+        >
+          <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-success' : 'bg-muted-foreground/40'}`} aria-hidden="true" />
+          <div className="leading-tight">
+            <p className="text-sm font-medium">{isOnline ? 'Online' : 'Offline'}</p>
+            <p className="text-[11px] text-muted-foreground">{onlineUpdating ? 'Saving…' : isOnline ? 'Visible for new jobs' : 'Not receiving new jobs'}</p>
+          </div>
+          <Switch
+            checked={isOnline}
+            onCheckedChange={toggleOnline}
+            disabled={onlineUpdating}
+            aria-label="Toggle online availability"
+          />
+        </div>
       </div>
 
       {/* Wallet Summary */}
@@ -577,7 +624,7 @@ export default function RiderDashboard() {
       <div className="grid gap-6 lg:grid-cols-2 items-start">
       {/* LEFT COLUMN: My queue */}
       <div className="space-y-6 lg:col-start-1">
-      <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">My queue</h2>
+      <h2 className="text-base font-semibold">My queue</h2>
       {/* Active delivery with map */}
       {activeDelivery && (
         <Card className="border-primary">
@@ -587,7 +634,7 @@ export default function RiderDashboard() {
               <Badge className={statusColor(activeDelivery.status)}>{activeDelivery.status.replace('_', ' ')}</Badge>
             </div>
             {activeDelivery.order_reference && <CardDescription>Order: {activeDelivery.order_reference}</CardDescription>}
-            {activeDelivery.estimated_tariff && <CardDescription>Tariff: D{Number(activeDelivery.estimated_tariff).toLocaleString()}</CardDescription>}
+            {activeDelivery.estimated_tariff && <CardDescription>Tariff: {formatMoney(Number(activeDelivery.estimated_tariff))}</CardDescription>}
           </CardHeader>
           <CardContent className="space-y-4">
             <OrderStatusTimeline status={activeDelivery.status} fulfillmentType="delivery" className="py-1" />
@@ -615,7 +662,7 @@ export default function RiderDashboard() {
                 <div className="flex items-center gap-1 text-muted-foreground"><Clock className="h-4 w-4" />{positions.length} points</div>
               </div>
             )}
-            <Button onClick={handleEndDelivery} variant="destructive" className="w-full" size="lg">
+            <Button onClick={handleEndDelivery} className="w-full" size="lg">
               <Square className="h-4 w-4 mr-2" />End Delivery
             </Button>
           </CardContent>
@@ -696,7 +743,7 @@ export default function RiderDashboard() {
 
       {/* RIGHT COLUMN: Unattended / Rejected deliveries */}
       <div className="space-y-6 lg:col-start-2">
-      <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Unattended / Rejected</h2>
+      <h2 className="text-base font-semibold">Unattended / Rejected</h2>
 
       {/* Delivery Offers — declined by another rider, broadcast to you */}
       {offered.length > 0 && (
@@ -770,7 +817,7 @@ export default function RiderDashboard() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Tariff</p>
-                  <p>D{Number(detail.estimated_tariff || 0).toLocaleString()}</p>
+                  <p>{formatMoney(Number(detail.estimated_tariff || 0))}</p>
                 </div>
               </div>
 
@@ -781,7 +828,7 @@ export default function RiderDashboard() {
                 const riderShare = Math.round(tariff * Number(rs.rider_percentage) / 100);
                 return (
                   <div className="border-t pt-3 text-sm">
-                    <p className="font-medium mb-2">Your estimated payout: <span className="text-primary">D{riderShare.toLocaleString()}</span> ({Number(rs.rider_percentage)}%)</p>
+                    <p className="font-medium mb-2">Your estimated payout: <span className="text-primary">{formatMoney(riderShare)}</span> ({Number(rs.rider_percentage)}%)</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>Rider</span><span className="text-right">{Number(rs.rider_percentage)}%</span>
                       <span>Merchant</span><span className="text-right">{Number(rs.merchant_percentage)}%</span>

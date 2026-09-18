@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { useParams, Link } from "react-router-dom";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -133,9 +134,9 @@ export default function CheckoutStatusPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-2 text-sm border-t pt-3">
-              <span className="text-muted-foreground">Subtotal</span><span className="text-right tabular-nums">D {Number(order.subtotal).toFixed(2)}</span>
-              <span className="text-muted-foreground">Delivery fee</span><span className="text-right tabular-nums">D {Number(order.delivery_fee).toFixed(2)}</span>
-              <span className="font-medium">Total</span><span className="text-right font-medium tabular-nums">D {Number(order.total).toFixed(2)}</span>
+              <span className="text-muted-foreground">Subtotal</span><span className="text-right tabular-nums">{formatMoney(Number(order.subtotal))}</span>
+              <span className="text-muted-foreground">Delivery fee</span><span className="text-right tabular-nums">{formatMoney(Number(order.delivery_fee))}</span>
+              <span className="font-medium">Total</span><span className="text-right font-medium tabular-nums">{formatMoney(Number(order.total))}</span>
               {order.payment_reference && (<><span className="text-muted-foreground">Reference</span><span className="text-right font-mono text-xs truncate">{order.payment_reference}</span></>)}
             </div>
             <div className="flex flex-col sm:flex-row gap-2 pt-2">

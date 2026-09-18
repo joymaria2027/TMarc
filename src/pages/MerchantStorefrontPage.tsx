@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import StorefrontLayout from "@/components/StorefrontLayout";
@@ -114,9 +115,9 @@ export default function MerchantStorefrontPage() {
                         {p.description && <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">{p.description}</p>}
                         <div className="flex items-center justify-between gap-2 pt-2 mt-auto">
                           <span className="font-display text-lg flex items-baseline gap-2 tabular-nums">
-                            D {quote(p).price.toFixed(2)}
+                            {formatMoney(quote(p).price)}
                             {quote(p).isWholesale && (
-                              <span className="text-xs text-muted-foreground line-through tabular-nums">D {Number(p.price).toFixed(2)}</span>
+                              <span className="text-xs text-muted-foreground line-through tabular-nums">{formatMoney(Number(p.price))}</span>
                             )}
                           </span>
                           {!p.available_today

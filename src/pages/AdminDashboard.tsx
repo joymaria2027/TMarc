@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Truck, Users, AlertTriangle, CheckCircle2, Clock, MapPin, Bell, DollarSign, TrendingUp, Package } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
+import { formatMoney, CHART_COLORS } from '@/lib/finance';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
 
@@ -17,6 +18,12 @@ export default function AdminDashboard() {
   const [dailyData, setDailyData] = useState<any[]>([]);
   const [statusData, setStatusData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Debounced realtime reload — bursts of events trigger one fetch, not one per event.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     const [delivRes, riderRes, alertRes, recentRes, notifRes] = await Promise.all([
@@ -78,10 +85,10 @@ export default function AdminDashboard() {
     load();
     const delivChannel = supabase
       .channel('dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'riders' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => scheduleReload())
       .subscribe();
     const notifChannel = supabase
       .channel('tariff-notif-realtime')
@@ -89,7 +96,7 @@ export default function AdminDashboard() {
         setNotifications(prev => [payload.new as any, ...prev]);
       })
       .subscribe();
-    return () => { supabase.removeChannel(delivChannel); supabase.removeChannel(notifChannel); };
+    return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(delivChannel); supabase.removeChannel(notifChannel); };
   }, []);
 
   const markNotifRead = async (id: string) => {
@@ -97,23 +104,15 @@ export default function AdminDashboard() {
     const notif = notifications.find(n => n.id === id);
     const readBy = notif?.read_by || [];
     if (readBy.includes(user.id)) return;
-    await supabase.from('tariff_notifications').update({ read_by: [...readBy, user.id] }).eq('id', id);
+    const { error } = await supabase.from('tariff_notifications').update({ read_by: [...readBy, user.id] }).eq('id', id);
+    if (error) { toast.error(error.message); return; } // keep unread on failure
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read_by: [...readBy, user.id] } : n));
   };
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const unreadNotifs = notifications.filter(n => !n.read_by?.includes(user?.id));
-  const PIE_COLORS = ['hsl(220, 70%, 50%)', 'hsl(145, 60%, 42%)', 'hsl(38, 92%, 50%)', 'hsl(0, 72%, 51%)', 'hsl(200, 80%, 50%)', 'hsl(280, 60%, 50%)'];
-
-  const statCards = [
-    { label: 'Total Deliveries', value: stats.total, icon: <Package className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Active Now', value: stats.active, icon: <Clock className="h-5 w-5" />, color: 'text-info', bg: 'bg-info/10' },
-    { label: 'Completed', value: stats.delivered, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Revenue', value: `D${stats.revenue.toLocaleString()}`, icon: <DollarSign className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Riders Online', value: `${stats.onlineRiders}/${stats.riders}`, icon: <Users className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Open Alerts', value: stats.alerts, icon: <AlertTriangle className="h-5 w-5" />, color: 'text-destructive', bg: 'bg-destructive/10' },
-  ];
+  const PIE_COLORS = CHART_COLORS;
 
   return (
     <div className="space-y-6">
@@ -122,20 +121,16 @@ export default function AdminDashboard() {
         <p className="text-muted-foreground">Overview of delivery operations</p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className={`${s.bg} ${s.color} p-2 rounded-lg`}>{s.icon}</span>
-              </div>
-              <p className="text-2xl font-bold">{s.value}</p>
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Operational strip (replaces hero-metric stat tiles banned by PRODUCT.md) */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-info" aria-hidden="true" /><strong className="tabular-nums">{stats.active}</strong>&nbsp;active now</span>
+          <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-primary" aria-hidden="true" /><strong className="tabular-nums">{stats.onlineRiders}/{stats.riders}</strong>&nbsp;riders online</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4 text-destructive" aria-hidden="true" /><strong className="tabular-nums">{stats.alerts}</strong>&nbsp;open alerts</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{stats.delivered}</strong>&nbsp;completed of {stats.total}</span>
+          <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(stats.revenue)}</strong>&nbsp;revenue</span>
+        </CardContent>
+      </Card>
 
       {/* Charts */}
       <div className="grid md:grid-cols-2 gap-4">
@@ -148,12 +143,12 @@ export default function AdminDashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 88%)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="deliveries" fill="hsl(220, 70%, 50%)" radius={[4, 4, 0, 0]} name="Total" />
-                <Bar dataKey="completed" fill="hsl(145, 60%, 42%)" radius={[4, 4, 0, 0]} name="Completed" />
+                <Bar dataKey="deliveries" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} name="Total" />
+                <Bar dataKey="completed" fill={CHART_COLORS[1]} radius={[4, 4, 0, 0]} name="Completed" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -168,11 +163,11 @@ export default function AdminDashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 88%)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => [`D${v.toLocaleString()}`, 'Revenue']} />
-                <Line type="monotone" dataKey="revenue" stroke="hsl(145, 60%, 42%)" strokeWidth={2} dot={{ r: 4 }} />
+                <Tooltip formatter={(v: number) => [formatMoney(v), 'Revenue']} />
+                <Line type="monotone" dataKey="revenue" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -255,7 +250,7 @@ export default function AdminDashboard() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{d.order_reference || d.id.slice(0, 8)}</p>
                     <p className="text-xs text-muted-foreground truncate">{d.pickup_address} → {d.dropoff_address}</p>
-                    {d.estimated_tariff && <p className="text-xs text-muted-foreground">D{Number(d.estimated_tariff).toLocaleString()}</p>}
+                    {d.estimated_tariff && <p className="text-xs text-muted-foreground tabular-nums">{formatMoney(Number(d.estimated_tariff))}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

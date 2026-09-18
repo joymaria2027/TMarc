@@ -140,12 +140,8 @@ export default function GpsTrackerPage() {
         <p className="text-muted-foreground">Monitor all rider movements and deliveries in real-time</p>
       </div>
 
-      {/* Stats */}
+      {/* Stats — operational counts only (lane-01: fold vanity Total into the list header) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold tabular-nums">{riders.length}</p>
-          <p className="text-xs text-muted-foreground">Total Riders</p>
-        </CardContent></Card>
         <Card><CardContent className="p-3 text-center">
           <p className="text-2xl font-bold text-accent-foreground bg-accent/15 rounded-md tabular-nums">{onlineRiders.length}</p>
           <p className="text-xs text-muted-foreground">Online</p>
@@ -162,8 +158,8 @@ export default function GpsTrackerPage() {
 
       <div className="grid md:grid-cols-3 gap-4">
         {/* Rider list */}
-        <div className="md:col-span-1 space-y-2 max-h-[600px] overflow-y-auto">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Riders</h2>
+        <div className="md:col-span-1 space-y-2 max-h-[600px] overflow-y-auto" role="region" aria-label={`Active riders (${riders.length} total)`} tabIndex={0}>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Riders ({riders.length})</h2>
           {riders.map(r => {
             const selected = selectedRider?.id === r.id;
             return (

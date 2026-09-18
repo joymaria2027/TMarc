@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { toast } from 'sonner';
 import { Shield, AlertTriangle, MapPin, Plus, RefreshCw, ChevronDown, CheckCircle2, AlertOctagon, Info } from 'lucide-react';
 import { entityIdOf, formatMoney, validateServiceArea } from '@/lib/finance';
+import { guardedWrite } from '@/lib/guardedWrite';
 
 type Severity = 'critical' | 'warning' | 'info';
 type Check = { key: string; label: string; severity: Severity; count: number; sample: any[] };
@@ -87,7 +88,11 @@ export default function FraudPage() {
   };
 
   const unflag = async (id: string) => {
-    await supabase.from('deliveries').update({ is_flagged: false, flag_reason: null }).eq('id', id);
+    const { error } = await guardedWrite(
+      supabase.from('deliveries').update({ is_flagged: false, flag_reason: null }).eq('id', id),
+      { context: 'Unflag failed' },
+    );
+    if (error) return;
     setFlagged(prev => prev.filter(d => d.id !== id));
     toast.success('Delivery unflagged');
   };
@@ -122,7 +127,7 @@ export default function FraudPage() {
   );
 
   return (
-    <div className="space-y-6" aria-busy={false}>
+    <div className="space-y-6" aria-busy={loading || auditing}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Fraud Prevention</h1>
@@ -140,9 +145,17 @@ export default function FraudPage() {
           <CardTitle className="text-base flex items-center justify-between">
             <span>Systems Audit — Fund Integrity</span>
             <div className="flex gap-2 text-xs">
-              <Badge className={sevMeta.critical.color}>{counts.critical || 0} Critical</Badge>
-              <Badge className={sevMeta.warning.color}>{counts.warning || 0} Warning</Badge>
-              <Badge className={sevMeta.info.color}>{counts.info || 0} Info</Badge>
+              {(counts.critical || counts.warning || counts.info) ? (
+                <>
+                  {!!counts.critical && <Badge className={sevMeta.critical.color}>{counts.critical} Critical</Badge>}
+                  {!!counts.warning && <Badge className={sevMeta.warning.color}>{counts.warning} Warning</Badge>}
+                  {!!counts.info && <Badge className={sevMeta.info.color}>{counts.info} Info</Badge>}
+                </>
+              ) : (
+                <Badge className="bg-success/10 text-success border-success/30 gap-1">
+                  <CheckCircle2 className="h-3 w-3" aria-hidden="true" />All clear
+                </Badge>
+              )}
             </div>
           </CardTitle>
           {report?.generated_at && (
@@ -211,8 +224,8 @@ export default function FraudPage() {
                         <td className="py-1.5 pr-3 text-right tabular-nums">{amt}</td>
                         <td className="py-1.5 text-right">
                         {id && (
-                          <Button size="sm" variant="outline" onClick={() => acknowledge(c.key, id)} aria-label={`Acknowledge ${id.slice(0, 8)}`}>
-                            Ack
+                          <Button size="sm" variant="outline" onClick={() => acknowledge(c.key, id)} aria-label={`Acknowledge ${c.label} ${id.slice(0, 8)}`}>
+                            Acknowledge
                           </Button>
                         )}
                         </td>

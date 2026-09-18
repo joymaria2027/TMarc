@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,7 +95,7 @@ export default function MerchantOrdersPage() {
         // Scope realtime to this manager's merchants; admins see all.
         if (merchantIds && !merchantIds.includes(row?.merchant_id)) return;
         if (payload.eventType === "UPDATE" && payload.old?.status !== "paid" && payload.new?.status === "paid") {
-          toast.success(`New paid order ${payload.new.order_reference || ""}`);
+          toast.success(`New paid order ${payload.new.order_reference || ""}`, { action: { label: "View orders", onClick: () => { window.location.href = "/merchant/orders"; } } });
         }
         scheduleLoad.current();
       })
@@ -116,8 +117,12 @@ export default function MerchantOrdersPage() {
         if (error) throw error;
         toast.success("Order ready — riders notified");
       } else {
-        const { error } = await supabase.from("orders").update({ status: to }).eq("id", orderId);
+        // Read-then-guarded-write: only transition if the status is still what we saw,
+        // so two managers clicking simultaneously can't double-apply.
+        const { data: cur } = await supabase.from("orders").select("status").eq("id", orderId).single();
+        const { error, count } = await supabase.from("orders").update({ status: to }).eq("id", orderId).eq("status", cur?.status ?? "");
         if (error) throw error;
+        if (count === 0) { toast.info("Order status already changed by someone else."); load(); return; }
       }
       load();
     } catch (e: any) { toast.error(e.message); }
@@ -134,7 +139,12 @@ export default function MerchantOrdersPage() {
         <Badge variant="secondary" className="text-xs">{orders.length} active</Badge>
       </div>
       {loading ? (
-        <p className="text-muted-foreground" role="status">Loading orders…</p>
+        <div role="status" aria-label="Loading orders" className="space-y-3">
+          <div className="shimmer h-32 rounded-lg" aria-hidden="true" />
+          <div className="shimmer h-32 rounded-lg" aria-hidden="true" />
+          <div className="shimmer h-32 rounded-lg" aria-hidden="true" />
+          <span className="sr-only">Loading orders…</span>
+        </div>
       ) : orders.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-muted-foreground space-y-1">
           <p>No active orders.</p>
@@ -196,12 +206,12 @@ function MerchantOrderCard({ o, unread, onTransition, onChatOpened }: { o: any; 
         {o.order_items?.map((it: any) => (
           <div key={it.id} className="flex justify-between gap-2 text-sm">
             <span>{it.quantity}× {it.name_snapshot}</span>
-            <span className="tabular-nums">D {Number(it.line_total).toFixed(2)}</span>
+            <span className="tabular-nums">{formatMoney(Number(it.line_total))}</span>
           </div>
         ))}
         {o.dropoff_address && <p className="text-xs text-muted-foreground">Deliver to: {o.dropoff_address}</p>}
         <div className="border-t pt-2 flex items-center justify-between flex-wrap gap-2">
-          <span className="font-semibold tabular-nums">Total D {Number(o.total).toFixed(2)}</span>
+          <span className="font-semibold tabular-nums">Total {formatMoney(Number(o.total))}</span>
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={toggleChat} aria-expanded={chatOpen} aria-controls={chatId} className="relative">
               <MessageCircle className="h-4 w-4 mr-1" aria-hidden="true" /> {chatOpen ? "Hide chat" : "Message customer"}

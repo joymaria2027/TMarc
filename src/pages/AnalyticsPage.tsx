@@ -171,7 +171,7 @@ export default function AnalyticsPage() {
   );
 
   return (
-    <div className="space-y-6" aria-busy={false}>
+    <div className="space-y-6" aria-busy={loading}>
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Analytics</h1>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,12 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Building2, Package, CheckCircle2, Clock, DollarSign, Users, TrendingUp, Plus, DollarSign as DollarIcon } from 'lucide-react';
 import { format, subDays } from 'date-fns';
+import { formatMoney } from '@/lib/finance';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
 import StoreQrDialog from '@/components/StoreQrDialog';
 import { QrCode } from 'lucide-react';
 
 export default function MerchantManagerDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [merchants, setMerchants] = useState<any[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
@@ -24,6 +27,12 @@ export default function MerchantManagerDashboard() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [tariffs, setTariffs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Debounced realtime reload — bursts of events trigger one fetch, not one per event.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     const [restRes, delRes, riderRes, profRes, tariffRes] = await Promise.all([
@@ -44,11 +53,11 @@ export default function MerchantManagerDashboard() {
   useEffect(() => {
     load();
     const ch = supabase.channel('rm-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchants' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_tariffs' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchants' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_tariffs' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
   // Tariff dialog state
@@ -56,11 +65,6 @@ export default function MerchantManagerDashboard() {
   const [tariffMerchant, setTariffMerchant] = useState<any>(null);
   const [tariffForm, setTariffForm] = useState({ location_name: '', tariff_amount: '' });
   const [qrMerchant, setQrMerchant] = useState<any>(null);
-
-  // Delivery dialog state
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const [deliveryMerchant, setDeliveryMerchant] = useState<any>(null);
-  const [deliveryForm, setDeliveryForm] = useState({ pickup_address: '', dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
 
   const addTariff = async () => {
     if (!tariffMerchant || !user) return;
@@ -74,35 +78,6 @@ export default function MerchantManagerDashboard() {
     toast.success('Tariff added');
     setTariffOpen(false);
     setTariffForm({ location_name: '', tariff_amount: '' });
-    load();
-  };
-
-  const createDelivery = async () => {
-    if (!deliveryMerchant) return;
-    if (!deliveryForm.rider_id) { toast.error('Please assign a rider'); return; }
-    const customerName = deliveryForm.customer_name.trim();
-    const customerPhone = deliveryForm.customer_phone.trim();
-    if (!customerName) { toast.error('Customer name is required'); return; }
-    if (!/^[+\d][\d\s\-]{6,19}$/.test(customerPhone)) { toast.error('Enter a valid customer phone number'); return; }
-    const selectedTariff = tariffs.find(t => t.id === deliveryForm.tariff_id);
-    const { error } = await supabase.from('deliveries').insert({
-      merchant_id: deliveryMerchant.id,
-      pickup_address: deliveryForm.pickup_address || deliveryMerchant.address,
-      dropoff_address: deliveryForm.dropoff_address,
-      order_reference: deliveryForm.order_reference || null,
-      rider_id: deliveryForm.rider_id,
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      status: 'dispatched',
-      dispatched_at: new Date().toISOString(),
-      estimated_tariff: selectedTariff ? selectedTariff.tariff_amount : null,
-      pickup_latitude: deliveryMerchant.latitude,
-      pickup_longitude: deliveryMerchant.longitude,
-    });
-    if (error) { toast.error(error.message); return; }
-    toast.success('Delivery created & dispatched');
-    setDeliveryOpen(false);
-    setDeliveryForm({ pickup_address: '', dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
     load();
   };
 
@@ -134,34 +109,21 @@ export default function MerchantManagerDashboard() {
 
   const myTariffs = tariffs.filter(t => myRestIds.includes(t.merchant_id));
 
-  const statCards = [
-    { label: 'My Merchants', value: myMerchants.length, icon: <Building2 className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Total Deliveries', value: myDeliveries.length, icon: <Package className="h-5 w-5" />, color: 'text-info', bg: 'bg-info/10' },
-    { label: 'Active Now', value: active.length, icon: <Clock className="h-5 w-5" />, color: 'text-warning', bg: 'bg-warning/10' },
-    { label: 'Completed', value: delivered.length, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Revenue', value: `D${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Settlements', value: `${approvedCount}/${delivered.length}`, icon: <TrendingUp className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-  ];
-
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Operator</p>
-        <h1 className="font-display text-4xl tracking-tight">Merchant dashboard.</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Merchant dashboard</h1>
         <p className="text-muted-foreground">A quick read on the day's deliveries, revenue and settlements.</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <div className={`${s.bg} ${s.color} p-2 rounded-md w-fit mb-3`}>{s.icon}</div>
-              <p className="font-display text-3xl tabular-nums leading-none">{s.value}</p>
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-2">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{active.length}</strong>&nbsp;active now</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{delivered.length}</strong>&nbsp;completed</span>
+          <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" /><strong className="tabular-nums">{approvedCount}/{delivered.length}</strong>&nbsp;settled</span>
+          <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totalRevenue)}</strong>&nbsp;revenue</span>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -204,7 +166,7 @@ export default function MerchantManagerDashboard() {
                     <p className="text-xs text-muted-foreground truncate">{r.address}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => { setDeliveryMerchant(r); setDeliveryOpen(true); }}>
+                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => navigate(`/deliveries/new?merchant=${r.id}`)}>
                       <Plus className="h-3 w-3" />Delivery
                     </Button>
                     <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => { setTariffMerchant(r); setTariffOpen(true); }}>
@@ -237,7 +199,7 @@ export default function MerchantManagerDashboard() {
               {myTariffs.map(t => (
                 <div key={t.id} className="bg-muted rounded p-2 text-sm">
                   <p className="text-muted-foreground text-xs">{t.location_name}</p>
-                  <p className="font-semibold">D {Number(t.tariff_amount).toFixed(2)}</p>
+                  <p className="font-semibold">{formatMoney(Number(t.tariff_amount))}</p>
                 </div>
               ))}
             </div>
@@ -275,46 +237,6 @@ export default function MerchantManagerDashboard() {
             <div className="space-y-2"><Label htmlFor="tariff-location">Location Name</Label><Input id="tariff-location" value={tariffForm.location_name} onChange={e => setTariffForm(p => ({ ...p, location_name: e.target.value }))} /></div>
             <div className="space-y-2"><Label htmlFor="tariff-amount">Tariff Amount (D)</Label><Input id="tariff-amount" type="number" step="any" value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} /></div>
             <Button onClick={addTariff} className="w-full">Add Tariff</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Delivery Dialog */}
-      <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Delivery – {deliveryMerchant?.name}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2"><Label htmlFor="delivery-ref">Order Reference (optional)</Label><Input id="delivery-ref" value={deliveryForm.order_reference} onChange={e => setDeliveryForm(p => ({ ...p, order_reference: e.target.value }))} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label htmlFor="delivery-customer">Customer Name *</Label><Input id="delivery-customer" required value={deliveryForm.customer_name} onChange={e => setDeliveryForm(p => ({ ...p, customer_name: e.target.value }))} /></div>
-              <div className="space-y-2"><Label htmlFor="delivery-phone">Customer Phone *</Label><Input id="delivery-phone" required type="tel" inputMode="tel" maxLength={20} placeholder="+220…" value={deliveryForm.customer_phone} onChange={e => setDeliveryForm(p => ({ ...p, customer_phone: e.target.value }))} /></div>
-            </div>
-            <div className="space-y-2"><Label htmlFor="delivery-pickup">Pickup Address</Label><Input id="delivery-pickup" placeholder={deliveryMerchant?.address || ''} value={deliveryForm.pickup_address} onChange={e => setDeliveryForm(p => ({ ...p, pickup_address: e.target.value }))} /></div>
-            <div className="space-y-2"><Label htmlFor="delivery-dropoff">Dropoff Address</Label><Input id="delivery-dropoff" value={deliveryForm.dropoff_address} onChange={e => setDeliveryForm(p => ({ ...p, dropoff_address: e.target.value }))} /></div>
-            <div className="space-y-2">
-              <Label htmlFor="delivery-tariff">Tariff (optional)</Label>
-              <Select value={deliveryForm.tariff_id} onValueChange={v => setDeliveryForm(p => ({ ...p, tariff_id: v }))}>
-                <SelectTrigger id="delivery-tariff"><SelectValue placeholder="Select tariff" /></SelectTrigger>
-                <SelectContent>
-                  {tariffs.filter(t => t.merchant_id === deliveryMerchant?.id).map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.location_name} – D{t.tariff_amount}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="delivery-rider">Assign Rider</Label>
-              <Select value={deliveryForm.rider_id} onValueChange={v => setDeliveryForm(p => ({ ...p, rider_id: v }))}>
-                <SelectTrigger id="delivery-rider"><SelectValue placeholder="Select rider" /></SelectTrigger>
-                <SelectContent>
-                  {riders.map(r => {
-                    const p = profiles.find(pr => pr.user_id === r.user_id);
-                    return <SelectItem key={r.id} value={r.id}>{p?.full_name || r.id.slice(0, 8)}{r.is_online ? ' • online' : ''}</SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={createDelivery} className="w-full">Create & Dispatch</Button>
           </div>
         </DialogContent>
       </Dialog>

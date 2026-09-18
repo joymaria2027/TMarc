@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { formatMoney, CHART_COLORS } from '@/lib/finance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Code2, Package, CheckCircle2, DollarSign, Users, Building2, TrendingUp, ShieldCheck } from 'lucide-react';
@@ -13,6 +15,12 @@ export default function AppDeveloperDashboard() {
   const [riders, setRiders] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Debounced realtime reload — bursts of events trigger one fetch, not one per event.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     const [delRes, restRes, riderRes, alertRes] = await Promise.all([
@@ -31,11 +39,11 @@ export default function AppDeveloperDashboard() {
   useEffect(() => {
     load();
     const ch = supabase.channel('ad-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -57,14 +65,7 @@ export default function AppDeveloperDashboard() {
     };
   });
 
-  const statCards = [
-    { label: 'Platform Revenue', value: `D${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Total Deliveries', value: deliveries.length, icon: <Package className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Completed', value: delivered.length, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Active Now', value: active.length, icon: <TrendingUp className="h-5 w-5" />, color: 'text-warning', bg: 'bg-warning/10' },
-    { label: 'Merchants', value: `${merchants.filter(r => r.is_active).length}/${merchants.length}`, icon: <Building2 className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Open Alerts', value: alerts.length, icon: <ShieldCheck className="h-5 w-5" />, color: 'text-destructive', bg: 'bg-destructive/10' },
-  ];
+  const completionRate = deliveries.length > 0 ? Math.round(delivered.length / deliveries.length * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -73,17 +74,15 @@ export default function AppDeveloperDashboard() {
         <p className="text-muted-foreground">Platform health, metrics & Platform revenue</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <div className={`${s.bg} ${s.color} p-2 rounded-lg w-fit mb-2`}>{s.icon}</div>
-              <p className="text-2xl font-bold">{s.value}</p>
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Operational strip + platform-data links (replaces the 10 hero-metric tiles) */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totalRevenue)}</strong>&nbsp;platform revenue</span>
+          <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{active.length}</strong>&nbsp;active now</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{completionRate}%</strong>&nbsp;completion</span>
+          <Link to="/rls-verification" className="flex items-center gap-1.5 hover:underline underline-offset-4"><ShieldCheck className="h-4 w-4 text-destructive" aria-hidden="true" /><strong className="tabular-nums">{alerts.length}</strong>&nbsp;unresolved alerts</Link>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -95,12 +94,12 @@ export default function AppDeveloperDashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 88%)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="deliveries" fill="hsl(220, 70%, 50%)" radius={[4, 4, 0, 0]} name="Total" />
-                <Bar dataKey="completed" fill="hsl(145, 60%, 42%)" radius={[4, 4, 0, 0]} name="Completed" />
+                <Bar dataKey="deliveries" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} name="Total" />
+                <Bar dataKey="completed" fill={CHART_COLORS[1]} radius={[4, 4, 0, 0]} name="Completed" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -118,35 +117,24 @@ export default function AppDeveloperDashboard() {
         <CardContent>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={dailyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 88%)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="day" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => [`D${v.toLocaleString()}`, 'Revenue']} />
-              <Line type="monotone" dataKey="revenue" stroke="hsl(145, 60%, 42%)" strokeWidth={2} dot={{ r: 4 }} />
+              <Tooltip formatter={(v: number) => [formatMoney(v), 'Revenue']} />
+              <Line type="monotone" dataKey="revenue" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 4 }} />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* System health */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-muted-foreground">Active Riders</p>
-          <p className="text-xl font-bold text-accent">{riders.filter(r => r.is_online).length}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-muted-foreground">Active Merchants</p>
-          <p className="text-xl font-bold text-primary">{merchants.filter(r => r.is_active).length}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-muted-foreground">Unresolved Alerts</p>
-          <p className="text-xl font-bold text-destructive">{alerts.length}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-muted-foreground">Completion Rate</p>
-          <p className="text-xl font-bold text-accent">{deliveries.length > 0 ? Math.round(delivered.length / deliveries.length * 100) : 0}%</p>
-        </CardContent></Card>
-      </div>
+      {/* System health as links (lane-10: dev dashboard should link into platform-data pages) */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{riders.filter(r => r.is_online).length}</strong>&nbsp;active riders</span>
+          <Link to="/merchants" className="flex items-center gap-1.5 hover:underline underline-offset-4"><Building2 className="h-4 w-4 text-primary" aria-hidden="true" /><strong className="tabular-nums">{merchants.filter(r => r.is_active).length}</strong>&nbsp;active stores</Link>
+          <Link to="/webhook-events" className="flex items-center gap-1.5 hover:underline underline-offset-4"><Package className="h-4 w-4 text-info" aria-hidden="true" />Webhook events</Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }

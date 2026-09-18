@@ -28,7 +28,7 @@ const ROLE_EXPECTATIONS: Record<string, string> = {
 };
 
 export default function RlsVerificationPage() {
-  const { user, roles } = useAuth();
+  const { user, roles, hasRole } = useAuth();
   const [results, setResults] = useState<CheckResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -167,10 +167,14 @@ export default function RlsVerificationPage() {
     setLoading(false);
   };
 
+  // Developer tool — the check battery hits 10+ tables, so only run it for
+  // admin/app_developer sessions (lane-10: intent + perf).
+  const isPlatformRole = hasRole('admin') || hasRole('app_developer');
+
   useEffect(() => {
-    runChecks();
+    if (isPlatformRole) runChecks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, isPlatformRole]);
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -232,7 +236,11 @@ export default function RlsVerificationPage() {
           </Card>
         ))}
         {!loading && results.length === 0 && (
-          <p className="text-sm text-muted-foreground">No checks run yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {isPlatformRole
+              ? 'No checks run yet.'
+              : 'This is a developer tool — the check battery runs for admin and app_developer sessions only.'}
+          </p>
         )}
       </div>
     </div>

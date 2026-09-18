@@ -201,7 +201,7 @@ export default function MyOrdersPage() {
           >
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </Button>
-          <h1 className="font-display text-4xl tracking-tight flex-1">My orders</h1>
+          <h1 className="text-2xl font-bold tracking-tight flex-1">My orders</h1>
           <Button
             variant="outline"
             size="sm"

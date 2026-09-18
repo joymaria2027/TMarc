@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,6 +58,7 @@ export default function WholesalersPage() {
   }
 
   const visible = filter === "all" ? rows : rows.filter(r => r.approval_status === filter);
+  const pendingCount = rows.filter(r => r.approval_status === "pending").length;
 
   return (
     <div className="space-y-6">
@@ -69,6 +71,9 @@ export default function WholesalersPage() {
           {FILTERS.map(f => (
             <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} aria-pressed={filter === f} onClick={() => setFilter(f)}>
               {f[0].toUpperCase() + f.slice(1)}
+              {f === "pending" && pendingCount > 0 && (
+                <Badge variant="destructive" className="ml-1 text-[11px] h-4 px-1.5 tabular-nums">{pendingCount}</Badge>
+              )}
             </Button>
           ))}
         </div>
@@ -81,6 +86,7 @@ export default function WholesalersPage() {
             <p className="text-sm">{filter === "pending" ? "New wholesale applications will appear here for review." : "Try a different status filter."}</p>
           </CardContent></Card>
         ) : (
+          <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -147,6 +153,7 @@ export default function WholesalersPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
     </div>
   );

@@ -79,8 +79,7 @@ export default function WholesaleApplyPage() {
     <StorefrontLayout>
       <div className="max-w-lg mx-auto space-y-6">
         <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Wholesale</p>
-          <h1 className="font-display text-3xl tracking-tight">Wholesale account</h1>
+          <h1 className="font-display text-2xl tracking-tight">Wholesale account</h1>
         </div>
 
         {app ? (

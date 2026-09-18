@@ -55,11 +55,11 @@ export default function DispatchAuditPage() {
 
   const scheduleReload = () => {
     if (reloadTimer.current) clearTimeout(reloadTimer.current);
-    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+    reloadTimer.current = setTimeout(() => { void load({ silent: true }); }, 400);
   };
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     const { data } = await supabase
       .from("dispatch_audit_log")
       .select("*")
@@ -142,7 +142,7 @@ export default function DispatchAuditPage() {
         </div>
         <div className="flex flex-wrap gap-1">
           {EVENT_TYPES.map(t => (
-            <Button key={t} size="sm" variant={type === t ? "default" : "outline"} onClick={() => setType(t)}>
+            <Button key={t} size="sm" variant={type === t ? "default" : "outline"} aria-pressed={type === t} onClick={() => setType(t)}>
               {t === "all" ? "All events" : EVENT_LABEL[t]}
             </Button>
           ))}
@@ -212,7 +212,7 @@ export default function DispatchAuditPage() {
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage(p => p + 1)}>Show more</Button>
+                <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage(p => p + 1)}>Next</Button>
               </div>
             </div>
           </>

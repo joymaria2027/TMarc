@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CHART_COLORS } from '@/lib/finance';
@@ -112,10 +112,11 @@ export default function AnalyticsCharts(props: {
             <div role="img" aria-label={`Bar chart of revenue in dalasi by payment method, top ${paymentRevenueData[0]?.name} at D${paymentRevenueData[0]?.revenue.toFixed(2)}`}>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={paymentRevenueData}>
+                <Legend />
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" fontSize={11} />
                   <YAxis fontSize={12} />
-                  <Tooltip formatter={(v: number) => `D${Number(v).toFixed(2)}`} />
+                  <Tooltip formatter={(v: number) => {formatMoney(Number(v))}} />
                   <Bar dataKey="revenue" fill={CHART_COLORS[0]} name="Revenue (D)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -133,11 +134,12 @@ export default function AnalyticsCharts(props: {
               <p className="text-xs text-muted-foreground mb-2">Left axis: deliveries (count). Right axis: revenue (D). Avg minutes are listed in the data table below.</p>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={merchantData}>
+                <Legend />
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" fontSize={11} interval={0} angle={-20} textAnchor="end" height={60} />
                   <YAxis yAxisId="left" fontSize={12} allowDecimals={false} label={{ value: 'Deliveries', angle: -90, position: 'insideLeft', fontSize: 11 }} />
                   <YAxis yAxisId="right" orientation="right" fontSize={12} label={{ value: 'Revenue (D)', angle: 90, position: 'insideRight', fontSize: 11 }} />
-                  <Tooltip formatter={(v: number, name: string) => name === 'Revenue (D)' ? `D${Number(v).toFixed(2)}` : v} />
+                  <Tooltip formatter={(v: number, name: string) => name === 'Revenue (D)' ? formatMoney(Number(v)) : v} />
                   <Bar yAxisId="left" dataKey="deliveries" fill={CHART_COLORS[0]} name="Deliveries" radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="right" dataKey="revenue" fill={CHART_COLORS[1]} name="Revenue (D)" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -161,6 +163,7 @@ export default function AnalyticsCharts(props: {
               <p className="text-xs text-muted-foreground mb-2">Deliveries (count), distance (km) and efficiency (%) use separate scales — see data table for exact values.</p>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={riderPerf}>
+                <Legend />
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" fontSize={12} />
                   <YAxis yAxisId="left" fontSize={12} allowDecimals={false} />

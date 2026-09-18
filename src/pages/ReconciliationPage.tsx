@@ -145,30 +145,21 @@ export default function ReconciliationPage() {
   };
 
   return (
-    <div className="space-y-6" aria-busy={false}>
+    <div className="space-y-6" aria-busy={loading}>
       <div>
         <h1 className="text-2xl font-bold">Reconciliation</h1>
         <p className="text-muted-foreground">Match delivery payments and payouts against bank statements.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <ArrowDownCircle className="h-8 w-8 text-accent" aria-hidden="true" />
-          <div><p className="text-xs text-muted-foreground">Received</p><p className="text-lg font-semibold tabular-nums text-right">{formatMoney(totals.received)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <ArrowUpCircle className="h-8 w-8 text-primary" aria-hidden="true" />
-          <div><p className="text-xs text-muted-foreground">Paid Out</p><p className="text-lg font-semibold tabular-nums text-right">{formatMoney(totals.paidOut)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <Scale className="h-8 w-8 text-info" aria-hidden="true" />
-          <div><p className="text-xs text-muted-foreground">Net</p><p className="text-lg font-semibold tabular-nums text-right">{formatMoney(totals.net)}</p></div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
-          <AlertCircle className="h-8 w-8 text-warning" aria-hidden="true" />
-          <div><p className="text-xs text-muted-foreground">Unmatched</p><p className="text-lg font-semibold tabular-nums text-right">{totals.unmatched}</p></div>
-        </CardContent></Card>
-      </div>
+      {/* Compact totals strip (lane-04: data-true but not hero tiles) */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <span className="flex items-center gap-1.5"><ArrowDownCircle className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totals.received)}</strong>&nbsp;received</span>
+          <span className="flex items-center gap-1.5"><ArrowUpCircle className="h-4 w-4 text-primary" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totals.paidOut)}</strong>&nbsp;paid out</span>
+          <span className="flex items-center gap-1.5"><Scale className="h-4 w-4 text-info" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totals.net)}</strong>&nbsp;net</span>
+          <span className="flex items-center gap-1.5"><AlertCircle className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{totals.unmatched}</strong>&nbsp;unmatched</span>
+        </CardContent>
+      </Card>
       <p className="text-xs text-muted-foreground">Showing latest {rows.length} of up to 1000 entries. Refine search or status to narrow results.</p>
 
       <div className="flex flex-col sm:flex-row sm:items-end gap-3">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatMoney } from "@/lib/finance";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,7 +79,6 @@ export default function ProductApprovalsPage() {
               <CardTitle className="text-base">{p.name}</CardTitle>
               <p className="text-xs text-muted-foreground">{p.merchants?.name}</p>
             </div>
-            <Badge variant="secondary" className="text-xs">pending</Badge>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex gap-4 flex-wrap">
@@ -94,7 +94,7 @@ export default function ProductApprovalsPage() {
               )}
               <div className="space-y-1 flex-1 min-w-52">
                 {p.description && <p className="text-sm">{p.description}</p>}
-                <p className="text-sm">Price: <strong className="tabular-nums">D {Number(p.price).toFixed(2)}</strong></p>
+                <p className="text-sm">Price: <strong className="tabular-nums">{formatMoney(Number(p.price))}</strong></p>
                 {p.track_inventory && <p className="text-sm tabular-nums">Stock: {p.quantity}</p>}
               </div>
             </div>

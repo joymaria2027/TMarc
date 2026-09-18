@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { formatMoney, CHART_COLORS } from '@/lib/finance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Building2, Package, CheckCircle2, DollarSign, Users, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
@@ -7,13 +8,19 @@ import { format, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
 
-const PIE_COLORS = ['hsl(220, 70%, 50%)', 'hsl(145, 60%, 42%)', 'hsl(38, 92%, 50%)', 'hsl(0, 72%, 51%)', 'hsl(200, 80%, 50%)'];
+const PIE_COLORS = CHART_COLORS;
 
 export default function BusinessOwnerDashboard() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [merchants, setMerchants] = useState<any[]>([]);
   const [riders, setRiders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Debounced realtime reload — bursts of events trigger one fetch, not one per event.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     const [delRes, restRes, riderRes] = await Promise.all([
@@ -30,10 +37,10 @@ export default function BusinessOwnerDashboard() {
   useEffect(() => {
     load();
     const ch = supabase.channel('bo-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -60,15 +67,6 @@ export default function BusinessOwnerDashboard() {
     };
   });
 
-  const statCards = [
-    { label: 'Total Revenue', value: `D${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Total Deliveries', value: deliveries.length, icon: <Package className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Completed', value: delivered.length, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Active Now', value: active.length, icon: <TrendingUp className="h-5 w-5" />, color: 'text-warning', bg: 'bg-warning/10' },
-    { label: 'Merchants', value: merchants.length, icon: <Building2 className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Riders', value: `${riders.filter(r => r.is_online).length}/${riders.length}`, icon: <Users className="h-5 w-5" />, color: 'text-info', bg: 'bg-info/10' },
-  ];
-
   return (
     <div className="space-y-6">
       <div>
@@ -76,17 +74,16 @@ export default function BusinessOwnerDashboard() {
         <p className="text-muted-foreground">High-level performance across all operations</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <div className={`${s.bg} ${s.color} p-2 rounded-lg w-fit mb-2`}>{s.icon}</div>
-              <p className="text-2xl font-bold">{s.value}</p>
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Operational strip (replaces hero-metric stat tiles banned by PRODUCT.md) */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totalRevenue)}</strong>&nbsp;delivered revenue</span>
+          <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{active.length}</strong>&nbsp;active now</span>
+          <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{delivered.length}</strong>&nbsp;completed of {deliveries.length}</span>
+          <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-primary" aria-hidden="true" /><strong className="tabular-nums">{merchants.length}</strong>&nbsp;stores</span>
+          <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-info" aria-hidden="true" /><strong className="tabular-nums">{riders.filter(r => r.is_online).length}/{riders.length}</strong>&nbsp;riders online</span>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -98,11 +95,11 @@ export default function BusinessOwnerDashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 88%)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(v: number) => [`D${v.toLocaleString()}`, 'Revenue']} />
-                <Line type="monotone" dataKey="revenue" stroke="hsl(145, 60%, 42%)" strokeWidth={2} dot={{ r: 4 }} />
+                <Tooltip formatter={(v: number) => [formatMoney(v), 'Revenue']} />
+                <Line type="monotone" dataKey="revenue" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -126,7 +123,7 @@ export default function BusinessOwnerDashboard() {
                   <Pie data={restRevenue} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" paddingAngle={2}>
                     {restRevenue.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => `D${v.toLocaleString()}`} />
+                  <Tooltip formatter={(v: number) => formatMoney(v)} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 text-sm">
@@ -134,7 +131,7 @@ export default function BusinessOwnerDashboard() {
                   <div key={r.name} className="flex items-center gap-2">
                     <div className="h-3 w-3 rounded-sm" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
                     <span>{r.name}</span>
-                    <span className="text-muted-foreground">D{r.value.toLocaleString()}</span>
+                    <span className="text-muted-foreground tabular-nums">{formatMoney(r.value)}</span>
                   </div>
                 ))}
               </div>

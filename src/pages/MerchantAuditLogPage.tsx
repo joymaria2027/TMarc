@@ -122,13 +122,19 @@ export default function MerchantAuditLogPage() {
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground" role="status">Loading audit log…</p>
+        <div role="status" aria-label="Loading audit log" className="space-y-2">
+          <div className="shimmer h-12 rounded-md" aria-hidden="true" />
+          <div className="shimmer h-12 rounded-md" aria-hidden="true" />
+          <div className="shimmer h-12 rounded-md" aria-hidden="true" />
+          <span className="sr-only">Loading audit log…</span>
+        </div>
       ) : pageRows.length === 0 ? (
         <p className="text-muted-foreground" role="status">
           {filtersActive ? 'No entries match these filters. Clear the search or choose a different store.' : 'No audit entries yet. Store approvals and QR activity will appear here.'}
         </p>
       ) : (
         <div className="space-y-2">
+          <div className="overflow-x-auto rounded-md border" role="region" aria-label="Merchant audit log">
           <Table>
             <TableHeader>
               <TableRow>
@@ -180,6 +186,7 @@ export default function MerchantAuditLogPage() {
               })}
             </TableBody>
           </Table>
+          </div>
           <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
             <span className="text-xs text-muted-foreground" role="status">Page {page + 1} of {pages}</span>
             <div className="flex gap-2">

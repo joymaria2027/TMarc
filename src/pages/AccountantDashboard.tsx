@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Receipt, CheckCircle2, Clock, DollarSign, AlertTriangle, Package, ArrowDownToLine } from 'lucide-react';
+import { Receipt, CheckCircle2, Clock, DollarSign, AlertTriangle, ArrowDownToLine } from 'lucide-react';
 import { format, subDays } from 'date-fns';
+import { formatMoney, CHART_COLORS } from '@/lib/finance';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
 
@@ -15,6 +17,12 @@ export default function AccountantDashboard() {
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Debounced realtime reload — bursts of events trigger one fetch, not one per event.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     const [delRes, alertRes, wrRes, expRes] = await Promise.all([
@@ -33,12 +41,12 @@ export default function AccountantDashboard() {
   useEffect(() => {
     load();
     const ch = supabase.channel('accountant-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
@@ -60,15 +68,6 @@ export default function AccountantDashboard() {
     };
   });
 
-  const statCards = [
-    { label: 'Delivered', value: deliveries.length, icon: <Package className="h-5 w-5" />, color: 'text-primary', bg: 'bg-primary/10' },
-    { label: 'Pending Settlement', value: pendingSettlements, icon: <Clock className="h-5 w-5" />, color: 'text-warning', bg: 'bg-warning/10' },
-    { label: 'Approved', value: approvedSettlements, icon: <CheckCircle2 className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Revenue', value: `D${totalRevenue.toLocaleString()}`, icon: <DollarSign className="h-5 w-5" />, color: 'text-accent', bg: 'bg-accent/10' },
-    { label: 'Pending Withdrawals', value: pendingWithdrawals.length, icon: <ArrowDownToLine className="h-5 w-5" />, color: 'text-destructive', bg: 'bg-destructive/10' },
-    { label: 'Open Alerts', value: alerts.length, icon: <AlertTriangle className="h-5 w-5" />, color: 'text-destructive', bg: 'bg-destructive/10' },
-  ];
-
   return (
     <div className="space-y-6">
       <div>
@@ -76,17 +75,23 @@ export default function AccountantDashboard() {
         <p className="text-muted-foreground">Settlement processing & financial overview</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {statCards.map(s => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <div className={`${s.bg} ${s.color} p-2 rounded-lg w-fit mb-2`}>{s.icon}</div>
-              <p className="text-2xl font-bold">{s.value}</p>
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Operational strip (replaces hero-metric stat tiles banned by PRODUCT.md) */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
+          <Link to="/settlements" className="flex items-center gap-1.5 hover:underline underline-offset-4">
+            <Clock className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{pendingSettlements}</strong>&nbsp;pending settlement ({approvedSettlements} approved)
+          </Link>
+          <Link to="/wallet" className="flex items-center gap-1.5 hover:underline underline-offset-4">
+            <ArrowDownToLine className="h-4 w-4 text-destructive" aria-hidden="true" /><strong className="tabular-nums">{pendingWithdrawals.length}</strong>&nbsp;pending withdrawals
+          </Link>
+          <Link to="/alerts" className="flex items-center gap-1.5 hover:underline underline-offset-4">
+            <AlertTriangle className="h-4 w-4 text-destructive" aria-hidden="true" /><strong className="tabular-nums">{alerts.length}</strong>&nbsp;open alerts
+          </Link>
+          <Link to="/analytics" className="flex items-center gap-1.5 hover:underline underline-offset-4">
+            <DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totalRevenue)}</strong>&nbsp;delivered revenue
+          </Link>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -98,12 +103,12 @@ export default function AccountantDashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 88%)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="settled" fill="hsl(145, 60%, 42%)" radius={[4, 4, 0, 0]} name="Settled" stackId="a" />
-                <Bar dataKey="pending" fill="hsl(38, 92%, 50%)" radius={[4, 4, 0, 0]} name="Pending" stackId="a" />
+                <Bar dataKey="settled" fill={CHART_COLORS[1]} radius={[4, 4, 0, 0]} name="Settled" stackId="a" />
+                <Bar dataKey="pending" fill={CHART_COLORS[2]} radius={[4, 4, 0, 0]} name="Pending" stackId="a" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -127,7 +132,7 @@ export default function AccountantDashboard() {
               {pendingWithdrawals.map(w => (
                 <div key={w.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
-                    <p className="text-sm font-medium">D {Number(w.amount).toFixed(2)}</p>
+                    <p className="text-sm font-medium tabular-nums">{formatMoney(Number(w.amount))}</p>
                     <p className="text-xs text-muted-foreground">{format(new Date(w.created_at), 'MMM d, HH:mm')}</p>
                     {w.notes && <p className="text-xs text-muted-foreground truncate max-w-[200px]">{w.notes}</p>}
                   </div>
@@ -151,7 +156,7 @@ export default function AccountantDashboard() {
                 <div key={e.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
                     <p className="text-sm font-medium">{e.description}</p>
-                    <p className="text-xs text-muted-foreground">D {Number(e.amount).toFixed(2)} · {format(new Date(e.expense_date), 'MMM d')}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">{formatMoney(Number(e.amount))} · {format(new Date(e.expense_date), 'MMM d')}</p>
                   </div>
                   <Badge variant="secondary">Pending</Badge>
                 </div>

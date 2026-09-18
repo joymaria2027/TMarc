@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,6 +26,7 @@ import {
   toggleSelected,
 } from '@/lib/alertBulk';
 import { nextFocusIndex, prevFocusIndex } from '@/lib/alertKeys';
+import { guardedWrite } from '@/lib/guardedWrite';
 
 interface AlertItem {
   id: string;
@@ -101,7 +103,11 @@ export default function AlertsPage() {
   const resolveAlert = async (id: string) => {
     if (!validateNote(resolveNote)) return;
     const note = normalizeResolveNote(resolveNote);
-    await supabase.from('delivery_alerts').update({ is_resolved: true, resolved_by: user?.id, resolved_note: note }).eq('id', id);
+    const { error } = await guardedWrite(
+      supabase.from('delivery_alerts').update({ is_resolved: true, resolved_by: user?.id, resolved_note: note }).eq('id', id),
+      { context: 'Resolve failed' },
+    );
+    if (error) return;
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, is_resolved: true, resolved_note: note } : a));
     toast.success('Alert resolved');
   };
@@ -233,7 +239,14 @@ export default function AlertsPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [visibleAlerts, focusIndex]);
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="space-y-3 py-6" role="status" aria-label="Loading alerts">
+      <Skeleton className="shimmer h-24 w-full rounded-lg" />
+      <Skeleton className="shimmer h-24 w-full rounded-lg" />
+      <Skeleton className="shimmer h-24 w-full rounded-lg" />
+      <span className="sr-only">Loading alerts…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -250,12 +263,12 @@ export default function AlertsPage() {
             id="alerts-search"
             ref={searchRef}
             value={search}
-            onChange={e => { setSearch(e.target.value); setSelected([]); }}
+            onChange={e => { setSearch(e.target.value); setSelected([]); setUndoSnapshot(null); }}
             placeholder="Search alerts…"
             aria-label="Search alerts by message or type"
             className="max-w-xs"
           />
-          <Select value={group} onValueChange={v => { setGroup(v as AlertGroup); setSelected([]); }}>
+          <Select value={group} onValueChange={v => { setGroup(v as AlertGroup); setSelected([]); setUndoSnapshot(null); }}>
             <SelectTrigger className="w-36" aria-label="Filter by alert group"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
@@ -264,7 +277,7 @@ export default function AlertsPage() {
               <SelectItem value="system">System</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filter} onValueChange={v => { setFilter(v); setSelected([]); }}>
+          <Select value={filter} onValueChange={v => { setFilter(v); setSelected([]); setUndoSnapshot(null); }}>
             <SelectTrigger className="w-36" aria-label="Filter by resolution status"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Alerts</SelectItem>
@@ -393,7 +406,7 @@ export default function AlertsPage() {
                 </div>
               </div>
               {!a.is_resolved && (
-                <Button size="sm" variant="outline" onClick={() => resolveAlert(a.id)} disabled={noteError !== null} className="shrink-0">Resolve</Button>
+                <Button size="sm" variant="outline" onClick={() => resolveAlert(a.id)} disabled={bulkBusy} className="shrink-0">Resolve</Button>
               )}
             </CardContent>
           </Card>

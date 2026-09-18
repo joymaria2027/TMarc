@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { paginate } from '@/lib/pagination';
+import { formatMoney } from '@/lib/finance';
 import {
   rpcClaimDelivery,
   rpcReclaimDelivery,
@@ -256,6 +257,7 @@ export default function RejectedDeliveriesPage() {
   const handleClaim = async (d: Delivery) => {
     if (!isRider) return;
     setClaiming(d.id);
+    // Claiming also puts the rider online — say so instead of silently flipping state.
     await supabase.from('riders').update({ is_online: true, is_active: true }).eq('id', riderId!);
     const isUnassigned = d.status === 'unassigned' && !d.rider_id;
     const { error } = isUnassigned
@@ -443,18 +445,18 @@ export default function RejectedDeliveriesPage() {
                     <div className="text-sm flex items-center gap-3 flex-wrap">
                       <div>
                         <span className="text-muted-foreground">Tariff: </span>
-                        <span className="font-semibold tabular-nums">D {Number(d.estimated_tariff || 0).toFixed(2)}</span>
+                        <span className="font-semibold tabular-nums">{formatMoney(Number(d.estimated_tariff || 0))}</span>
                       </div>
                       {isRider && d.merchant_id && riderShares[d.merchant_id] != null && (
                         <Badge variant="outline" className="text-primary border-primary/40 tabular-nums">
-                          Your share: {riderShares[d.merchant_id]}% · D {(Number(d.estimated_tariff || 0) * riderShares[d.merchant_id] / 100).toFixed(2)}
+                          Your share: {riderShares[d.merchant_id]}% · {formatMoney(Number(d.estimated_tariff || 0) * riderShares[d.merchant_id] / 100)}
                         </Badge>
                       )}
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => openDetail(d)}>View</Button>
                       {canClaim(d) && (
-                        <Button size="sm" disabled={claiming === d.id} onClick={() => handleClaim(d)}>
+                        <Button size="sm" disabled={claiming === d.id} onClick={() => handleClaim(d)} title="Claiming also puts you online">
                           <CheckCircle2 className="h-4 w-4 mr-1" />
                           {claiming === d.id ? 'Claiming…' : (d.status === 'unassigned' && !d.rider_id ? 'Claim' : 'Reclaim')}
                         </Button>
@@ -467,9 +469,14 @@ export default function RejectedDeliveriesPage() {
           })}
         </div>
         {visibleCount < filtered.length && (
-          <Button variant="outline" className="w-full" onClick={() => setVisibleCount(v => v + REJECTED_PAGE_SIZE)}>
-            Show more ({filtered.length - visibleCount} remaining)
-          </Button>
+          <>
+            <Button variant="outline" className="w-full" onClick={() => setVisibleCount(v => v + REJECTED_PAGE_SIZE)}>
+              Show more ({filtered.length - visibleCount} remaining)
+            </Button>
+            <p className="text-xs text-muted-foreground text-center" role="status">
+              Showing {Math.min(visibleCount, filtered.length)} of {filtered.length}
+            </p>
+          </>
         )}
         </>
       )}
@@ -484,7 +491,7 @@ export default function RejectedDeliveriesPage() {
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><div className="text-xs text-muted-foreground">Order</div><div>{detail.order_reference || '—'}</div></div>
-                <div><div className="text-xs text-muted-foreground">Tariff</div><div className="tabular-nums">D {Number(detail.estimated_tariff || 0).toFixed(2)}</div></div>
+                <div><div className="text-xs text-muted-foreground">Tariff</div><div className="tabular-nums">{formatMoney(Number(detail.estimated_tariff || 0))}</div></div>
                 <div><div className="text-xs text-muted-foreground">Customer</div><div>{detail.customer_name}</div></div>
                 <div><div className="text-xs text-muted-foreground">Phone</div><div>{detail.customer_phone ? <a href={`tel:${detail.customer_phone}`} className="hover:underline">{detail.customer_phone}</a> : '—'}</div></div>
               </div>

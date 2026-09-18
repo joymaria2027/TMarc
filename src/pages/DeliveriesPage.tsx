@@ -27,6 +27,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Flag, Search } from 'lucide-react';
+import { guardedWrite } from '@/lib/guardedWrite';
+import { formatMoney } from '@/lib/finance';
 import { format } from 'date-fns';
 
 export const DELIVERIES_PAGE_SIZE = 20;
@@ -232,7 +234,11 @@ export default function DeliveriesPage() {
   }, [highlightId, loading, unattended, deliveries]);
 
   const flagDelivery = async (id: string) => {
-    await supabase.from('deliveries').update(flagPayload(true)).eq('id', id);
+    const { error } = await guardedWrite(
+      supabase.from('deliveries').update(flagPayload(true)).eq('id', id),
+      { context: 'Flag failed' },
+    );
+    if (error) return;
     setDeliveries(prev => prev.map(d => d.id === id ? { ...d, is_flagged: true } : d));
     setUnattended(prev => prev.map(d => d.id === id ? { ...d, is_flagged: true } : d));
   };
@@ -281,7 +287,7 @@ export default function DeliveriesPage() {
           <div className="relative">
             <Label htmlFor="deliveries-search" className="sr-only">Search deliveries</Label>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input id="deliveries-search" placeholder="Search deliveries..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-56" />
+            <Input id="deliveries-search" type="search" placeholder="Search deliveries..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-56 h-11" />
           </div>
           <div>
             <Label htmlFor="deliveries-status" className="sr-only">Filter by status</Label>
@@ -358,8 +364,8 @@ export default function DeliveriesPage() {
                 <div><span className="text-muted-foreground">GPS Confirmed:</span> {selected.gps_confirmed ? 'Yes' : 'No'}</div>
                 <div><span className="text-muted-foreground">Est. Distance:</span> {selected.estimated_distance_km ?? '–'} km</div>
                 <div><span className="text-muted-foreground">Actual Distance:</span> {selected.actual_distance_km ?? '–'} km</div>
-                <div><span className="text-muted-foreground">Est. Tariff:</span> D{selected.estimated_tariff ?? '–'}</div>
-                <div><span className="text-muted-foreground">Actual Tariff:</span> D{selected.actual_tariff ?? '–'}</div>
+                <div className="tabular-nums"><span className="text-muted-foreground">Est. Tariff:</span> {selected.estimated_tariff != null ? formatMoney(Number(selected.estimated_tariff)) : '–'}</div>
+                <div className="tabular-nums"><span className="text-muted-foreground">Actual Tariff:</span> {selected.actual_tariff != null ? formatMoney(Number(selected.actual_tariff)) : '–'}</div>
                 <div><span className="text-muted-foreground">Dispatched:</span> {selected.dispatched_at ? format(new Date(selected.dispatched_at), 'MMM d, yyyy HH:mm') : '–'}</div>
                 <div><span className="text-muted-foreground">Picked Up:</span> {selected.picked_up_at ? format(new Date(selected.picked_up_at), 'MMM d, yyyy HH:mm') : '–'}</div>
                 <div><span className="text-muted-foreground">Delivered:</span> {selected.delivered_at ? format(new Date(selected.delivered_at), 'MMM d, yyyy HH:mm') : '–'}</div>

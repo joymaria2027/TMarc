@@ -59,7 +59,7 @@ export default function WebhookEventsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">ModemPay webhook events</h1>
+        <h1 className="text-2xl font-bold">ModemPay webhook events</h1>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
         </Button>
@@ -67,7 +67,7 @@ export default function WebhookEventsPage() {
 
       <Card>
         <CardContent className="p-4 flex flex-wrap gap-2">
-          <Input placeholder="Search event type, order id, or reference…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md" />
+          <Input placeholder="Search event type, order id, or reference…" aria-label="Search events by type, order id, or reference" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-md" />
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
