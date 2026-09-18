@@ -90,9 +90,9 @@
     "semantic_hash": "31c0881fdd8500aa4d0aa963079713ae"
   },
   "package.json": {
-    "mtime": 1789644896.0,
-    "ast_hash": "34f34c077a5c3698771e23aba7fc05b3",
-    "semantic_hash": "34f34c077a5c3698771e23aba7fc05b3"
+    "mtime": 1789693635.407108,
+    "ast_hash": "7f96888ce9068631505f1084f440b77f",
+    "semantic_hash": ""
   },
   "postcss.config.js": {
     "mtime": 1789644896.0,
@@ -440,9 +440,9 @@
     "semantic_hash": "b71dada69ba3acf4c9bb01a24e3d914b"
   },
   "src/integrations/supabase/client.ts": {
-    "mtime": 1789644900.0,
-    "ast_hash": "ea731aa7f857b1b89542717c662d05c0",
-    "semantic_hash": "ea731aa7f857b1b89542717c662d05c0"
+    "mtime": 1789693813.73346,
+    "ast_hash": "73f5a73c4ac066a8d940dc02c3285b1e",
+    "semantic_hash": ""
   },
   "src/integrations/supabase/previewAuthStorage.ts": {
     "mtime": 1789644900.0,
@@ -1822,6 +1822,16 @@
   "src/lib/rpcTypes.ts": {
     "mtime": 1789691752.8183253,
     "ast_hash": "f83cbe7997c77f3fdb82e7a8561c62a8",
+    "semantic_hash": ""
+  },
+  "src/integrations/supabase/__tests__/supabaseLock.test.ts": {
+    "mtime": 1789693808.3844848,
+    "ast_hash": "3a9e15fac8e4dc96c0a3ce52b44d0254",
+    "semantic_hash": ""
+  },
+  "src/integrations/supabase/supabaseLock.ts": {
+    "mtime": 1789693802.7205114,
+    "ast_hash": "7ee413438ec35f3dc57d4807745e351f",
     "semantic_hash": ""
   }
 }

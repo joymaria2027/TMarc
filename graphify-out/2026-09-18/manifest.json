@@ -100,22 +100,22 @@
     "semantic_hash": "c735540bb63936a123bc867d950c9f69"
   },
   "src/App.tsx": {
-    "mtime": 1789678701.7035093,
+    "mtime": 1789692561.9515831,
     "ast_hash": "b0735b02e089000b23884cc393308fd0",
     "semantic_hash": ""
   },
   "src/components/DeliveryMap.tsx": {
-    "mtime": 1789678701.7035093,
+    "mtime": 1789692561.9515831,
     "ast_hash": "c0c239e7b6cdb763cda1b998d1238e49",
     "semantic_hash": ""
   },
   "src/components/Layout.tsx": {
-    "mtime": 1789678701.7035093,
+    "mtime": 1789692561.9515831,
     "ast_hash": "8b5be70a1b1f5ee2b004371c862291a9",
     "semantic_hash": ""
   },
   "src/components/LiveDeliveryMap.tsx": {
-    "mtime": 1789678701.7035093,
+    "mtime": 1789692561.9519756,
     "ast_hash": "bc68ba9590cb11accd8a07953e93108a",
     "semantic_hash": ""
   },
@@ -125,9 +125,9 @@
     "semantic_hash": "8f7c178b4776787e58e1011855ca28f6"
   },
   "src/components/OdometerCaptureDialog.tsx": {
-    "mtime": 1789644896.0,
-    "ast_hash": "db806b1e0295f1c84f8bf04f33c8fdaf",
-    "semantic_hash": "db806b1e0295f1c84f8bf04f33c8fdaf"
+    "mtime": 1789693237.747388,
+    "ast_hash": "30f1b1357ed020ba39db4b9c316891ac",
+    "semantic_hash": ""
   },
   "src/components/OrderChat.tsx": {
     "mtime": 1789677593.0402262,
@@ -150,14 +150,14 @@
     "semantic_hash": ""
   },
   "src/components/ReceiptUpload.tsx": {
-    "mtime": 1789644898.0,
-    "ast_hash": "2360b72b409111ad6b2e75cc399fbb72",
-    "semantic_hash": "2360b72b409111ad6b2e75cc399fbb72"
+    "mtime": 1789693352.87392,
+    "ast_hash": "f13d13f3cf031c61bba675ce1d084021",
+    "semantic_hash": ""
   },
   "src/components/RiderDispatchOffers.tsx": {
-    "mtime": 1789644898.0,
-    "ast_hash": "4d71a26cd5f4b044fe5c8544c19fb8b9",
-    "semantic_hash": "4d71a26cd5f4b044fe5c8544c19fb8b9"
+    "mtime": 1789693335.3951223,
+    "ast_hash": "62e310e2521ad13288b7fad2f7342812",
+    "semantic_hash": ""
   },
   "src/components/StoreQrDialog.tsx": {
     "mtime": 1789644898.0,
@@ -170,7 +170,7 @@
     "semantic_hash": ""
   },
   "src/components/WalletWidget.tsx": {
-    "mtime": 1789678701.7041798,
+    "mtime": 1789692561.9519756,
     "ast_hash": "4d82b56f26d250f4a923dd171f57a9f4",
     "semantic_hash": ""
   },
@@ -255,7 +255,7 @@
     "semantic_hash": "9b8e8efdf0456cd542e32d341b071cac"
   },
   "src/components/ui/dialog.tsx": {
-    "mtime": 1789678701.7041798,
+    "mtime": 1789692561.9519756,
     "ast_hash": "f7c35821d0205020bd0568288a5ff34b",
     "semantic_hash": ""
   },
@@ -270,7 +270,7 @@
     "semantic_hash": "f308eb98a2e21bf8bd1e30dbcb741dc0"
   },
   "src/components/ui/form.tsx": {
-    "mtime": 1789678701.7041798,
+    "mtime": 1789692561.9519756,
     "ast_hash": "6035c4df583a2af2f96616f6baf5a8d9",
     "semantic_hash": ""
   },
@@ -335,7 +335,7 @@
     "semantic_hash": "cfbc224001af0e6daba676de225a2a47"
   },
   "src/components/ui/select.tsx": {
-    "mtime": 1789678701.704573,
+    "mtime": 1789692561.9521708,
     "ast_hash": "bf85a6d22be391d1c676d488f60b7467",
     "semantic_hash": ""
   },
@@ -375,7 +375,7 @@
     "semantic_hash": "eccd8c41c46e782eaaa1f8be0111e089"
   },
   "src/components/ui/table.tsx": {
-    "mtime": 1789678701.7046578,
+    "mtime": 1789692561.9521708,
     "ast_hash": "8a1005d014cdd961708b29385189d442",
     "semantic_hash": ""
   },
@@ -390,9 +390,9 @@
     "semantic_hash": "29ab470ee59e9da5070d4fba251bce81"
   },
   "src/components/ui/toast.tsx": {
-    "mtime": 1789644900.0,
-    "ast_hash": "7c08b5cb6026058514672a4ebc53847e",
-    "semantic_hash": "7c08b5cb6026058514672a4ebc53847e"
+    "mtime": 1789693275.175874,
+    "ast_hash": "5f46caaf22aeff9b50236b225bcc020a",
+    "semantic_hash": ""
   },
   "src/components/ui/toaster.tsx": {
     "mtime": 1789644900.0,
@@ -510,7 +510,7 @@
     "semantic_hash": "9227a933d3fb258bedcdcd0057a4080c"
   },
   "src/pages/AnalyticsPage.tsx": {
-    "mtime": 1789678701.7046578,
+    "mtime": 1789692561.9521708,
     "ast_hash": "0568d23223cebd6b4755a89b7d8fc953",
     "semantic_hash": ""
   },
@@ -520,7 +520,7 @@
     "semantic_hash": "c46468ad4816088ae20bfb415e11f0ba"
   },
   "src/pages/Auth.tsx": {
-    "mtime": 1789678701.7047515,
+    "mtime": 1789692561.9521708,
     "ast_hash": "07b739bc8ffbe43b28aec6b244fd26be",
     "semantic_hash": ""
   },
@@ -530,48 +530,48 @@
     "semantic_hash": "a4890b769d1d4c8c076d38ffc676b976"
   },
   "src/pages/BusinessTypesPage.tsx": {
-    "mtime": 1789678701.7047515,
+    "mtime": 1789692561.9521708,
     "ast_hash": "fdc06ce10739e0ceea3870d0067202d3",
     "semantic_hash": ""
   },
   "src/pages/CartPage.tsx": {
-    "mtime": 1789678701.7047515,
+    "mtime": 1789692561.9521708,
     "ast_hash": "a8267beb0ef6875766ab5a03bc6a6d51",
     "semantic_hash": ""
   },
   "src/pages/CheckoutPage.tsx": {
-    "mtime": 1789678701.7047515,
+    "mtime": 1789692561.953171,
     "ast_hash": "402979ab7c0fbdbd731d4b4270cb1371",
     "semantic_hash": ""
   },
   "src/pages/CheckoutStatusPage.tsx": {
-    "mtime": 1789678701.7047515,
+    "mtime": 1789692561.953171,
     "ast_hash": "2baa411ac05c92c734ea547903421d26",
     "semantic_hash": ""
   },
   "src/pages/DeliveriesPage.tsx": {
-    "mtime": 1789678701.7047515,
-    "ast_hash": "a7a852e7d2369e5780f47fee72ce7e2c",
+    "mtime": 1789693046.3486903,
+    "ast_hash": "84b0e55274a448f24d08590240065eaf",
     "semantic_hash": ""
   },
   "src/pages/DispatchAuditPage.tsx": {
-    "mtime": 1789678701.7047515,
+    "mtime": 1789692561.9538562,
     "ast_hash": "75706ea4b67e75bf008328e9d6992bc9",
     "semantic_hash": ""
   },
   "src/pages/ExpenseTypesPage.tsx": {
-    "mtime": 1789680373.5565977,
-    "ast_hash": "7ae60c3eb14db5a8a24552ef6b46edc7",
+    "mtime": 1789693346.7319903,
+    "ast_hash": "4112aea6754b9d368d54cbee42f83dd7",
     "semantic_hash": ""
   },
   "src/pages/FraudPage.tsx": {
-    "mtime": 1789678701.7051797,
+    "mtime": 1789692561.9538562,
     "ast_hash": "db64bae0ed2ab4bda952dfd6e3ddab10",
     "semantic_hash": ""
   },
   "src/pages/GpsTrackerPage.tsx": {
-    "mtime": 1789678701.7051797,
-    "ast_hash": "76808d0d0a5b346cac68737be9df426e",
+    "mtime": 1789692809.1057909,
+    "ast_hash": "89c3fc72032b4a937c680c09611e553f",
     "semantic_hash": ""
   },
   "src/pages/Index.tsx": {
@@ -580,37 +580,37 @@
     "semantic_hash": "f6f1015b5718e68b061c0c41cd65153f"
   },
   "src/pages/MerchantAuditLogPage.tsx": {
-    "mtime": 1789678701.7051797,
+    "mtime": 1789692561.954171,
     "ast_hash": "97cedf8b14ee1f3cec1aa17efcb45c37",
     "semantic_hash": ""
   },
   "src/pages/MerchantManagerDashboard.tsx": {
-    "mtime": 1789644902.0,
-    "ast_hash": "1828db48a81d01241863f225c7bfe896",
-    "semantic_hash": "1828db48a81d01241863f225c7bfe896"
+    "mtime": 1789693217.1716866,
+    "ast_hash": "91e66194956b48ebcb1544bfdcea9970",
+    "semantic_hash": ""
   },
   "src/pages/MerchantOrdersPage.tsx": {
-    "mtime": 1789678701.7051797,
+    "mtime": 1789692561.954171,
     "ast_hash": "09939973d89dcbbb0106d015d6c63541",
     "semantic_hash": ""
   },
   "src/pages/MerchantProductsPage.tsx": {
-    "mtime": 1789678701.7051797,
+    "mtime": 1789692561.954171,
     "ast_hash": "24776a422428e58fd26e4198c97b3e67",
     "semantic_hash": ""
   },
   "src/pages/MerchantStorefrontPage.tsx": {
-    "mtime": 1789678701.7051797,
+    "mtime": 1789692561.954171,
     "ast_hash": "8446a01d92f26598228372881432a72a",
     "semantic_hash": ""
   },
   "src/pages/MerchantsPage.tsx": {
-    "mtime": 1789678701.7061796,
+    "mtime": 1789692561.954171,
     "ast_hash": "ac00d8163e8c416340b98203afe4a5ef",
     "semantic_hash": ""
   },
   "src/pages/MyOrdersPage.tsx": {
-    "mtime": 1789678701.7061796,
+    "mtime": 1789692561.9551709,
     "ast_hash": "f053fe376a163b22b65dc84f7b98dbcb",
     "semantic_hash": ""
   },
@@ -620,53 +620,53 @@
     "semantic_hash": "233617e24ded7876ea905f003f0f2889"
   },
   "src/pages/PaymentBackfillPage.tsx": {
-    "mtime": 1789644902.0,
-    "ast_hash": "cc8f9ca2f95198b839478ed535c60e0f",
-    "semantic_hash": "cc8f9ca2f95198b839478ed535c60e0f"
+    "mtime": 1789693253.2201707,
+    "ast_hash": "3d3b7aea01479852b46e291b9b33ebb2",
+    "semantic_hash": ""
   },
   "src/pages/PayrollPage.tsx": {
-    "mtime": 1789680351.784709,
-    "ast_hash": "8c4316c51b9173eba937546868c49b90",
+    "mtime": 1789693237.7463877,
+    "ast_hash": "dd5a6b95a0808e384701f3810d2462c3",
     "semantic_hash": ""
   },
   "src/pages/ProductApprovalsPage.tsx": {
-    "mtime": 1789678701.7061796,
+    "mtime": 1789692561.9551709,
     "ast_hash": "1b7df67f58a2b0c779d352bb1d7f103f",
     "semantic_hash": ""
   },
   "src/pages/ProductDetailPage.tsx": {
-    "mtime": 1789678701.707039,
-    "ast_hash": "0dedf91b9abde5714a46334e6209d8f4",
+    "mtime": 1789693352.87392,
+    "ast_hash": "8ec24dc6161caea50e19e02f14e323ef",
     "semantic_hash": ""
   },
   "src/pages/ReconciliationPage.tsx": {
-    "mtime": 1789678701.707039,
+    "mtime": 1789692561.9551709,
     "ast_hash": "b0b441cbc28951d2bfc39d18f853ecdb",
     "semantic_hash": ""
   },
   "src/pages/RejectedDeliveriesPage.tsx": {
-    "mtime": 1789681801.0905535,
-    "ast_hash": "2b4e21a6613b8b0f695b3b5ef47fc479",
+    "mtime": 1789693325.648238,
+    "ast_hash": "b41f2331b919b568892dac6500433dfe",
     "semantic_hash": ""
   },
   "src/pages/RevenueSharingPage.tsx": {
-    "mtime": 1789678701.707039,
+    "mtime": 1789692561.956171,
     "ast_hash": "0b566e587018fa5fd17e22a423741c23",
     "semantic_hash": ""
   },
   "src/pages/RiderDashboard.tsx": {
-    "mtime": 1789681506.0951262,
-    "ast_hash": "36d3cef72ec8411bab0056bde532f35a",
+    "mtime": 1789693280.8657992,
+    "ast_hash": "4a7b6a19dd10d3eb78aea9123a68d9b7",
     "semantic_hash": ""
   },
   "src/pages/RiderExpensesPage.tsx": {
-    "mtime": 1789682190.2973359,
-    "ast_hash": "c0815cfc30cf06989c8bd4cb41223c22",
+    "mtime": 1789692926.8859138,
+    "ast_hash": "b2270d45ef43ce68fc6c1510f88d06fc",
     "semantic_hash": ""
   },
   "src/pages/RidersPage.tsx": {
-    "mtime": 1789678701.7074108,
-    "ast_hash": "7c67feb85274923e8de93b658b789677",
+    "mtime": 1789693335.3951223,
+    "ast_hash": "46915b5eb7b0efedc3c2e527d78bf3d6",
     "semantic_hash": ""
   },
   "src/pages/RlsVerificationPage.tsx": {
@@ -675,47 +675,47 @@
     "semantic_hash": "0eb3723703f934102ade79ff78d3d582"
   },
   "src/pages/RolePermissionsPage.tsx": {
-    "mtime": 1789678701.7074108,
+    "mtime": 1789692561.9566689,
     "ast_hash": "8e49709060de6272c204676d35d4729b",
     "semantic_hash": ""
   },
   "src/pages/SettingsPage.tsx": {
-    "mtime": 1789678701.7074108,
+    "mtime": 1789692561.957171,
     "ast_hash": "0c4993ab2ab2d68bf4ed881938c108ad",
     "semantic_hash": ""
   },
   "src/pages/SettlementsPage.tsx": {
-    "mtime": 1789680475.252078,
-    "ast_hash": "1889d9fce55f230ae25baefaf698004c",
+    "mtime": 1789692904.6840646,
+    "ast_hash": "1a5200f5e2c8b7716831531d28f602ce",
     "semantic_hash": ""
   },
   "src/pages/ShopPage.tsx": {
-    "mtime": 1789678701.7074108,
+    "mtime": 1789692561.957171,
     "ast_hash": "a09823f849676854b936044f2de5e80b",
     "semantic_hash": ""
   },
   "src/pages/StoreLandingPage.tsx": {
-    "mtime": 1789678701.7074108,
+    "mtime": 1789692561.957171,
     "ast_hash": "62f8fdff78b3dcd268aa4d3b8352bee7",
     "semantic_hash": ""
   },
   "src/pages/WalletPage.tsx": {
-    "mtime": 1789680305.4049468,
-    "ast_hash": "4ca5e8bd6d34e041be01fde9853928fc",
+    "mtime": 1789693246.7622607,
+    "ast_hash": "84790df2da90b8815933a73f335c36ae",
     "semantic_hash": ""
   },
   "src/pages/WebhookEventsPage.tsx": {
-    "mtime": 1789644902.0,
-    "ast_hash": "031807feb5ce65f19e3d238078c8dbb0",
-    "semantic_hash": "031807feb5ce65f19e3d238078c8dbb0"
+    "mtime": 1789693265.6610012,
+    "ast_hash": "96287ff3d82c525d1edcae3cdbfdbbd0",
+    "semantic_hash": ""
   },
   "src/pages/WholesaleApplyPage.tsx": {
-    "mtime": 1789678701.7074108,
+    "mtime": 1789692561.958171,
     "ast_hash": "184aff7558446ab49d7b2e87f8a62c67",
     "semantic_hash": ""
   },
   "src/pages/WholesalersPage.tsx": {
-    "mtime": 1789678701.7074108,
+    "mtime": 1789692561.958171,
     "ast_hash": "5e13f48f4cdd59fbab0838f621768eb6",
     "semantic_hash": ""
   },
@@ -1640,8 +1640,8 @@
     "semantic_hash": ""
   },
   "src/lib/pagination.ts": {
-    "mtime": 1789678426.2194383,
-    "ast_hash": "61815b52758831f5ca3e6a20c95c1d7e",
+    "mtime": 1789691724.2013988,
+    "ast_hash": "fdfe855624e6908dbfd550fe13331a40",
     "semantic_hash": ""
   },
   "src/pages/AnalyticsCharts.tsx": {
@@ -1655,8 +1655,8 @@
     "semantic_hash": ""
   },
   "src/pages/__tests__/core-ops-a11y.test.ts": {
-    "mtime": 1789678381.7478526,
-    "ast_hash": "99e2369c3d95172be079be2701f42ece",
+    "mtime": 1789692234.8426754,
+    "ast_hash": "5477b40da141840859dbce9c6014515d",
     "semantic_hash": ""
   },
   "src/pages/__tests__/finance-remediation.test.ts": {
@@ -1732,6 +1732,96 @@
   "PRODUCT.md": {
     "mtime": 1789678223.4444785,
     "ast_hash": "f4db784a30c4b6b974956c4380d5fed2",
+    "semantic_hash": ""
+  },
+  "src/components/expenses/ExpenseFormDialog.tsx": {
+    "mtime": 1789692129.4666374,
+    "ast_hash": "729d40198a8e762f080cdff3e5f82010",
+    "semantic_hash": ""
+  },
+  "src/components/expenses/ExpenseRow.tsx": {
+    "mtime": 1789693325.6792376,
+    "ast_hash": "7cd91d8b31b8a207c12486e3d82e1d9e",
+    "semantic_hash": ""
+  },
+  "src/components/rider/OfferCard.tsx": {
+    "mtime": 1789692796.1002553,
+    "ast_hash": "184db6e76852f7f4c55db77c8283dec4",
+    "semantic_hash": ""
+  },
+  "src/components/rider/QueueCard.tsx": {
+    "mtime": 1789692796.1002553,
+    "ast_hash": "7dbe0fcb378aafe54dd65f78d81e1ba9",
+    "semantic_hash": ""
+  },
+  "src/components/settlements/DeliverySettlementRow.tsx": {
+    "mtime": 1789691769.9742563,
+    "ast_hash": "f4a65c75a38284bf43d5be9ed02f9820",
+    "semantic_hash": ""
+  },
+  "src/components/settlements/MerchantSettlementCard.tsx": {
+    "mtime": 1789691759.6092052,
+    "ast_hash": "b31b2ba035918521a8c408404df4b138",
+    "semantic_hash": ""
+  },
+  "src/components/settlements/RiderSettlementCard.tsx": {
+    "mtime": 1789691765.1412072,
+    "ast_hash": "f42477247ed996df5bcd522bf94dc4de",
+    "semantic_hash": ""
+  },
+  "src/components/settlements/SettlementSummaryCards.tsx": {
+    "mtime": 1789691754.0083203,
+    "ast_hash": "30cb96d59df7312683b836ce9ffd45e2",
+    "semantic_hash": ""
+  },
+  "src/components/wallet/TransactionHistoryTable.tsx": {
+    "mtime": 1789691888.615893,
+    "ast_hash": "e506be44374169bff4f8c65796e377a7",
+    "semantic_hash": ""
+  },
+  "src/components/wallet/WalletFolderCard.tsx": {
+    "mtime": 1789692809.1057909,
+    "ast_hash": "72d09378528219138cebc4bb08610687",
+    "semantic_hash": ""
+  },
+  "src/components/wallet/WithdrawalRequestsTable.tsx": {
+    "mtime": 1789691878.5441782,
+    "ast_hash": "4124fcc471ef3f5d47746ba25b381a84",
+    "semantic_hash": ""
+  },
+  "src/hooks/__tests__/useRealtimeTable.test.tsx": {
+    "mtime": 1789691760.5922935,
+    "ast_hash": "f13cd13d7031cd12279e6a5915bf31f2",
+    "semantic_hash": ""
+  },
+  "src/hooks/useRealtimeTable.ts": {
+    "mtime": 1789692547.7651405,
+    "ast_hash": "db928ff59cadea6231ebcd9dcdbdc636",
+    "semantic_hash": ""
+  },
+  "src/lib/queries/__tests__/queries.test.ts": {
+    "mtime": 1789692553.4051526,
+    "ast_hash": "566b12e907266f023a19a8ba04474f99",
+    "semantic_hash": ""
+  },
+  "src/lib/queries/deliveries.ts": {
+    "mtime": 1789691743.9410312,
+    "ast_hash": "3c58e4a0a4dbc38fe7ab81c16ea462c4",
+    "semantic_hash": ""
+  },
+  "src/lib/queries/expenses.ts": {
+    "mtime": 1789691743.9410312,
+    "ast_hash": "298b10599229c9908cff261c8d13e36b",
+    "semantic_hash": ""
+  },
+  "src/lib/queries/riders.ts": {
+    "mtime": 1789691743.9410312,
+    "ast_hash": "17919c60bf42272ddaee0213e47dba4b",
+    "semantic_hash": ""
+  },
+  "src/lib/rpcTypes.ts": {
+    "mtime": 1789691752.8183253,
+    "ast_hash": "f83cbe7997c77f3fdb82e7a8561c62a8",
     "semantic_hash": ""
   }
 }
