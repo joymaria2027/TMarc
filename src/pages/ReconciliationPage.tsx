@@ -100,8 +100,12 @@ export default function ReconciliationPage() {
   const filtered = useMemo(() => rows.filter(r => {
     if (tab !== 'all' && r.entry_type !== tab) return false;
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (dateFrom && r.occurred_at < dateFrom) return false;
-    if (dateTo && r.occurred_at > dateTo) return false;
+    // P2-NEW-7: compare on the UTC calendar date of the timestamptz. Raw
+    // string comparison against 'yyyy-mm-dd' made a 'to' filter exclude the
+    // entire target day (every timestamp on it sorts after the bare date).
+    const day = r.occurred_at.slice(0, 10);
+    if (dateFrom && day < dateFrom) return false;
+    if (dateTo && day > dateTo) return false;
     if (amountMin && Number(r.amount) < Number(amountMin)) return false;
     if (amountMax && Number(r.amount) > Number(amountMax)) return false;
     if (search) {

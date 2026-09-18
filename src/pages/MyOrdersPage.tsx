@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, ChevronLeft, MessageCircle, RefreshCw } from "lucide-react";
 import { haptics } from "@/lib/haptics";
+import { formatMoney } from "@/lib/finance";
 import { filterOrders, type OrderTab } from "@/lib/orderGroups";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -36,9 +37,6 @@ function humanizeStatus(status: string): string {
     .join(" ");
 }
 
-function formatCurrency(n: number): string {
-  return `D ${Number(n).toFixed(2)}`;
-}
 
 export default function MyOrdersPage() {
   const { user, loading } = useAuth();
@@ -361,14 +359,14 @@ function OrderCard({ o, unread, preview, onChatOpened }: { o: any; unread: numbe
               <span className="flex-1 min-w-0 break-words">
                 {it.quantity}× {it.name_snapshot}
               </span>
-              <span className="shrink-0 tabular-nums">{formatCurrency(it.line_total)}</span>
+              <span className="shrink-0 tabular-nums">{formatMoney(it.line_total)}</span>
             </li>
           ))}
         </ul>
         <div className="border-t pt-2 flex justify-between gap-3 font-semibold text-base leading-relaxed">
           <span>{o.fulfillment_type === "delivery" ? "Delivery" : "Pickup"} · Total</span>
           <span className="tabular-nums">
-            {formatCurrency(o.total)}
+            {formatMoney(o.total)}
             <span className="sr-only"> total</span>
           </span>
         </div>

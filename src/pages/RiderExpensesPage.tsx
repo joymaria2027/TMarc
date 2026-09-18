@@ -148,6 +148,7 @@ export default function RiderExpensesPage() {
   // Bulk selection
   const [expenseSelectedIds, setExpenseSelectedIds] = useState<Set<string>>(new Set());
   const [expenseBulkActionPending, setExpenseBulkActionPending] = useState<'verify' | 'reject' | null>(null);
+  const [verifyPendingId, setVerifyPendingId] = useState<string | null>(null);
 
   const isRiderOnly = hasRole('rider') && !hasRole('admin') && !hasRole('accountant') && !hasRole('app_developer');
   const isManager = hasRole('company_manager') && !hasRole('admin');
@@ -347,20 +348,25 @@ export default function RiderExpensesPage() {
   };
 
   const verifyExpense = async (expense: ExpenseItem, action: 'verified' | 'rejected') => {
+    setVerifyPendingId(expense.id);
     const { error } = await supabase.from('rider_expenses').update({
       status: action,
       verified_by: user!.id,
       verified_at: new Date().toISOString(),
     }).eq('id', expense.id);
 
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      setVerifyPendingId(null);
+      toast.error(`Failed to ${action === 'verified' ? 'verify' : 'reject'} expense: ${error.message}`);
+      return;
+    }
 
-    const riderName = getRiderName(expense.rider_id);
     const restName = getMerchantName(expense.merchant_id);
     const label = action === 'verified' ? 'approved' : 'rejected';
 
-    // Alert the rider
-    await supabase.from('expense_alerts').insert({
+    // Alert the rider. The status change above already happened — if the alert
+    // insert fails, report both facts instead of a bare success or failure.
+    const { error: alertError } = await supabase.from('expense_alerts').insert({
       rider_id: expense.rider_id,
       expense_id: expense.id,
       merchant_id: expense.merchant_id,
@@ -369,7 +375,12 @@ export default function RiderExpensesPage() {
       target_role: 'rider',
     });
 
-    toast.success(`Expense ${label}`);
+    setVerifyPendingId(null);
+    if (alertError) {
+      toast.error(`Expense ${label}, but notifying the rider failed: ${alertError.message}`);
+    } else {
+      toast.success(`Expense ${label}`);
+    }
     load();
   };
 
@@ -658,11 +669,11 @@ export default function RiderExpensesPage() {
                             {canVerify && e.status === 'pending' && (
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
-                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-success" onClick={() => verifyExpense(e, 'verified')}>
-                                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />Verify
+                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-success" disabled={verifyPendingId !== null} onClick={() => verifyExpense(e, 'verified')}>
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />{verifyPendingId === e.id ? 'Verifying…' : 'Verify'}
                                   </Button>
-                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-destructive" onClick={() => verifyExpense(e, 'rejected')}>
-                                    <XCircle className="h-3 w-3" aria-hidden="true" />Reject
+                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-destructive" disabled={verifyPendingId !== null} onClick={() => verifyExpense(e, 'rejected')}>
+                                    <XCircle className="h-3 w-3" aria-hidden="true" />{verifyPendingId === e.id ? 'Rejecting…' : 'Reject'}
                                   </Button>
                                 </div>
                               </TableCell>

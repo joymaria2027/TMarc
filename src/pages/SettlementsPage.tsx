@@ -376,10 +376,14 @@ export default function SettlementsPage() {
       toast.error('Set a sharing ratio for this merchant first');
       return;
     }
-    await supabase.from('deliveries').update({
+    const { error } = await supabase.from('deliveries').update({
       settlement_approved: true,
       settlement_approved_by: user?.id,
     }).eq('id', id);
+    if (error) {
+      toast.error(`Settlement approval failed: ${error.message}`);
+      return;
+    }
     setRows(prev => prev.map(r => r.id === id ? { ...r, settlement_approved: true } : r));
     toast.success('Settlement approved');
   };
