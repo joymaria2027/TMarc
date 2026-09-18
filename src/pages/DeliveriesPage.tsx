@@ -204,7 +204,7 @@ export default function DeliveriesPage() {
   // TODO(data-layer): fold rejection counts into a query helper with its own channel.
   useEffect(() => {
     const channel = supabase
-      .channel('deliveries-rejections')
+      .channel(`deliveries-rejections-${Math.random().toString(36).slice(2, 8)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_rejections' }, () => {
         loadRejectionCounts();
         setUnassignedPage(1);
