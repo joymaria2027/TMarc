@@ -10,7 +10,8 @@ import SettlementSummaryCards from '@/components/settlements/SettlementSummaryCa
 import MerchantSettlementCard from '@/components/settlements/MerchantSettlementCard';
 import RiderSettlementCard from '@/components/settlements/RiderSettlementCard';
 import DeliverySettlementRow from '@/components/settlements/DeliverySettlementRow';
-import { partitionPayoutDeliveries } from '@/lib/moneyGuards';
+import { partitionPayoutDeliveries, summarizeBulkResult } from '@/lib/moneyGuards';
+import { formatMoney } from '@/lib/finance';
 
 interface SettlementRow {
   id: string;
@@ -323,24 +324,29 @@ export default function SettlementsPage() {
       return;
     }
     setPayingRiderId(summary.rider_id);
-    try {
-      for (const d of approvable) {
-        const { error } = await supabase.from('deliveries').update({
-          settlement_approved: true,
-          settlement_approved_by: user?.id,
-        }).eq('id', d.id);
-        if (error) throw error;
-      }
-      toast.success(
-        `Approved ${approvable.length} ${approvable.length === 1 ? 'settlement' : 'settlements'} for ${summary.rider_name} (net D${summary.net_payout.toFixed(2)})` +
-        (skippedNoRatio.length > 0 ? ` — ${skippedNoRatio.length} skipped (no sharing ratio)` : '')
-      );
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Payout failed — no changes were confirmed');
-    } finally {
-      setPayingRiderId(null);
-      load();
+    // F1 (FRICTION-ANALYSIS-2026-09-18): a sequential loop can half-succeed —
+    // report exactly which rows landed instead of a catch-all that over-claims
+    // "no changes were confirmed" when earlier rows already did.
+    const results = [] as { id: string; error: { message?: string } | null }[];
+    for (const d of approvable) {
+      const { error } = await supabase.from('deliveries').update({
+        settlement_approved: true,
+        settlement_approved_by: user?.id,
+      }).eq('id', d.id);
+      results.push({ id: d.id, error });
     }
+    const bulk = summarizeBulkResult(results);
+    const skippedNote = skippedNoRatio.length > 0 ? ` — ${skippedNoRatio.length} skipped (no sharing ratio)` : '';
+    if (bulk.failed === 0) {
+      toast.success(`Approved ${bulk.succeeded} ${bulk.succeeded === 1 ? 'settlement' : 'settlements'} for ${summary.rider_name} (net ${formatMoney(summary.net_payout)})${skippedNote}`);
+    } else if (bulk.succeeded === 0) {
+      toast.error(`Payout failed for ${summary.rider_name} — no changes were confirmed`);
+    } else {
+      const ids = bulk.failedIds.map(id => `#${id.slice(0, 8)}`).join(', ');
+      toast.error(`Approved ${bulk.succeeded} of ${approvable.length} settlements for ${summary.rider_name}; ${bulk.failed} failed (${ids}) — retry the failed rows`);
+    }
+    setPayingRiderId(null);
+    load();
   };
 
   // Build a map of per-merchant expense totals for use in individual delivery breakdowns

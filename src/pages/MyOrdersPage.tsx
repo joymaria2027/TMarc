@@ -45,6 +45,9 @@ export default function MyOrdersPage() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
+  // F8: last inbound message body per order — the collapsed chat header
+  // previews it so the customer never taps blind.
+  const [previews, setPreviews] = useState<Record<string, string>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [tab, setTab] = useState<OrderTab>("all");
@@ -81,12 +84,24 @@ export default function MyOrdersPage() {
         if (ids.length && user) {
           const { data: msgs } = await supabase
             .from("order_messages")
-            .select("order_id,sender_user_id,read_at")
+            .select("order_id,sender_user_id,read_at,body,created_at")
             .in("order_id", ids)
             .is("read_at", null);
           const counts: Record<string, number> = {};
+          const newest: Record<string, { body: string; at: string }> = {};
           (msgs || []).forEach((m: any) => {
-            if (m.sender_user_id !== user.id) counts[m.order_id] = (counts[m.order_id] || 0) + 1;
+            if (m.sender_user_id !== user.id) {
+              counts[m.order_id] = (counts[m.order_id] || 0) + 1;
+              const at = m.created_at ?? "";
+              if (!newest[m.order_id] || at > newest[m.order_id].at) {
+                newest[m.order_id] = { body: m.body as string, at };
+              }
+            }
+          });
+          setPreviews((prev) => {
+            const merged = { ...prev };
+            for (const [oid, v] of Object.entries(newest)) merged[oid] = v.body;
+            return merged;
           });
           setUnread((prev) => {
             // Announce + haptic only on growth (new inbound message)
@@ -257,11 +272,11 @@ export default function MyOrdersPage() {
             </Button>
           </div>
         ) : (
-          visibleOrders.map((o) => (
-            <OrderCard
-              key={o.id}
-              o={o}
-              unread={unread[o.id] || 0}
+          visibleOrders.map((o) => (              <OrderCard
+                key={o.id}
+                o={o}
+                unread={unread[o.id] || 0}
+                preview={previews[o.id]}
               onChatOpened={() => setUnread((u) => ({ ...u, [o.id]: 0 }))}
             />
           ))
@@ -271,10 +286,14 @@ export default function MyOrdersPage() {
   );
 }
 
-function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChatOpened: () => void }) {
+function OrderCard({ o, unread, preview, onChatOpened }: { o: any; unread: number; preview?: string; onChatOpened: () => void }) {
   const [chatOpen, setChatOpen] = useState(false);
+  const [livePreview, setLivePreview] = useState<string | null>(null);
   const chatRegionId = `chat-${o.id}`;
   const unreadId = `unread-${o.id}`;
+  // Parent supplies the preview while unread exists; the open chat keeps it
+  // live after messages are read.
+  const previewBody = livePreview ?? preview ?? null;
 
   const toggleChat = async () => {
     const next = !chatOpen;
@@ -298,6 +317,14 @@ function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChat
           <p className="text-[15px] leading-relaxed text-muted-foreground break-words">
             {o.merchants?.name} · <time dateTime={o.created_at}>{new Date(o.created_at).toLocaleString()}</time>
           </p>
+          {/* F8: last-message preview — recognition over recall; no tap needed
+              to learn what was said. Hidden from AT; the unread pill carries
+              the count announcement. */}
+          {!chatOpen && previewBody && (
+            <p className="text-[13px] leading-snug text-muted-foreground/90 break-words" aria-hidden="true">
+              {previewBody}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           <PaymentStatusBadge status={o.payment_status} />
@@ -377,7 +404,11 @@ function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChat
         </div>
         {chatOpen && (
           <section id={chatRegionId} aria-label={`Messages for order ${o.order_reference}`}>
-            <OrderChat orderId={o.id} senderRole="customer" />
+            <OrderChat
+              orderId={o.id}
+              senderRole="customer"
+              onLastMessage={(msg) => setLivePreview(msg ? msg.body : null)}
+            />
           </section>
         )}
       </CardContent>

@@ -9,6 +9,8 @@ import {
   validateServiceArea,
   entityIdOf,
 } from '@/lib/finance';
+import { summarizeBulkResult } from '@/lib/moneyGuards';
+import { buildWithdrawalFilterKey } from '@/components/wallet/withdrawalFilters';
 
 const srcDir = path.resolve(__dirname, '..');
 const compDir = path.resolve(__dirname, '../../components');
@@ -156,5 +158,96 @@ describe('finance group audit guards', () => {
   });
   it('P1: Reconciliation table has overflow-x-auto wrapper', () => {
     expect(byName('ReconciliationPage.tsx')).toMatch(/overflow-x-auto/);
+  });
+
+  // F1 (FRICTION-ANALYSIS-2026-09-18): bulk money writes must be honest about
+  // partial failure. A bare per-id error toast loop hides which rows landed;
+  // the UI must summarize counts (and ids) in the failure copy.
+  describe('F1: honest bulk-write summaries', () => {
+    it('summarizeBulkResult reports partial failure with failed ids', () => {
+      const r = summarizeBulkResult([
+        { id: 'a', error: null },
+        { id: 'b', error: new Error('rls') },
+      ]);
+      expect(r.succeeded).toBe(1);
+      expect(r.failed).toBe(1);
+      expect(r.failedIds).toEqual(['b']);
+    });
+    it('summarizeBulkResult: all-success has empty failedIds', () => {
+      const r = summarizeBulkResult([{ id: 'a', error: null }]);
+      expect(r.failed).toBe(0);
+      expect(r.failedIds).toEqual([]);
+    });
+    it('ReconciliationPage sums bulk results instead of bare per-id toasts', () => {
+      expect(byName('ReconciliationPage.tsx')).toMatch(/summarizeBulkResult/);
+    });
+    it('SettlementsPage payout loop announces partial failures', () => {
+      expect(byName('SettlementsPage.tsx')).toMatch(/failedIds\.length|failedIds\.map/);
+    });
+  });
+
+  // F4 (FRICTION-ANALYSIS-2026-09-18): pending labels that can never render
+  // (state vocabulary 'verify'/'reject' vs action vocabulary 'matched'/'disputed')
+  // leave a double-submit window on money rows. One vocabulary end-to-end.
+  it('F4: Reconciliation bulkActionPending uses the DB status vocabulary', () => {
+    expect(byName('ReconciliationPage.tsx')).toMatch(/bulkActionPending.*'matched' \| 'disputed' \| null/);
+  });
+
+  // F10 (FRICTION-ANALYSIS-2026-09-18): an invisible selection that survives a
+  // filter change is a money-safety trap — the user can bulk-act on rows they
+  // can no longer see. Selection must clear whenever the visible set can change.
+  it('F10: reconciliation selection clears on any filter-shape change', () => {
+    const src = byName('ReconciliationPage.tsx');
+    expect(src).toMatch(/buildWithdrawalFilterKey|filterKey/);
+    expect(src).toMatch(/setSelectedIds\(new Set\(\)\)/);
+  });
+
+  // F2 (FRICTION-ANALYSIS-2026-09-18): bulk destructive actions on money rows
+  // need a confirm interposition, not a one-click footer button.
+  it('F2: reconciliation bulk reject confirms before firing', () => {
+    const src = byName('ReconciliationPage.tsx');
+    expect(src).toMatch(/bulkConfirm/);
+  });
+
+  // F5 (FRICTION-ANALYSIS-2026-09-18): money buttons name the amount — the
+  // PaymentBackfillPage pattern. Amount-only buttons force mental arithmetic
+  // before every confirm.
+  it('F5: settlements payout button names the amount', () => {
+    expect(byName('SettlementsPage.tsx')).toMatch(/Pay .* — pay D|formatMoney\(.*net_payout/);
+  });
+
+  // F3: export buttons state the row scope — a CSV that silently differs from
+  // the screen is a reconciliation trust failure.
+  it('F3: export buttons state row scope', () => {
+    expect(byName('ReconciliationPage.tsx')).toMatch(/Export filtered \(/);
+  });
+
+  // P2-NEW-6 regression guard: CONTEXT.md makes Merchant canonical; the
+  // customer-facing purchase funnel had purged "Restaurant" copy once
+  // (febbd5b) and it regressed. Lock it.
+  it('F-copy: purchase funnel has no customer-facing "Restaurant" copy', () => {
+    expect(byName('CartPage.tsx')).not.toMatch(/restaurant/i);
+    expect(byName('MerchantStorefrontPage.tsx')).not.toMatch(/Restaurant not found/i);
+  });
+
+  // P2-NEW-5 regression guard: wallet family back on hand-rolled D toFixed(2).
+  it('F-money: wallet family uses formatMoney, not hand-rolled D toFixed(2)', () => {
+    const walletFamily = [
+      read(path.join(compDir, 'wallet/WalletFolderCard.tsx')),
+      read(path.join(compDir, 'wallet/TransactionHistoryTable.tsx')),
+    ].join('\n');
+    expect(walletFamily).toMatch(/formatMoney/);
+    expect(walletFamily).not.toMatch(/D \{Number\(|D \{[a-zA-Z_]/);
+  });
+
+  // F8 (FRICTION-ANALYSIS-2026-09-18): chat unread pill without a preview
+  // snippet forces a tap per order just to learn what was said — recognition
+  // over recall. The collapsed chat header must expose the last message.
+  it('F8: collapsed chat header exposes a last-message preview', () => {
+    const orderCard = byName('MyOrdersPage.tsx');
+    expect(orderCard).toMatch(/previewBody/);
+  });
+  it('F8: OrderChat supports an onLastMessage callback', () => {
+    expect(read(path.join(compDir, 'OrderChat.tsx'))).toMatch(/onLastMessage/);
   });
 });

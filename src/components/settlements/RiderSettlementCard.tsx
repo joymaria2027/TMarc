@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { CheckCircle2, ChevronDown, CreditCard, DollarSign, TrendingDown, User } from 'lucide-react';
 import type { ExpenseItem, SettlementRow } from './MerchantSettlementCard';
+import { formatMoney } from '@/lib/finance';
 
 export interface RiderSummary {
   rider_id: string;
@@ -72,7 +73,7 @@ export default function RiderSettlementCard({
                 <Badge variant="outline" className="text-accent gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Payout Issued</Badge>
               ) : (
                 <Button size="sm" variant="outline" className="min-h-[44px]" disabled={issuing} onClick={() => onIssuePayout(rs)}>
-                  <DollarSign className="h-3 w-3 mr-1" aria-hidden="true" />{issuing ? 'Issuing…' : 'Issue Net Payout'}
+                  <DollarSign className="h-3 w-3 mr-1" aria-hidden="true" />{issuing ? 'Issuing…' : `Pay ${formatMoney(rs.net_payout)}`}
                 </Button>
               )
             )}

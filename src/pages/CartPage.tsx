@@ -71,7 +71,7 @@ export default function CartPage() {
               </CardContent>
             </Card>
             <p className="text-xs text-muted-foreground text-center">
-              Items from {Object.keys(groups).length > 1 ? `${Object.keys(groups).length} restaurants will be placed as separate orders` : "this restaurant"}.
+              Items from {Object.keys(groups).length > 1 ? `${Object.keys(groups).length} merchants will be placed as separate orders` : "this merchant"}.
             </p>
             <Button size="lg" className="w-full" onClick={() => navigate("/checkout")}>
               Proceed to checkout

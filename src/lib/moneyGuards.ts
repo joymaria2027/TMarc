@@ -30,3 +30,39 @@ export function partitionPayoutDeliveries<T extends PayoutDelivery>(
   }
   return { approvable, skippedNoRatio };
 }
+
+export interface BulkWriteResult {
+  id: string;
+  error: { message?: string } | null;
+}
+
+export interface BulkSummary {
+  succeeded: number;
+  failed: number;
+  failedIds: string[];
+}
+
+/**
+ * Summarize a bulk money write (F1, FRICTION-ANALYSIS-2026-09-18). Sequential
+ * per-row loops can half-succeed; the UI must say exactly which rows landed
+ * and which did not instead of a bare per-id error toast (or worse, a
+ * catch-all that over-claims reversal).
+ */
+export function summarizeBulkResult(results: BulkWriteResult[]): BulkSummary {
+  const failedIds: string[] = [];
+  let succeeded = 0;
+  for (const r of results) {
+    if (r.error) failedIds.push(r.id);
+    else succeeded++;
+  }
+  return { succeeded, failed: failedIds.length, failedIds };
+}
+
+/** Toast copy for a bulk result: honest about partial failure, names ids. */
+export function bulkResultMessage(summary: BulkSummary, action: string): string {
+  if (summary.failed === 0) {
+    return `${summary.succeeded} ${summary.succeeded === 1 ? 'entry' : 'entries'} ${action}`;
+  }
+  const ids = summary.failedIds.map(id => `#${id.slice(0, 8)}`).join(', ');
+  return `${summary.succeeded} ${summary.succeeded === 1 ? 'entry' : 'entries'} ${action}; ${summary.failed} failed (${ids}) — retry the failed rows`;
+}

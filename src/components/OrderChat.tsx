@@ -26,9 +26,12 @@ function prefersReducedMotion(): boolean {
 export default function OrderChat({
   orderId,
   senderRole,
+  onLastMessage,
 }: {
   orderId: string;
   senderRole: "customer" | "merchant" | "admin";
+  /** F8: lets a collapsed chat header show the last message without a tap. */
+  onLastMessage?: (msg: { body: string; created_at: string; mine: boolean } | null) => void;
 }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -53,6 +56,13 @@ export default function OrderChat({
       .order("created_at", { ascending: true });
     setMessages((prev) => {
       const next = (data as any) || [];
+      // F8: surface the last message so a collapsed header can preview it.
+      const last = next.length > 0 ? next[next.length - 1] : null;
+      onLastMessage?.(
+        last
+          ? { body: last.body, created_at: last.created_at, mine: last.sender_user_id === user?.id }
+          : null,
+      );
       // Only auto-scroll if user was already near bottom; otherwise show pill
       const stuckToBottom = isNearBottom();
       requestAnimationFrame(() => {

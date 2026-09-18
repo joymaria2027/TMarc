@@ -22,6 +22,11 @@ export default function CheckoutStatusPage() {
   const [openingPayment, setOpeningPayment] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const prevStatus = useRef<string | null>(null);
+  // F7 (FRICTION-ANALYSIS-2026-09-18): multi-merchant carts create one order
+  // per merchant. Without sibling surfacing, the other order is discoverable
+  // only through toast memory + a page change — the "did my other order
+  // happen?" cliff.
+  const [siblingOrders, setSiblingOrders] = useState<{ id: string; order_reference: string | null; merchant_name: string | null; payment_status: string | null; total: number }[]>([]);
 
   const load = async () => {
     if (!orderId) return;
@@ -36,6 +41,28 @@ export default function CheckoutStatusPage() {
       setAnnouncement(`Payment is now ${humanizePaymentStatus(next)}`);
     }
     prevStatus.current = next;
+    // Same customer, same session, sibling orders from a multi-merchant cart.
+    if (data?.customer_id) {
+      const since = new Date(Date.parse(data.created_at) - 30 * 60 * 1000).toISOString();
+      const { data: sibs } = await supabase
+        .from("orders")
+        .select("id, order_reference, payment_status, total, merchants(name)")
+        .eq("customer_id", data.customer_id)
+        .gte("created_at", since)
+        .neq("id", orderId)
+        .order("created_at", { ascending: true });
+      setSiblingOrders(
+        (sibs ?? []).map((s: { id: string; order_reference: string | null; payment_status: string | null; total: number | string; merchants?: { name: string } | null }) => ({
+          id: s.id,
+          order_reference: s.order_reference,
+          payment_status: s.payment_status,
+          total: Number(s.total),
+          merchant_name: s.merchants?.name ?? null,
+        })),
+      );
+    } else {
+      setSiblingOrders([]);
+    }
   };
 
   useEffect(() => {
@@ -139,6 +166,25 @@ export default function CheckoutStatusPage() {
               <span className="font-medium">Total</span><span className="text-right font-medium tabular-nums">{formatMoney(Number(order.total))}</span>
               {order.payment_reference && (<><span className="text-muted-foreground">Reference</span><span className="text-right font-mono text-xs truncate">{order.payment_reference}</span></>)}
             </div>
+            {siblingOrders.length > 0 && (
+              <div role="status" className="p-3 bg-info/10 border border-info/40 rounded">
+                <p className="text-sm font-medium">
+                  {siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length > 0
+                    ? `You have ${siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length} more order${siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length === 1 ? "" : "s"} awaiting payment`
+                    : "Your other orders from this checkout"}
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {siblingOrders.map(s => (
+                    <li key={s.id} className="text-sm flex items-center justify-between gap-2">
+                      <Link to={`/checkout/status/${s.id}`} className="text-info hover:underline min-w-0 truncate">
+                        {s.merchant_name ?? "Order"} · {s.order_reference}
+                      </Link>
+                      <span className="tabular-nums shrink-0">{formatMoney(s.total)} · {humanizePaymentStatus((s.payment_status ?? "pending").toLowerCase())}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               {status === "pending" && (
                 <>

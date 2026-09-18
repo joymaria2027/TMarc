@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowUpFromLine, BarChart3, ChevronDown, FolderOpen } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatMoney } from '@/lib/finance';
 
 export interface WalletRow {
   id: string;
@@ -124,9 +125,9 @@ export function WalletBalancesTable({
               <TableRow key={w.id}>
                 <TableCell className="font-medium">{label}</TableCell>
                 <TableCell className="capitalize text-muted-foreground">{w.party_type}</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums text-primary">D {Number(w.balance).toFixed(2)}</TableCell>
-                <TableCell className="text-right tabular-nums text-success">D {income.toFixed(2)}</TableCell>
-                <TableCell className="text-right tabular-nums text-destructive">D {withdrawn.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums text-primary">{formatMoney(w.balance)}</TableCell>
+                <TableCell className="text-right tabular-nums text-success">{formatMoney(income)}</TableCell>
+                <TableCell className="text-right tabular-nums text-destructive">{formatMoney(withdrawn)}</TableCell>
                 <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                   <time dateTime={w.updated_at}>{new Date(w.updated_at).toLocaleDateString()}</time>
                 </TableCell>
@@ -152,9 +153,9 @@ export function WalletBalancesTable({
         <TableFooter>
           <TableRow>
             <TableCell colSpan={2} className="font-semibold">Totals</TableCell>
-            <TableCell className="text-right tabular-nums text-primary font-semibold">D {totalBalance.toFixed(2)}</TableCell>
-            <TableCell className="text-right tabular-nums text-success font-semibold">D {totals.income.toFixed(2)}</TableCell>
-            <TableCell className="text-right tabular-nums text-destructive font-semibold">D {totals.withdrawn.toFixed(2)}</TableCell>
+            <TableCell className="text-right tabular-nums text-primary font-semibold">{formatMoney(totalBalance)}</TableCell>
+            <TableCell className="text-right tabular-nums text-success font-semibold">{formatMoney(totals.income)}</TableCell>
+            <TableCell className="text-right tabular-nums text-destructive font-semibold">{formatMoney(totals.withdrawn)}</TableCell>
             <TableCell colSpan={2} />
           </TableRow>
         </TableFooter>
@@ -264,15 +265,15 @@ export default function WalletFolderCard({
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Balance</p>
-                <p className="text-base tabular-nums text-primary leading-tight">D {totalBal.toFixed(2)}</p>
+                <p className="text-base tabular-nums text-primary leading-tight">{formatMoney(totalBal)}</p>
               </div>
               <div className="text-right">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Income</p>
-                <p className="text-base tabular-nums text-success leading-tight">D {totalIncome.toFixed(2)}</p>
+                <p className="text-base tabular-nums text-success leading-tight">{formatMoney(totalIncome)}</p>
               </div>
               <div className="text-right">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Withdrawn</p>
-                <p className="text-base tabular-nums text-destructive leading-tight">D {totalWithdrawn.toFixed(2)}</p>
+                <p className="text-base tabular-nums text-destructive leading-tight">{formatMoney(totalWithdrawn)}</p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" aria-hidden="true" />
             </div>

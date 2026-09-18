@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { History, Search, TrendingDown, TrendingUp } from 'lucide-react';
 import type { TransactionRow, WalletRow } from './WalletFolderCard';
+import { formatMoney } from '@/lib/finance';
+import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface TransactionHistoryTableProps {
@@ -107,7 +109,7 @@ export default function TransactionHistoryTable({
                     const wallet = wallets.find(w => w.id === tx.wallet_id);
                     return (
                       <TableRow key={tx.id}>
-                        <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={tx.created_at}>{new Date(tx.created_at).toLocaleString()}</time></TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={tx.created_at}>{format(new Date(tx.created_at), 'MMM d, HH:mm')}</time></TableCell>
                         <TableCell>
                           <span className={`flex items-center gap-1 font-medium ${tx.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
                             {tx.type === 'credit' ? <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" /> : <TrendingDown className="h-3.5 w-3.5" aria-hidden="true" />}
@@ -116,7 +118,7 @@ export default function TransactionHistoryTable({
                         </TableCell>
                         <TableCell>{wallet ? getPartyLabel(wallet) : '–'}</TableCell>
                         <TableCell className={`text-right font-medium tabular-nums ${tx.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
-                          {tx.type === 'credit' ? '+' : '-'} D {Number(tx.amount).toFixed(2)}
+                          {tx.type === 'credit' ? '+' : '-'}{formatMoney(tx.amount)}
                         </TableCell>
                         <TableCell className="max-w-[250px] truncate">{tx.description}</TableCell>
                       </TableRow>

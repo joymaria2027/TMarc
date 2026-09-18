@@ -93,6 +93,9 @@ export default function RiderDashboard() {
   // Riders start online when they open the dashboard; the header toggle keeps
   // this state visible and controllable (previously silent and forced).
   const [isOnline, setIsOnline] = useState(true);
+  // Ref mirror so imperative paths (ensureRiderAvailable) read current state
+  // without effect re-subscription.
+  const isOnlineRef = useRef(true);
   const [onlineUpdating, setOnlineUpdating] = useState(false);
   // Recently rejected ids (TTL ~5s) — prevents realtime refetch from re-adding them
   const recentlyRejectedRef = useRef<Map<string, number>>(new Map());
@@ -306,7 +309,13 @@ export default function RiderDashboard() {
   const ensureRiderAvailable = async () => {
     if (!riderId) return null;
     const { error } = await supabase.from('riders').update({ is_online: true, is_active: true }).eq('id', riderId);
-    if (error) console.warn('ensureRiderAvailable failed', error);
+    // F6 (FRICTION-ANALYSIS-2026-09-18): this is a covert state change — the
+    // rider discovers their online status later, out of band. Announce it once.
+    if (!error && !isOnlineRef.current) {
+      isOnlineRef.current = true;
+      setIsOnline(true);
+      toast.info('You are online — new jobs can reach you');
+    }
     return error;
   };
 
@@ -546,10 +555,12 @@ export default function RiderDashboard() {
     if (!riderId || onlineUpdating) return;
     setOnlineUpdating(true);
     setIsOnline(next); // optimistic
+    isOnlineRef.current = next;
     const { error } = await supabase.from('riders').update({ is_online: next, is_active: next }).eq('id', riderId);
     setOnlineUpdating(false);
     if (error) {
       setIsOnline(!next); // revert
+      isOnlineRef.current = !next;
       toast.error(describeError(error));
       return;
     }
