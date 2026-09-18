@@ -6,7 +6,7 @@ import StorefrontLayout from "@/components/StorefrontLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getProductImageUrl } from "@/lib/productImage";
+import { getProductImageUrl, getProductPublicUrl } from "@/lib/productImage";
 import { useCart } from "@/lib/cart";
 import { useWholesale } from "@/lib/wholesale";
 import { toast } from "sonner";
@@ -48,14 +48,21 @@ export default function MerchantStorefrontPage() {
       const list = (p.data || []) as Product[];
       setProducts(list);
       setCategories((c.data || []) as Category[]);
-      setLoading(false);
-      // Signed URLs resolve through the shared cache (1h TTL).
+      // Populate public URLs immediately
       const u: Record<string, string> = {};
+      for (const pr of list) {
+        const pub = getProductPublicUrl(pr.image_path);
+        if (pub) u[pr.id] = pub;
+      }
+      setUrls(u);
+      setLoading(false);
+      // Signed URLs fallback
       await Promise.all(list.map(async pr => {
+        if (u[pr.id]) return;
         const url = await getProductImageUrl(pr.image_path);
         if (url) u[pr.id] = url;
       }));
-      setUrls(u);
+      setUrls({ ...u });
     })();
   }, [merchantId]);
 

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getProductImageUrl } from "@/lib/productImage";
+import { getProductImageUrl, getProductPublicUrl } from "@/lib/productImage";
 import { useCart } from "@/lib/cart";
 import { useWholesale } from "@/lib/wholesale";
 import { toast } from "sonner";
@@ -38,8 +38,12 @@ export default function ProductDetailPage() {
         .eq("id", productId).eq("approval_status", "approved").eq("is_active", true)
         .maybeSingle();
       setProduct(data as any);
+      if (data?.image_path) {
+        const pub = getProductPublicUrl(data.image_path);
+        if (pub) setImgUrl(pub);
+        else getProductImageUrl(data.image_path).then(u => u && setImgUrl(u));
+      }
       setLoading(false);
-      if (data?.image_path) setImgUrl(await getProductImageUrl(data.image_path));
     })();
   }, [productId]);
 

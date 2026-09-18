@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ProductCard from "@/components/ProductCard";
-import { getProductImageUrl } from "@/lib/productImage";
+import { getProductImageUrl, getProductPublicUrl } from "@/lib/productImage";
 import { paginate, pageCount } from "@/lib/pagination";
 import { useCart } from "@/lib/cart";
 import { useWholesale } from "@/lib/wholesale";
@@ -62,9 +62,19 @@ export default function ShopPage() {
       setMerchants((m.data || []) as Merchant[]);
       setBusinessTypes((bt.data || []) as BusinessType[]);
       setCategories((c.data || []) as Category[]);
+
+      // Populate public image URLs immediately so product cards display photos instantly without lag
+      const initialUrls: Record<string, string> = {};
+      for (const item of list) {
+        const u = getProductPublicUrl(item.image_path);
+        if (u) initialUrls[item.id] = u;
+      }
+      setImageUrls(initialUrls);
       setLoading(false);
-      // Incremental render: paint each image URL as it resolves.
+
+      // Incremental render fallback for any non-public paths
       list.forEach(async item => {
+        if (initialUrls[item.id]) return;
         const u = await getProductImageUrl(item.image_path);
         if (cancelled || !u) return;
         setImageUrls(prev => (prev[item.id] ? prev : { ...prev, [item.id]: u }));
