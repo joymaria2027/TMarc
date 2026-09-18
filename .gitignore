@@ -35,3 +35,12 @@ dist-ssr
 
 # Editor backups
 *~
+
+# Local dev artifacts (tickets, knowledge graph cache)
+.scratch/
+graphify-out/
+
+# Local buffers / generated docs
+.freebuff/
+docs/diagram.png
+docs/joymaria2027-tmarc-8a5edab282632443.txt
