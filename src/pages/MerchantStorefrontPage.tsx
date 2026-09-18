@@ -79,7 +79,7 @@ export default function MerchantStorefrontPage() {
         {loading ? (
           <p className="text-muted-foreground" role="status">Loading store…</p>
         ) : !merchant ? (
-          <p className="text-muted-foreground" role="status">Merchant not found.</p>
+          <p className="text-muted-foreground" role="status">This store is unavailable.</p>
         ) : (
           <>
             <div className="space-y-2">

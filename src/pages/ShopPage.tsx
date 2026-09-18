@@ -124,7 +124,7 @@ export default function ShopPage() {
         <div className="space-y-2">
           <h1 className="text-2xl font-bold tracking-tight">Order from stores near you</h1>
           <p className="text-muted-foreground max-w-xl">
-            Approved local businesses — pickup or delivery, tracked to your door.
+            Order from local stores. Pickup or delivery, tracked to your door.
           </p>
           {isWholesaler && (
             <Badge className="mt-1">Wholesale pricing active</Badge>
@@ -132,7 +132,7 @@ export default function ShopPage() {
         </div>
 
         {merchantsWithProducts.length > 0 && (
-          <section aria-label="Open restaurants" className="space-y-3">
+          <section aria-label="Open stores near you" className="space-y-3">
             <div className="flex items-baseline justify-between flex-wrap gap-2">
               <h2 className="font-display text-xl">Open near you</h2>
               <span className="text-xs text-muted-foreground" role="status">{merchantsWithProducts.length} open</span>
@@ -207,7 +207,7 @@ export default function ShopPage() {
         ) : filtered.length === 0 ? (
           <div className="rounded-lg border bg-card p-8 text-center space-y-2">
             <p role="status" className="font-medium">No products match those filters</p>
-            <p className="text-sm text-muted-foreground">Try clearing the search or choosing a different category — new stores open regularly.</p>
+            <p className="text-sm text-muted-foreground">Try clearing the search or picking a different category. New stores open regularly.</p>
             <Button variant="outline" onClick={() => { setSearch(""); setBtFilter("all"); setCatFilter("all"); setSort("newest"); }}>
               Clear filters
             </Button>

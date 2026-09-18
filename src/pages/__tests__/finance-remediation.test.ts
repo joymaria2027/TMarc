@@ -228,6 +228,31 @@ describe('finance group audit guards', () => {
   it('F-copy: purchase funnel has no customer-facing "Restaurant" copy', () => {
     expect(byName('CartPage.tsx')).not.toMatch(/restaurant/i);
     expect(byName('MerchantStorefrontPage.tsx')).not.toMatch(/Restaurant not found/i);
+    // ShopPage section label previously said "Open restaurants"; heading says "Open near you"
+    expect(byName('ShopPage.tsx')).not.toMatch(/restaurant/i);
+  });
+
+  // Copy-audit 2026-09-18 (humanizer + GCSE lens): funnel copy register.
+  describe('F-copy2: funnel copy audit guards', () => {
+    it('ShopPage subhead drops the em-dash approval jargon', () => {
+      const s = byName('ShopPage.tsx');
+      expect(s).toMatch(/Order from local stores\./);
+      expect(s).not.toMatch(/Approved local businesses/);
+    });
+    it('Checkout pay button uses formatMoney (no hand-rolled D toFixed)', () => {
+      const s = byName('CheckoutPage.tsx');
+      expect(s).toMatch(/Pay \$\{formatMoney\(total\)\} with ModemPay/);
+      expect(s).not.toMatch(/D \$\{total\.toFixed/);
+    });
+    it('Checkout sign-in prompt has no em dash', () => {
+      expect(byName('CheckoutPage.tsx')).not.toMatch(/to continue —/);
+    });
+    it('ProductDetail not-found copy has no dev jargon ("stale")', () => {
+      expect(byName('ProductDetailPage.tsx')).toMatch(/link is out of date/);
+    });
+    it('MerchantStorefront not-found copy speaks shopper language', () => {
+      expect(byName('MerchantStorefrontPage.tsx')).toMatch(/This store is unavailable\./);
+    });
   });
 
   // P2-NEW-5 regression guard: wallet family back on hand-rolled D toFixed(2).

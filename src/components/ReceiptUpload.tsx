@@ -68,7 +68,7 @@ export default function ReceiptUpload({ deliveryId, orderReference, userId, onUp
       await supabase.from('deliveries').update({ receipt_attached: true }).eq('id', deliveryId);
 
       setUploaded(true);
-      toast.success('Receipt uploaded successfully!');
+      toast.success('Receipt uploaded.');
       onUploaded?.();
       setTimeout(() => setOpen(false), 1000);
     } catch (err: any) {

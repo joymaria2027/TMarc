@@ -60,7 +60,7 @@ export default function ProductDetailPage() {
     <StorefrontLayout>
       <div className="max-w-md mx-auto rounded-lg border bg-card p-8 text-center space-y-2">
         <p role="status" className="font-medium">Product not found</p>
-        <p className="text-sm text-muted-foreground">It may have sold out or the link is stale.</p>
+        <p className="text-sm text-muted-foreground">It may have sold out, or the link is out of date.</p>
         <Button asChild><Link to="/shop">Browse stores</Link></Button>
       </div>
     </StorefrontLayout>

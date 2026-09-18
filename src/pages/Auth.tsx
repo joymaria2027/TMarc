@@ -202,8 +202,8 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
 
           <Tabs defaultValue={initialTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-muted/60">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Create Account</TabsTrigger>
+              <TabsTrigger value="signin">Sign in</TabsTrigger>
+              <TabsTrigger value="signup">Create account</TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin" className="mt-6">
@@ -235,7 +235,7 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
                 <Button type="submit" className="w-full group" size="lg" disabled={submitting}>
                   {submitting ? 'Signing in…' : (
                     <>
-                      Sign In
+                      Sign in
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </>
                   )}
@@ -362,7 +362,7 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
                 <Button type="submit" className="w-full group" size="lg" disabled={submitting}>
                   {submitting ? 'Creating account…' : (
                     <>
-                      Create Account
+                      Create account
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </>
                   )}

@@ -165,8 +165,8 @@
     "semantic_hash": "707964513732425d50fb8a0f7a82160d"
   },
   "src/components/StorefrontLayout.tsx": {
-    "mtime": 1789677575.5926852,
-    "ast_hash": "9b463b177414bc15a54e773b7a2a2079",
+    "mtime": 1789719055.865751,
+    "ast_hash": "f78a3158283dd0ef7b57d142a4f92cdc",
     "semantic_hash": ""
   },
   "src/components/WalletWidget.tsx": {
@@ -535,13 +535,13 @@
     "semantic_hash": ""
   },
   "src/pages/CartPage.tsx": {
-    "mtime": 1789713176.0351372,
-    "ast_hash": "ac663867da70198b94e46671bf69cb81",
+    "mtime": 1789718284.3619065,
+    "ast_hash": "f60a434179b59650cf8b26c1515c4bb0",
     "semantic_hash": ""
   },
   "src/pages/CheckoutPage.tsx": {
-    "mtime": 1789705402.1749856,
-    "ast_hash": "a237f1bb0259874b4c9b8f86c4407795",
+    "mtime": 1789718590.0369565,
+    "ast_hash": "c61a478c205003f5d62214b80a6e23f2",
     "semantic_hash": ""
   },
   "src/pages/CheckoutStatusPage.tsx": {
@@ -675,8 +675,8 @@
     "semantic_hash": ""
   },
   "src/pages/RolePermissionsPage.tsx": {
-    "mtime": 1789692561.9566689,
-    "ast_hash": "8e49709060de6272c204676d35d4729b",
+    "mtime": 1789718730.720557,
+    "ast_hash": "00bad906c6cfba50bda095f68029571e",
     "semantic_hash": ""
   },
   "src/pages/SettingsPage.tsx": {
@@ -715,8 +715,8 @@
     "semantic_hash": ""
   },
   "src/pages/WholesalersPage.tsx": {
-    "mtime": 1789705298.8145387,
-    "ast_hash": "2205f11b299e3d3f34f33e69437c93f9",
+    "mtime": 1789719147.8928099,
+    "ast_hash": "d944677a8434b206b2205653a9d31d6c",
     "semantic_hash": ""
   },
   "src/pages/__tests__/RiderDashboard.reject.test.tsx": {
@@ -2172,6 +2172,31 @@
   "supabase/migrations/20260918073500_8f6e1a2b-3c4d-4e5f-9a0b-1c2d3e4f5a6b.sql": {
     "mtime": 1789716813.1938124,
     "ast_hash": "61cf19e138cadd3fbef5f87f88d6a116",
+    "semantic_hash": ""
+  },
+  "src/components/UserNotificationBell.tsx": {
+    "mtime": 1789718963.7038035,
+    "ast_hash": "c9cbd4ed113f3e7d69e7815d2f6426d0",
+    "semantic_hash": ""
+  },
+  "src/lib/__tests__/accessRestrictionsAndNotifications.test.ts": {
+    "mtime": 1789718126.6404617,
+    "ast_hash": "5c037aa7359607a73b9726e3a0e999a6",
+    "semantic_hash": ""
+  },
+  "src/lib/__tests__/wholesaleValidation.test.ts": {
+    "mtime": 1789718098.3275678,
+    "ast_hash": "934590f41af2b68b1e1aa3273ce50db3",
+    "semantic_hash": ""
+  },
+  "src/lib/wholesaleValidation.ts": {
+    "mtime": 1789718079.858638,
+    "ast_hash": "b49d141634a9f939772949df053b939e",
+    "semantic_hash": ""
+  },
+  "supabase/migrations/20260918075500_c8d1e2f3-4a5b-6c7d-8e9f-0a1b2c3d4e5f.sql": {
+    "mtime": 1789718063.6187007,
+    "ast_hash": "a0ebeb3f7205e26ac1a2abdf5fe65493",
     "semantic_hash": ""
   }
 }

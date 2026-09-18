@@ -302,7 +302,7 @@ export default function RiderDashboard() {
       { context: 'Accept failed' },
     );
     if (error) return;
-    toast.success('Delivery accepted! You can now start it.');
+    toast.success('Delivery accepted. Start it when you reach the pickup.');
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'accepted' } : d));
   };
 
@@ -480,7 +480,7 @@ export default function RiderDashboard() {
       loadOffered();
       return;
     }
-    toast.success('Delivery claimed!');
+    toast.success('Delivery claimed.');
     setUnassigned(prev => prev.filter(d => d.id !== delivery.id));
     setOffered(prev => prev.filter(d => d.id !== delivery.id));
     setDetail(null);
@@ -508,7 +508,7 @@ export default function RiderDashboard() {
     if (error) { toast.error(error.message); return; }
     setActiveDelivery({ ...delivery, status: 'in_transit', picked_up_at: nowIso, start_odometer_miles: miles });
     startTracking();
-    toast.success('Delivery started! GPS tracking active.');
+    toast.success('Delivery started. GPS tracking is on.');
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'in_transit', picked_up_at: nowIso, start_odometer_miles: miles } : d));
     setPendingStart(null);
   };
@@ -533,7 +533,7 @@ export default function RiderDashboard() {
     }).eq('id', delivery.id);
     if (error) { toast.error(error.message); return; }
     const milesCovered = delivery.start_odometer_miles != null ? (miles - delivery.start_odometer_miles) : null;
-    toast.success(`Delivery completed!${milesCovered != null ? ` ${milesCovered.toFixed(1)} mi covered` : ''}`);
+    toast.success(`Delivery completed${milesCovered != null ? ` · ${milesCovered.toFixed(1)} mi covered` : ''}`);
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'delivered', actual_distance_km: distance, end_odometer_miles: miles } : d));
     setActiveDelivery(null);
     setPendingEnd(null);
@@ -752,9 +752,9 @@ export default function RiderDashboard() {
       </div>
       {/* END LEFT COLUMN */}
 
-      {/* RIGHT COLUMN: Unattended / Rejected deliveries */}
+      {/* RIGHT COLUMN: Unassigned / Rejected deliveries */}
       <div className="space-y-6 lg:col-start-2">
-      <h2 className="text-base font-semibold">Unattended / Rejected</h2>
+      <h2 className="text-base font-semibold">Unassigned / Rejected</h2>
 
       {/* Delivery Offers — declined by another rider, broadcast to you */}
       {offered.length > 0 && (
@@ -786,7 +786,7 @@ export default function RiderDashboard() {
 
       {offered.length === 0 && (
         <div className="text-center py-10 text-muted-foreground border border-dashed rounded-lg">
-          <p className="text-sm">No offered deliveries right now. Visit Deliveries to claim from the unattended pool.</p>
+          <p className="text-sm">No offers right now. Claim unassigned jobs from Deliveries.</p>
         </div>
       )}
       </div>

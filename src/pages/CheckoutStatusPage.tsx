@@ -98,6 +98,7 @@ export default function CheckoutStatusPage() {
   }
 
   const status = (order.payment_status ?? "pending").toLowerCase();
+  const pendingSiblings = siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length;
 
   const openPayment = async () => {
     if (!orderId) return;
@@ -169,8 +170,8 @@ export default function CheckoutStatusPage() {
             {siblingOrders.length > 0 && (
               <div role="status" className="p-3 bg-info/10 border border-info/40 rounded">
                 <p className="text-sm font-medium">
-                  {siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length > 0
-                    ? `You have ${siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length} more order${siblingOrders.filter(s => (s.payment_status ?? "").toLowerCase() === "pending").length === 1 ? "" : "s"} awaiting payment`
+                  {pendingSiblings > 0
+                    ? `${pendingSiblings} more order${pendingSiblings === 1 ? "" : "s"} awaiting payment`
                     : "Your other orders from this checkout"}
                 </p>
                 <ul className="mt-1 space-y-1">

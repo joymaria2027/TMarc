@@ -156,7 +156,7 @@ export default function CheckoutPage() {
 
   const submit = async () => {
     if (!user) {
-      const msg = "Create an account or sign in above to continue — your details below are saved.";
+      const msg = "Create an account or sign in to continue. Your details below are saved.";
       toast.error(msg);
       setAnnouncement(msg);
       requestAnimationFrame(() => document.getElementById("checkout-account")?.focus());
@@ -454,12 +454,12 @@ export default function CheckoutPage() {
           aria-describedby={!user ? "checkout-auth-hint" : wholesaleViolations.length > 0 ? "checkout-wholesale-alert" : undefined}
         >
           {!user
-            ? "Create an account or sign in above to continue"
+            ? "Create an account or sign in to continue"
             : wholesaleViolations.length > 0
             ? "Fix wholesale quantities to continue"
             : submitting
             ? "Placing orders…"
-            : `Pay D ${total.toFixed(2)} with ModemPay`}
+            : `Pay ${formatMoney(total)} with ModemPay`}
         </Button>
       </div>
     </StorefrontLayout>

@@ -43,10 +43,10 @@ export default function CartPage() {
               <div role="alert" className="p-4 rounded-md border border-destructive/30 bg-destructive/10 text-destructive space-y-1">
                 <div className="flex items-center gap-2 font-medium">
                   <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>Wholesale minimum order requirement not met</span>
+                  <span>Wholesale minimum not met</span>
                 </div>
                 <p className="text-xs">
-                  Some items in your cart do not meet the minimum order quantity for wholesale pricing. Please update the quantities before proceeding to checkout.
+                  Some items are below the minimum quantity for wholesale pricing. Increase the quantities, then check out.
                 </p>
               </div>
             )}
@@ -113,7 +113,7 @@ export default function CartPage() {
               disabled={hasWholesaleErrors}
               onClick={() => {
                 if (hasWholesaleErrors) {
-                  toast.error("Please meet all wholesale minimum order quantities before checkout.");
+                  toast.error("Some items are still below the wholesale minimum.");
                   return;
                 }
                 navigate("/checkout");
