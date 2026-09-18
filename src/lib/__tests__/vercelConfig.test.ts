@@ -25,6 +25,12 @@ describe("vercel.json deployment configuration", () => {
     expect(catchAllRewrite.destination).toBe("/index.html");
   });
 
+  it("specifies installCommand with --legacy-peer-deps to avoid ERESOLVE on Vercel", () => {
+    const content = fs.readFileSync(vercelConfigPath, "utf-8");
+    const config = JSON.parse(content);
+    expect(config.installCommand).toBe("npm install --legacy-peer-deps");
+  });
+
   it("configures caching headers for immutable assets and dynamic index.html", () => {
     const content = fs.readFileSync(vercelConfigPath, "utf-8");
     const config = JSON.parse(content);
