@@ -108,6 +108,18 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
         {children}
       </main>
 
+      {/* Legal footer — trust signal wherever accounts or orders are created */}
+      <footer className="border-t bg-card/60">
+        <div className="container mx-auto flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-muted-foreground">
+          <p>© {new Date().getFullYear()} DeliveryAce</p>
+          <nav aria-label="Legal" className="flex items-center gap-4">
+            <Link to="/privacy" className="underline-offset-2 hover:underline">Privacy policy</Link>
+            <Link to="/wholesale" className="underline-offset-2 hover:underline">Wholesale</Link>
+            <a href="mailto:support@deliveryace.example" className="underline-offset-2 hover:underline">Contact</a>
+          </nav>
+        </div>
+      </footer>
+
       {/* iOS bottom tab bar: 2–5 destinations within thumb reach */}
       <nav
         aria-label="Store sections"

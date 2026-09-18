@@ -42,6 +42,8 @@ import DispatchAuditPage from "@/pages/DispatchAuditPage";
 import PaymentBackfillPage from "@/pages/PaymentBackfillPage";
 import MerchantAuditLogPage from "@/pages/MerchantAuditLogPage";
 import StoreLandingPage from "@/pages/StoreLandingPage";
+import LandingPage from "@/pages/LandingPage";
+import PrivacyPage from "@/pages/PrivacyPage";
 import WholesaleApplyPage from "@/pages/WholesaleApplyPage";
 import WholesalersPage from "@/pages/WholesalersPage";
 import NotFound from "@/pages/NotFound";
@@ -60,6 +62,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <Layout>{children}</Layout>;
 }
 
+/** Signed-in visitors land in the app; everyone else gets the pitch. */
+function ProtectedIndex() {
+  const { user, loading } = useAuth();
+  if (loading)
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div role="status" aria-label="Loading" className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  return user ? <Layout><Index /></Layout> : <LandingPage />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -69,7 +83,10 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/reset" element={<Auth resetMode />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            {/* Marketing page for visitors, dashboards for signed-in users */}
+            <Route path="/" element={<ProtectedIndex />} />
+            <Route path="/app/*" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/rider" element={<ProtectedRoute><RiderDashboard /></ProtectedRoute>} />
             <Route path="/deliveries" element={<ProtectedRoute><DeliveriesPage /></ProtectedRoute>} />
             <Route path="/deliveries/new" element={<ProtectedRoute><NewDeliveryPage /></ProtectedRoute>} />

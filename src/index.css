@@ -165,6 +165,44 @@
   }
 }
 
+/* Landing entrance: staggered rise (predetermined, runs once) */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise { animation: rise 480ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.rise-1 { animation-delay: 70ms; }
+.rise-2 { animation-delay: 140ms; }
+.rise-3 { animation-delay: 210ms; }
+.rise-4 { animation-delay: 280ms; }
+
+/* Tactile press feedback for CTAs (transform only, GPU-friendly) */
+.press {
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* Live-indicator dot: gentle state pulse */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.pulse-dot { animation: pulse-dot 2.4s ease-in-out infinite; }
+
+/* Reduced motion: keep opacity fades, drop movement */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: fade-in 240ms ease both; }
+  .pulse-dot { animation: none; }
+  .press { transition: none; }
+  .press:active { transform: none; }
+}
+
 /* Reusable shimmer for skeletons */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
