@@ -4,8 +4,8 @@ import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
 import { resilientNavigatorLock } from './supabaseLock';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://ynlbzxpgjduvpjvbnpyb.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_60xj55Rr3SfzCoHUE2fpeA_K5dZ59z2';
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
