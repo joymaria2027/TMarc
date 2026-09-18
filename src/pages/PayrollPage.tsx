@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { formatMoney } from '@/lib/finance';
 import { Plus, Play, Wallet, CheckCircle2, Download, X, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatMoney, paginate } from '@/lib/finance';
