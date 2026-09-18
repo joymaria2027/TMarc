@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package } from "lucide-react";
+import { Package, Images } from "lucide-react";
 
 export interface ProductCardProduct {
   id: string;
@@ -14,6 +14,7 @@ export interface ProductCardProduct {
   track_inventory: boolean;
   available_today: boolean;
   image_path: string | null;
+  image_paths?: string[] | null;
 }
 
 export interface ProductCardQuote {
@@ -79,6 +80,14 @@ export default function ProductCard({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
             <Package className="h-6 w-6" aria-hidden="true" />
             <span className="text-xs">No image available</span>
+          </div>
+        )}
+        {p.image_paths && p.image_paths.length > 1 && (
+          <div className="absolute top-2 right-2 z-10 pointer-events-none">
+            <span className="inline-flex items-center gap-1 rounded-md bg-background/85 px-1.5 py-0.5 text-[11px] font-medium text-foreground backdrop-blur-xs shadow-xs border border-border/40">
+              <Images className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+              <span>{p.image_paths.length}</span>
+            </span>
           </div>
         )}
       </Link>

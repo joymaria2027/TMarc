@@ -15,16 +15,23 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Percent } from "lucide-react";
+import { Plus, Trash2, Percent, Star, ArrowLeft, ArrowRight, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { validateProductForm, type Errors } from "./merchantGroup.helpers";
 import { getProductPublicUrl } from "@/lib/productImage";
 
 interface Merchant { id: string; name: string; business_type_id: string | null; business_type_name?: string; }
+export interface StagedImageItem {
+  id: string;
+  url: string;
+  file?: File;
+  path?: string;
+  stats?: { width: number; height: number; label: string };
+}
 interface Product {
   id: string; merchant_id: string; name: string; description: string | null; price: number;
   quantity: number; track_inventory: boolean; available_today: boolean; is_active: boolean;
-  image_path: string | null; approval_status: string; rejection_reason: string | null;
+  image_path: string | null; image_paths?: string[] | null; approval_status: string; rejection_reason: string | null;
 }
 
 interface WholesaleRow { product_id: string; wholesale_price: number | null; min_quantity: number }
@@ -86,15 +93,37 @@ export default function MerchantProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const save = async (p: Partial<Product>, file: File | null, ws?: { price: string; minQty: string }) => {
+  const save = async (
+    p: Partial<Product>,
+    imageItems: StagedImageItem[] | File | null,
+    ws?: { price: string; minQty: string }
+  ) => {
     try {
-      let image_path = p.image_path ?? null;
-      if (file) {
-        const path = `${selected}/${Date.now()}-${file.name}`;
-        const { error } = await supabase.storage.from("product-images").upload(path, file);
+      const finalPaths: string[] = [];
+      if (Array.isArray(imageItems)) {
+        for (let i = 0; i < imageItems.length; i++) {
+          const item = imageItems[i];
+          if (item.file) {
+            const cleanName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const path = `${selected}/${Date.now()}-${i}-${cleanName}`;
+            const { error } = await supabase.storage.from("product-images").upload(path, item.file);
+            if (error) throw error;
+            finalPaths.push(path);
+          } else if (item.path) {
+            finalPaths.push(item.path);
+          }
+        }
+      } else if (imageItems instanceof File) {
+        const cleanName = imageItems.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${selected}/${Date.now()}-${cleanName}`;
+        const { error } = await supabase.storage.from("product-images").upload(path, imageItems);
         if (error) throw error;
-        image_path = path;
+        finalPaths.push(path);
+      } else if (p.image_path) {
+        finalPaths.push(p.image_path);
       }
+
+      const primaryPath = finalPaths[0] || null;
       const payload: any = {
         merchant_id: selected,
         name: p.name, description: p.description, price: p.price,
@@ -102,7 +131,8 @@ export default function MerchantProductsPage() {
         track_inventory: !isRestaurant,
         available_today: p.available_today ?? true,
         is_active: p.is_active ?? true,
-        image_path,
+        image_path: primaryPath,
+        image_paths: finalPaths,
       };
       let productId = editing?.id ?? null;
       if (editing) {
@@ -257,15 +287,15 @@ export default function MerchantProductsPage() {
 function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
   editing: Product | null; isRestaurant: boolean;
   wholesale?: WholesaleRow;
-  onSave: (p: Partial<Product>, file: File | null, ws?: { price: string; minQty: string }) => void;
+  onSave: (p: Partial<Product>, imageItems: StagedImageItem[], ws?: { price: string; minQty: string }) => void;
 }) {
   const [name, setName] = useState(editing?.name || "");
   const [description, setDescription] = useState(editing?.description || "");
   const [price, setPrice] = useState(editing?.price?.toString() || "");
   const [quantity, setQuantity] = useState(editing?.quantity?.toString() || "0");
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewStats, setPreviewStats] = useState<{ width: number; height: number; label: string } | null>(null);
+  const [images, setImages] = useState<StagedImageItem[]>([]);
+  const [activePreviewIdx, setActivePreviewIdx] = useState<number>(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [wsPrice, setWsPrice] = useState(wholesale?.wholesale_price?.toString() || "");
   const [wsMin, setWsMin] = useState(wholesale?.min_quantity?.toString() || "1");
   const [errors, setErrors] = useState<Errors>({});
@@ -273,40 +303,94 @@ function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
   useEffect(() => {
     setName(editing?.name || ""); setDescription(editing?.description || "");
     setPrice(editing?.price?.toString() || ""); setQuantity(editing?.quantity?.toString() || "0");
-    setFile(null);
     setWsPrice(wholesale?.wholesale_price?.toString() || "");
     setWsMin(wholesale?.min_quantity?.toString() || "1");
     setErrors({});
+
+    const initial: StagedImageItem[] = [];
+    if (editing?.image_paths && editing.image_paths.length > 0) {
+      for (const p of editing.image_paths) {
+        initial.push({ id: p, path: p, url: getProductPublicUrl(p) || "" });
+      }
+    } else if (editing?.image_path) {
+      initial.push({ id: editing.image_path, path: editing.image_path, url: getProductPublicUrl(editing.image_path) || "" });
+    }
+    setImages(initial);
+    setActivePreviewIdx(0);
   }, [editing, wholesale]);
 
-  useEffect(() => {
-    if (!file) {
-      if (editing?.image_path) {
-        const u = getProductPublicUrl(editing.image_path);
-        setPreviewUrl(u);
-      } else {
-        setPreviewUrl(null);
-        setPreviewStats(null);
-      }
+  const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const remaining = 10 - images.length;
+    if (remaining <= 0) {
+      toast.error("Maximum 10 photos allowed per product.");
       return;
     }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    const img = new Image();
-    img.onload = () => {
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      const ratio = w / h;
-      let label = "Custom";
-      if (ratio >= 0.95 && ratio <= 1.05) label = "1:1 Square (Optimal)";
-      else if (ratio >= 1.25 && ratio <= 1.45) label = "4:3 Standard (Optimal)";
-      else if (ratio < 0.85) label = "Portrait (Full photo preserved)";
-      else label = "Landscape (Full photo preserved)";
-      setPreviewStats({ width: w, height: h, label });
-    };
-    img.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [file, editing]);
+    const toAdd = files.slice(0, remaining);
+    if (files.length > remaining) {
+      toast.warning(`Added ${remaining} photo(s). Maximum 10 photos per product.`);
+    }
+
+    const newItems: StagedImageItem[] = toAdd.map(f => {
+      const url = URL.createObjectURL(f);
+      const item: StagedImageItem = {
+        id: `new-${Date.now()}-${Math.random()}`,
+        url,
+        file: f,
+      };
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        const ratio = w / h;
+        let label = "4:3 Standard";
+        if (ratio >= 0.95 && ratio <= 1.05) label = "1:1 Square";
+        else if (ratio < 0.85) label = "Portrait";
+        else if (ratio > 1.6) label = "Wide";
+        item.stats = { width: w, height: h, label };
+        setImages(prev => [...prev]);
+      };
+      img.src = url;
+      return item;
+    });
+
+    setImages(prev => [...prev, ...newItems]);
+    if (e.target) e.target.value = "";
+  };
+
+  const makePrimary = (idx: number) => {
+    if (idx === 0) return;
+    setImages(prev => {
+      const copy = [...prev];
+      const [item] = copy.splice(idx, 1);
+      copy.unshift(item);
+      return copy;
+    });
+    setActivePreviewIdx(0);
+    toast.success("Cover image set.");
+  };
+
+  const moveImage = (idx: number, dir: "left" | "right") => {
+    const target = dir === "left" ? idx - 1 : idx + 1;
+    if (target < 0 || target >= images.length) return;
+    setImages(prev => {
+      const copy = [...prev];
+      const temp = copy[idx];
+      copy[idx] = copy[target];
+      copy[target] = temp;
+      return copy;
+    });
+    setActivePreviewIdx(target);
+  };
+
+  const removeImage = (idx: number) => {
+    setImages(prev => prev.filter((_, i) => i !== idx));
+    if (activePreviewIdx >= idx && activePreviewIdx > 0) {
+      setActivePreviewIdx(activePreviewIdx - 1);
+    }
+  };
 
   const submit = () => {
     const errs = validateProductForm({ name, price });
@@ -314,9 +398,9 @@ function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
     if (Object.keys(errs).length) return;
     onSave({
       name, description, price: parseFloat(price) || 0, quantity: parseInt(quantity) || 0,
-      image_path: editing?.image_path ?? null, available_today: editing?.available_today ?? true,
+      image_path: images[0]?.path ?? null, available_today: editing?.available_today ?? true,
       is_active: editing?.is_active ?? true,
-    }, file, { price: wsPrice, minQty: wsMin });
+    }, images, { price: wsPrice, minQty: wsMin });
   };
 
   return (
@@ -359,47 +443,146 @@ function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
             <Input id="product-ws-min" type="number" min={1} value={wsMin} onChange={e => setWsMin(e.target.value)} />
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="product-image">Product photo</Label>
-          <Input id="product-image" type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)} />
-          <p className="text-[11px] text-muted-foreground">
-            Any aspect ratio is accepted. Square (1:1) or 4:3 with the item centered is recommended.
-          </p>
 
-          {previewUrl && (
-            <div className="p-3 bg-muted/40 border rounded-lg space-y-2">
+        {/* Multi-image photo manager (up to 10 photos) */}
+        <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <Label htmlFor="product-photos-input" className="font-semibold text-sm">Product Photos (up to 10)</Label>
+              <p className="text-[11px] text-muted-foreground">
+                First photo is the storefront cover. Any aspect ratio is preserved without cropping.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {images.length} / 10 photos
+            </Badge>
+          </div>
+
+          {/* Thumbnail list */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1">
+            {images.map((img, idx) => {
+              const isSelected = idx === activePreviewIdx;
+              const isPrimary = idx === 0;
+              return (
+                <div
+                  key={img.id}
+                  onClick={() => setActivePreviewIdx(idx)}
+                  className={`relative w-16 h-16 shrink-0 rounded-md border-2 overflow-hidden cursor-pointer transition-all ${
+                    isSelected ? "border-primary shadow-xs scale-102" : "border-border hover:border-muted-foreground"
+                  }`}
+                >
+                  <img src={img.url} alt={`Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                  {isPrimary && (
+                    <span className="absolute top-0.5 left-0.5 bg-primary text-primary-foreground text-[8px] font-bold px-1 rounded shadow">
+                      Cover
+                    </span>
+                  )}
+                  <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[8px] px-1 rounded">
+                    #{idx + 1}
+                  </span>
+                </div>
+              );
+            })}
+
+            {images.length < 10 && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-16 h-16 shrink-0 rounded-md border-2 border-dashed border-muted-foreground/40 hover:border-primary flex flex-col items-center justify-center gap-0.5 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Add ({10 - images.length})</span>
+              </button>
+            )}
+          </div>
+
+          <input
+            id="product-photos-input"
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            className="hidden"
+            onChange={handleAddFiles}
+          />
+
+          {images[activePreviewIdx] && (
+            <div className="pt-2 border-t space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-                <span className="font-medium">Storefront preview:</span>
-                {previewStats && (
-                  <Badge variant="outline" className="text-[11px]">
-                    {previewStats.width} × {previewStats.height}px · {previewStats.label}
+                <div className="flex items-center gap-1.5">
+                  <Badge variant={activePreviewIdx === 0 ? "default" : "secondary"}>
+                    {activePreviewIdx === 0 ? "Cover Photo (#1)" : `Photo #${activePreviewIdx + 1}`}
                   </Badge>
-                )}
+                  {activePreviewIdx !== 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[11px] gap-1 px-2"
+                      onClick={() => makePrimary(activePreviewIdx)}
+                    >
+                      <Star className="h-3 w-3 text-primary" /> Make Cover
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    disabled={activePreviewIdx === 0}
+                    onClick={() => moveImage(activePreviewIdx, "left")}
+                    title="Move left"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    disabled={activePreviewIdx === images.length - 1}
+                    onClick={() => moveImage(activePreviewIdx, "right")}
+                    title="Move right"
+                  >
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                    onClick={() => removeImage(activePreviewIdx)}
+                    title="Remove photo"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
+
+              {/* 4:3 Live Preview Card */}
               <div className="flex justify-center">
                 <div
-                  className="relative w-48 bg-muted/60 rounded-md border overflow-hidden flex items-center justify-center shadow-xs"
+                  className="relative w-44 bg-muted/60 rounded-md border overflow-hidden flex items-center justify-center shadow-xs"
                   style={{ aspectRatio: "4 / 3" }}
                 >
                   <img
-                    src={previewUrl}
+                    src={images[activePreviewIdx].url}
                     alt=""
                     aria-hidden="true"
                     className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-125 pointer-events-none"
                   />
                   <img
-                    src={previewUrl}
+                    src={images[activePreviewIdx].url}
                     alt="Preview"
                     className="relative max-w-full max-h-full object-contain p-1.5"
                   />
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground text-center">
-                ✓ Full photo is preserved without cropping using ambient edge framing.
+                ✓ Full photo is preserved uncropped with ambient containment.
               </p>
             </div>
           )}
         </div>
+
         <Button className="w-full" onClick={submit}>{editing ? "Save changes" : "Submit for approval"}</Button>
       </div>
     </DialogContent>

@@ -1459,6 +1459,7 @@ export type Database = {
           description: string | null
           id: string
           image_path: string | null
+          image_paths: string[] | null
           is_active: boolean
           merchant_id: string
           name: string
@@ -1479,6 +1480,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_path?: string | null
+          image_paths?: string[] | null
           is_active?: boolean
           merchant_id: string
           name: string
@@ -1499,6 +1501,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_path?: string | null
+          image_paths?: string[] | null
           is_active?: boolean
           merchant_id?: string
           name?: string

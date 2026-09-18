@@ -19,7 +19,7 @@ const PAGE_SIZE = 12;
 interface Product {
   id: string; merchant_id: string; name: string; description: string | null;
   price: number; quantity: number; track_inventory: boolean; available_today: boolean;
-  image_path: string | null; category_id: string | null; created_at: string;
+  image_path: string | null; image_paths?: string[] | null; category_id: string | null; created_at: string;
   merchants?: { id: string; name: string; business_type_id: string | null };
 }
 interface Merchant { id: string; name: string; business_type_id: string | null; address: string | null }
@@ -49,7 +49,7 @@ export default function ShopPage() {
     (async () => {
       const [p, m, bt, c] = await Promise.all([
         supabase.from("products")
-          .select("id,merchant_id,name,description,price,quantity,track_inventory,available_today,image_path,category_id,created_at,merchants(id,name,business_type_id)")
+          .select("id,merchant_id,name,description,price,quantity,track_inventory,available_today,image_path,image_paths,category_id,created_at,merchants(id,name,business_type_id)")
           .eq("approval_status", "approved").eq("is_active", true)
           .order("created_at", { ascending: false }),
         (supabase.from("merchants").select("id,name,business_type_id,address") as any).eq("is_active", true).eq("approval_status", "approved"),

@@ -11,19 +11,20 @@ import { getProductImageUrl, getProductPublicUrl } from "@/lib/productImage";
 import { useCart } from "@/lib/cart";
 import { useWholesale } from "@/lib/wholesale";
 import { toast } from "sonner";
-import { Package } from "lucide-react";
+import { Package, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Product {
   id: string; merchant_id: string; name: string; description: string | null;
   price: number; quantity: number; track_inventory: boolean; available_today: boolean;
-  image_path: string | null;
+  image_path: string | null; image_paths?: string[] | null;
   merchants?: { id: string; name: string; address: string | null } | null;
 }
 
 export default function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
   const [product, setProduct] = useState<Product | null>(null);
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [activeIdx, setActiveIdx] = useState(0);
   const [qty, setQty] = useState(1);
   const [loading, setLoading] = useState(true);
   const [announcement, setAnnouncement] = useState("");
@@ -34,15 +35,18 @@ export default function ProductDetailPage() {
     if (!productId) return;
     (async () => {
       const { data } = await supabase.from("products")
-        .select("id,merchant_id,name,description,price,quantity,track_inventory,available_today,image_path,merchants(id,name,address)")
+        .select("id,merchant_id,name,description,price,quantity,track_inventory,available_today,image_path,image_paths,merchants(id,name,address)")
         .eq("id", productId).eq("approval_status", "approved").eq("is_active", true)
         .maybeSingle();
       setProduct(data as any);
-      if (data?.image_path) {
-        const pub = getProductPublicUrl(data.image_path);
-        if (pub) setImgUrl(pub);
-        else getProductImageUrl(data.image_path).then(u => u && setImgUrl(u));
-      }
+
+      const paths: string[] = (data as any)?.image_paths?.length
+        ? (data as any).image_paths
+        : data?.image_path ? [data.image_path] : [];
+
+      const urls = paths.map(p => getProductPublicUrl(p)).filter(Boolean) as string[];
+      setImageUrls(urls);
+      setActiveIdx(0);
       setLoading(false);
     })();
   }, [productId]);
@@ -86,16 +90,82 @@ export default function ProductDetailPage() {
           <span aria-hidden="true">←</span> Back to {product.merchants?.name}
         </Link>
         <div className="grid md:grid-cols-2 gap-8">
-          <div className="aspect-square bg-muted/40 rounded-lg overflow-hidden relative flex items-center justify-center">
-            {imgUrl ? (
-              <>
-                <img src={imgUrl} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover blur-lg opacity-25 scale-125 pointer-events-none" />
-                <img src={imgUrl} alt={product.name} loading="lazy" decoding="async" className="relative max-w-full max-h-full object-contain p-4" />
-              </>
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
-                <Package className="h-8 w-8" aria-hidden="true" />
-                <span className="text-xs">No image available</span>
+          <div className="space-y-3">
+            <div className="aspect-square bg-muted/40 rounded-xl overflow-hidden relative flex items-center justify-center border shadow-xs group">
+              {imageUrls.length > 0 ? (
+                <>
+                  <img
+                    src={imageUrls[activeIdx]}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover blur-xl opacity-25 scale-125 pointer-events-none transition-all duration-300"
+                  />
+                  <img
+                    src={imageUrls[activeIdx]}
+                    alt={`${product.name} - view ${activeIdx + 1}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="relative max-w-full max-h-full object-contain p-4 select-none"
+                  />
+
+                  {imageUrls.length > 1 && (
+                    <>
+                      <div className="absolute top-3 right-3 z-10">
+                        <Badge variant="secondary" className="bg-background/80 backdrop-blur-md shadow-xs text-xs font-mono">
+                          {activeIdx + 1} / {imageUrls.length}
+                        </Badge>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        aria-label="Previous image"
+                        onClick={() => setActiveIdx((prev) => (prev > 0 ? prev - 1 : imageUrls.length - 1))}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-background/85 backdrop-blur-md shadow-md hover:bg-background opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        aria-label="Next image"
+                        onClick={() => setActiveIdx((prev) => (prev < imageUrls.length - 1 ? prev + 1 : 0))}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-background/85 backdrop-blur-md shadow-md hover:bg-background opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
+                  <Package className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
+                  <span className="text-xs">No image available</span>
+                </div>
+              )}
+            </div>
+
+            {imageUrls.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin" role="tablist" aria-label="Product image thumbnails">
+                {imageUrls.map((url, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    role="tab"
+                    aria-selected={idx === activeIdx}
+                    aria-label={`View photo ${idx + 1}`}
+                    onClick={() => setActiveIdx(idx)}
+                    className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all p-0.5 bg-muted/20 ${
+                      idx === activeIdx
+                        ? "border-primary ring-2 ring-primary/20 shadow-xs scale-102"
+                        : "border-border/60 hover:border-border opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    <img src={url} alt="" aria-hidden="true" className="w-full h-full object-contain rounded" />
+                  </button>
+                ))}
               </div>
             )}
           </div>
