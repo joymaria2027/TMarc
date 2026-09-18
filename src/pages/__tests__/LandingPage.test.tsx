@@ -1,11 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-
-// The public marketing page at "/" is the first thing logged-out visitors see.
-// Contract: one outcome headline, CTAs for both visitor types, three steps,
-// three objections, legal links, and decorative markup hidden from screen
-// readers.
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
@@ -28,6 +23,16 @@ const renderLanding = () =>
       <LandingPage />
     </MemoryRouter>
   );
+
+beforeEach(() => {
+  localStorage.removeItem('dg-theme-mode');
+  document.documentElement.classList.remove('dark');
+});
+
+afterEach(() => {
+  localStorage.clear();
+  document.documentElement.classList.remove('dark');
+});
 
 describe('LandingPage (public marketing page at "/")', () => {
   it('leads with the outcome headline', () => {
@@ -66,10 +71,10 @@ describe('LandingPage (public marketing page at "/")', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(3);
   });
 
-  it('closes with a second Start free CTA and carries legal links', () => {
+  it('closes with a second Start-here CTA and carries legal links', () => {
     renderLanding();
     const heading = screen.getByRole('heading', { name: /accounted for by tonight/i });
-    const cta = within(heading.closest('section')!).getByRole('link', { name: /start free/i });
+    const cta = within(heading.closest('section')!).getByRole('link', { name: /start here/i });
     expect(cta).toHaveAttribute('href', '/auth?tab=signup');
 
     const footer = screen.getByRole('contentinfo');
@@ -77,6 +82,105 @@ describe('LandingPage (public marketing page at "/")', () => {
       'href',
       '/privacy'
     );
+  });
+
+  it('labels each step with its audience, Icebug-style', () => {
+    const { container } = renderLanding();
+    const steps = container.querySelector('ol')!;
+    const text = within(steps).getAllByRole('listitem').map(i => i.textContent).join(' ');
+    expect(text).toMatch(/for riders/i);
+    expect(text).toMatch(/for managers/i);
+    expect(text).toMatch(/for finance/i);
+  });
+
+  it('sets the hero scene in the rain', () => {
+    renderLanding();
+    // The Icebug-style scene label is visible content (like "Evening rain"),
+    // not decoration: it names the element for everyone.
+    expect(screen.getByText(/evening rain/i)).toBeInTheDocument();
+  });
+
+  it('splits the nav: audience anchors and utility links', () => {
+    renderLanding();
+    const nav = screen.getByRole('navigation', { name: /audience/i });
+    expect(within(nav).getByRole('link', { name: /for riders/i })).toHaveAttribute('href', '#riders');
+    expect(within(nav).getByRole('link', { name: /for managers/i })).toHaveAttribute('href', '#managers');
+    expect(within(nav).getByRole('link', { name: /for finance/i })).toHaveAttribute('href', '#finance');
+
+    const primary = screen.getByRole('navigation', { name: /primary/i });
+    expect(within(primary).getByRole('link', { name: /order delivery/i })).toHaveAttribute('href', '/shop');
+    expect(within(primary).getByRole('link', { name: /start free/i })).toHaveAttribute('href', '/auth?tab=signup');
+  });
+
+  it('offers the outlined START HERE hero path', () => {
+    renderLanding();
+    // "Start here" appears in the hero and again in the closing section.
+    const startHere = screen.getAllByRole('link', { name: /start here/i });
+    expect(startHere.length).toBeGreaterThanOrEqual(2);
+    expect(startHere[0]).toHaveAttribute('href', '/auth?tab=signup');
+  });
+
+  it('flips the theme from the footer LIGHT / DARK / SYSTEM toggle', () => {
+    renderLanding();
+    fireEvent.click(screen.getByRole('button', { name: /^dark$/i }));
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /^light$/i }));
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  });
+
+  it('whispers a statement break between the loud sections', () => {
+    renderLanding();
+    const statement = screen.getByText(/every kilometre, every dalasi/i);
+    expect(statement.closest('section')).toBeTruthy();
+  });
+
+  it('runs the banner-to-rail rhythm for the audience steps', () => {
+    const { container } = renderLanding();
+    const banner = screen.getByRole('heading', { name: /three jobs\. one map\./i });
+    // Banner headline hugs the bottom-left of its full-bleed section.
+    expect(banner.closest('section')!.className).toMatch(/bg-sidebar/);
+    const rail = container.querySelector('ol')!;
+    expect(rail.className).toMatch(/overflow-x-auto/);
+    expect(within(rail).getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('carries mono proof badges in the footer', () => {
+    renderLanding();
+    const footer = screen.getByRole('contentinfo');
+    const badges = within(footer).getByText(/96% on time/i);
+    expect(badges.closest('div')!.className).toMatch(/font-mono/);
+  });
+
+  it('lets visitors self-segment through two door tiles', () => {
+    renderLanding();
+    expect(screen.getByText(/you run deliveries/i)).toBeInTheDocument();
+    expect(screen.getByText(/you need something moved/i)).toBeInTheDocument();
+    const doors = screen.getByText(/you run deliveries/i).closest('section')!;
+    expect(within(doors).getByRole('link', { name: /^start free$/i })).toHaveAttribute('href', '/auth?tab=signup');
+    expect(within(doors).getByRole('link', { name: /^order a delivery$/i })).toHaveAttribute('href', '/shop');
+    expect(within(doors).getByRole('link', { name: /wholesale pricing/i })).toHaveAttribute('href', '/wholesale');
+  });
+
+  it('states the promise as a triad', () => {
+    renderLanding();
+    const promise = screen.getByText(/fair fees\. live tracking\. money settled/i);
+    expect(promise.closest('section')).toBeTruthy();
+  });
+
+  it('carries a values band that points at settlement', () => {
+    renderLanding();
+    expect(screen.getByText(/riders first\. then the merchants\. then us\./i)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /see how settlement works/i });
+    expect(link).toHaveAttribute('href', '#finance');
+  });
+
+  it('ships a mega footer with product, company, and legal columns', () => {
+    renderLanding();
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).getByText('Product')).toBeInTheDocument();
+    expect(within(footer).getByText('Company')).toBeInTheDocument();
+    expect(within(footer).getByText('Legal')).toBeInTheDocument();
+    expect(within(footer).getByRole('link', { name: /privacy policy/i })).toHaveAttribute('href', '/privacy');
   });
 
   it('hides the decorative dispatch card from assistive tech', () => {

@@ -1,16 +1,24 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Bike, CheckCircle2, MapPin, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  usePrefersDark,
+  setThemeMode,
+  getThemeMode,
+  type ThemeMode,
+} from "@/hooks/usePrefersDark";
 
 /**
- * Public marketing page at "/".
- *
- * Copy follows the CRO framework: one outcome promise in the headline, a
- * who-it's-for sub-headline, proof instead of decoration, three objection
- * bullets, and a CTA that names what you get. Kept deliberately short;
- * every section has to earn its place.
+ * Public marketing page at "/", structured after the Icebug reference:
+ * full-viewport centered hero over a moody scene, split mono nav with the
+ * logo in the middle, mega footer with a LIGHT / DARK / SYSTEM toggle.
+ * Copy follows the CRO framework and stays deliberately short.
  */
 export default function LandingPage() {
+  // Mount the mode-aware hook so the footer toggle applies on this page.
+  usePrefersDark();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <a
@@ -20,20 +28,27 @@ export default function LandingPage() {
         Skip to content
       </a>
 
-      {/* Header */}
+      {/* Split nav: audience anchors left, logo center, utilities right */}
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
+        <div className="container mx-auto grid h-14 grid-cols-[auto_1fr_auto] items-center gap-3 px-4 md:grid-cols-[1fr_auto_1fr]">
+          <nav aria-label="Audience" className="hidden md:flex items-center gap-5 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <a href="#riders" className="hover:text-foreground">For riders</a>
+            <a href="#managers" className="hover:text-foreground">For managers</a>
+            <a href="#finance" className="hover:text-foreground">For finance</a>
+          </nav>
+
+          <Link to="/" className="flex items-center gap-2.5 md:justify-center" aria-label="DeliveryAce home">
+            <span className="h-8 w-8 rounded-md bg-primary flex items-center justify-center">
               <span className="font-display text-lg text-primary-foreground leading-none">D</span>
-            </div>
+            </span>
             <span className="font-display text-xl tracking-tight">DeliveryAce</span>
-          </div>
-          <nav aria-label="Primary" className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" asChild>
+          </Link>
+
+          <nav aria-label="Primary" className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
               <Link to="/shop">Order delivery</Link>
             </Button>
-            <Button variant="ghost" size="sm" asChild>
+            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
               <Link to="/wholesale">Wholesale</Link>
             </Button>
             <Button size="sm" asChild>
@@ -44,66 +59,97 @@ export default function LandingPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        {/* Hero: text holds the center; proof card sits in the reading flow on
-            small screens and floats right on large ones */}
+        {/* Full-viewport hero: centered giant headline over the rain scene */}
         <section className="relative overflow-hidden border-b bg-sidebar text-sidebar-foreground">
-          <div className="absolute -top-40 right-0 h-[28rem] w-[28rem] rounded-full bg-primary/15 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 -left-24 h-72 w-72 rounded-full bg-accent/10 blur-3xl pointer-events-none" />
+          <div className="absolute inset-0" aria-hidden="true">
+            <div className="absolute inset-0 opacity-[0.07]" style={{
+              backgroundImage:
+                'repeating-linear-gradient(105deg, hsl(var(--sidebar-foreground)) 0 1px, transparent 1px 9px)',
+            }} />
+            <div className="absolute -top-40 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
+            <div className="absolute bottom-0 -right-24 h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
+          </div>
 
-          <div className="container relative mx-auto px-4 py-20 md:py-28">
-            <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr]">
-              <div className="max-w-xl space-y-7">
-                <h1 className="rise font-display text-5xl md:text-6xl xl:text-7xl leading-[1.02] tracking-tight">
-                  Track every delivery. Settle every dalasi.
-                </h1>
-                <p className="rise rise-1 text-lg text-sidebar-foreground/80 max-w-md leading-relaxed">
-                  DeliveryAce runs dispatch, GPS tracking, and settlement for delivery
-                  teams across The Gambia.
-                </p>
-                <div className="rise rise-2 flex flex-wrap items-center gap-4">
-                  <Button asChild size="lg" className="min-h-[48px] px-6 text-base press">
-                    <Link to="/auth?tab=signup">
-                      Start free
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    size="lg"
-                    variant="outline"
-                    className="min-h-[48px] border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  >
-                    <Link to="/shop">Order a delivery</Link>
-                  </Button>
-                </div>
-                <p className="rise rise-3 text-sm text-sidebar-foreground/70">
-                  Free to join, set up in minutes.
-                </p>
-              </div>
+          <div className="relative container mx-auto flex min-h-[92vh] flex-col items-center justify-center px-4 py-16 text-center">
+            <p className="rise font-mono text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground/70">
+              Evening rain · Serrekunda
+            </p>
+            <h1 className="rise rise-1 mt-5 max-w-4xl font-display text-5xl md:text-7xl xl:text-8xl leading-[1.02] tracking-tight">
+              Track every delivery. Settle every dalasi.
+            </h1>
+            <p className="rise rise-2 mt-6 max-w-md text-base md:text-lg text-sidebar-foreground/80 leading-relaxed">
+              DeliveryAce runs dispatch, GPS tracking, and settlement for delivery
+              teams across The Gambia.
+            </p>
 
-              <div className="rise rise-2 relative lg:justify-self-end">
-                <DispatchCard />
-              </div>
+            <div className="rise rise-3 mt-9 flex flex-wrap items-center justify-center gap-4">
+              {/* Icebug-style outlined mono CTA */}
+              <Link
+                to="/auth?tab=signup"
+                className="press inline-flex min-h-[44px] items-center gap-2 border border-sidebar-foreground/60 px-6 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10"
+              >
+                Start here
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+              <Link
+                to="/shop"
+                className="press inline-flex min-h-[44px] items-center border-b border-sidebar-foreground/40 px-1 pb-0.5 font-mono text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground/80 transition-colors hover:text-sidebar-foreground"
+              >
+                Order a delivery
+              </Link>
+            </div>
+            <p className="rise rise-4 mt-5 text-sm text-sidebar-foreground/70">
+              Free to join, set up in minutes.
+            </p>
+
+            {/* Product close-up: the dispatch card, centered under the pitch */}
+            <div className="rise rise-4 mt-12 w-full max-w-md">
+              <DispatchCard />
             </div>
           </div>
         </section>
 
-        {/* How it works: three big verbs, one per audience. No card grid. */}
-        <section className="container mx-auto px-4 py-20 md:py-24">
-          <ol className="grid gap-12 md:grid-cols-3 md:gap-8">
-            <Step n="1" icon={<Bike className="h-5 w-5" />} title="Riders accept">
-              A job lands, one tap accepts it. The route, the customer, the tariff,
-              all in one screen built for a gloved thumb.
-            </Step>
-            <Step n="2" icon={<MapPin className="h-5 w-5" />} title="Managers watch">
-              Every rider on one live map. Spot a stalled delivery before the
-              customer calls about it.
-            </Step>
-            <Step n="3" icon={<Receipt className="h-5 w-5" />} title="Finance settles">
-              Distances, tariffs, and payouts reconcile themselves. Close the books
-              while the day is still fresh.
-            </Step>
-          </ol>
+        {/* Statement break: the quiet line between loud sections, Icebug-style */}
+        <section className="border-b bg-background">
+          <div className="container mx-auto px-4 py-16 text-center">
+            <p className="rise mx-auto max-w-xl font-display text-2xl md:text-3xl tracking-tight text-foreground/90">
+              Every kilometre, every dalasi, accounted for.
+            </p>
+          </div>
+        </section>
+
+        {/* Webshop rhythm: full-bleed banner, then the audience rail */}
+        <section className="relative overflow-hidden border-b bg-sidebar text-sidebar-foreground">
+          <div className="absolute inset-0 opacity-[0.06]" aria-hidden="true" style={{
+            backgroundImage:
+              'repeating-linear-gradient(105deg, hsl(var(--sidebar-foreground)) 0 1px, transparent 1px 11px)',
+          }} />
+          <div className="absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-primary/15 blur-3xl" aria-hidden="true" />
+          <div className="relative container mx-auto px-4 pb-10 pt-20 md:pt-28">
+            <h2 className="rise max-w-lg font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+              Three jobs. One map.
+            </h2>
+          </div>
+        </section>
+
+        {/* The rail: one card per audience, scrollable on small screens */}
+        <section className="border-b bg-background">
+          <div className="container mx-auto px-4 py-12">
+            <ol className="flex snap-x gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:overflow-visible">
+              <Step id="riders" n="1" audience="For riders" icon={<Bike className="h-5 w-5" />} title="Riders accept">
+                A job lands, one tap accepts it. The route, the customer, the tariff,
+                all in one screen built for a gloved thumb.
+              </Step>
+              <Step id="managers" n="2" audience="For managers" icon={<MapPin className="h-5 w-5" />} title="Managers watch">
+                Every rider on one live map. Spot a stalled delivery before the
+                customer calls about it.
+              </Step>
+              <Step id="finance" n="3" audience="For finance" icon={<Receipt className="h-5 w-5" />} title="Finance settles">
+                Distances, tariffs, and payouts reconcile themselves. Close the books
+                while the day is still fresh.
+              </Step>
+            </ol>
+          </div>
         </section>
 
         {/* Objections: exactly three, ordered by how often they come up */}
@@ -129,6 +175,67 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Doors: Icebug's finder pattern — visitors segment themselves */}
+        <section className="border-b bg-background">
+          <div className="container mx-auto grid gap-10 px-4 py-20 md:grid-cols-2 md:gap-8 md:py-24">
+            <DoorTile
+              kicker="You run deliveries"
+              statement="Take your operation from WhatsApp threads to one live map."
+              cta="Start free"
+              href="/auth?tab=signup"
+              primary
+            />
+            <DoorTile
+              kicker="You need something moved"
+              statement="Order from local stores and follow the rider to your door."
+              cta="Order a delivery"
+              href="/shop"
+            />
+          </div>
+        </section>
+
+        {/* Promise: kicker, triad statement, small aside — Icebug's pattern */}
+        <section className="border-b bg-background">
+          <div className="container mx-auto grid gap-10 px-4 py-20 md:grid-cols-[1.4fr_1fr] md:py-24">
+            <div className="space-y-6">
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Our promise to you
+              </p>
+              <h2 className="rise max-w-xl font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+                Fair fees. Live tracking. Money settled the day it's earned.
+              </h2>
+            </div>
+            <p className="self-end font-mono text-[11px] leading-relaxed tracking-wide text-muted-foreground md:justify-self-end md:max-w-xs">
+              The money arrives when we said it would. That is the whole promise,
+              and everything else on this page exists to keep it.
+            </p>
+          </div>
+        </section>
+
+        {/* Values band: full-bleed, kicker + centered statement + outlined link */}
+        <section className="relative overflow-hidden border-b bg-sidebar text-sidebar-foreground">
+          <div className="absolute inset-0 opacity-[0.06]" aria-hidden="true" style={{
+            backgroundImage:
+              'repeating-linear-gradient(105deg, hsl(var(--sidebar-foreground)) 0 1px, transparent 1px 11px)',
+          }} />
+          <div className="relative container mx-auto px-4 py-24 md:py-32">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
+              Who comes first
+            </p>
+            <div className="mt-10 flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
+              <h2 className="rise max-w-xl font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+                Riders first. Then the merchants. Then us.
+              </h2>
+              <a
+                href="#finance"
+                className="press inline-flex min-h-[44px] items-center border border-sidebar-foreground/60 px-6 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10"
+              >
+                See how settlement works
+              </a>
+            </div>
+          </div>
+        </section>
+
         {/* Closing CTA: heavy type, image-toned background, centered */}
         <section className="relative overflow-hidden bg-sidebar text-sidebar-foreground">
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-primary/15 to-transparent pointer-events-none" />
@@ -137,41 +244,154 @@ export default function LandingPage() {
               Today's deliveries, accounted for by tonight.
             </h2>
             <div className="rise rise-1 flex justify-center">
-              <Button asChild size="lg" className="min-h-[52px] px-8 text-base press">
-                <Link to="/auth?tab=signup">
-                  Start free
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </Link>
-              </Button>
+              <Link
+                to="/auth?tab=signup"
+                className="press inline-flex min-h-[48px] items-center gap-2 border border-sidebar-foreground/60 px-8 py-2.5 font-mono text-xs uppercase tracking-[0.2em] text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10"
+              >
+                Start here
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </div>
           </div>
         </section>
       </main>
 
-      {/* Footer: legal links are a trust signal, not decoration */}
-      <footer className="border-t bg-background">
-        <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} DeliveryAce</p>
-          <nav aria-label="Legal" className="flex items-center gap-4">
-            <Link to="/privacy" className="underline-offset-2 hover:underline">Privacy policy</Link>
-            <Link to="/shop" className="underline-offset-2 hover:underline">Order delivery</Link>
-            <a href="mailto:support@deliveryace.example" className="underline-offset-2 hover:underline">Contact</a>
-          </nav>
+      {/* Mega footer: link columns, blurb, theme toggle, © line */}
+      <footer className="border-t bg-card text-card-foreground">
+        <div className="container mx-auto grid gap-10 px-4 py-14 md:grid-cols-[1fr_1fr_1fr_1.4fr]">
+          <FooterCol title="Product">
+            <Link to="/shop" className="hover:underline underline-offset-4">Order delivery</Link>
+            <Link to="/wholesale" className="hover:underline underline-offset-4">Wholesale</Link>
+            <Link to="/auth?tab=signup" className="hover:underline underline-offset-4">Start free</Link>
+          </FooterCol>
+          <FooterCol title="Company">
+            <a href="#riders" className="hover:underline underline-offset-4">For riders</a>
+            <a href="#managers" className="hover:underline underline-offset-4">For managers</a>
+            <a href="#finance" className="hover:underline underline-offset-4">For finance</a>
+          </FooterCol>
+          <FooterCol title="Legal">
+            <Link to="/privacy" className="hover:underline underline-offset-4">Privacy policy</Link>
+            <a href="mailto:support@deliveryace.example" className="hover:underline underline-offset-4">Contact</a>
+          </FooterCol>
+          {/* Theme toggle stays legible in both footer palettes */}
+          <div className="space-y-5">
+            <p className="font-display text-2xl leading-snug tracking-tight">
+              Run one delivery through it today.
+            </p>
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+              Most teams move their whole operation over within a week.
+            </p>
+            <Button asChild size="sm" className="min-h-[44px] press">
+              <Link to="/auth?tab=signup">Start free</Link>
+            </Button>
+            <ThemeToggle />
+          </div>
+        </div>
+        <div className="border-t">
+          <div className="container mx-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            <p>96% on time · WCAG AA · Gambia-built</p>
+            <p>© DeliveryAce {new Date().getFullYear()}</p>
+          </div>
         </div>
       </footer>
     </div>
   );
 }
 
-/** One numbered step: icon, title, one plain-language sentence. */
-function Step({ n, icon, title, children }: {
+/** LIGHT / DARK / SYSTEM footer toggle, persisted by the theme store. */
+function ThemeToggle() {
+  const [mode, setMode] = useState<ThemeMode>(getThemeMode());
+  const choose = (next: ThemeMode) => {
+    setThemeMode(next);
+    setMode(next);
+  };
+  return (
+    <div className="font-mono text-[11px] uppercase tracking-[0.18em]" role="group" aria-label="Colour theme">
+      {(["light", "dark", "system"] as const).map((m, i) => (
+        <span key={m}>
+          {i > 0 && <span className="text-muted-foreground/50"> / </span>}
+          <button
+            type="button"
+            onClick={() => choose(m)}
+            aria-pressed={mode === m}
+            className={
+              mode === m
+                ? "underline underline-offset-4 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }
+          >
+            {m}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** One self-segmentation door, Icebug finder style. */
+function DoorTile({ kicker, statement, cta, href, primary = false }: {
+  kicker: string;
+  statement: string;
+  cta: string;
+  href: string;
+  primary?: boolean;
+}) {
+  return (
+    <div className="rise flex flex-col items-start gap-5">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{kicker}</p>
+      <p className="max-w-md font-display text-3xl md:text-4xl leading-[1.08] tracking-tight">{statement}</p>
+      {primary ? (
+        <Link
+          to={href}
+          className="press inline-flex min-h-[44px] items-center gap-2 bg-primary px-6 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          {cta}
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Link>
+      ) : (
+        <div className="space-y-2">
+          <Link
+            to={href}
+            className="press inline-flex min-h-[44px] items-center border border-foreground/40 px-6 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-foreground transition-colors hover:bg-foreground/5"
+          >
+            {cta}
+          </Link>
+          <p className="text-xs text-muted-foreground">
+            Buying in bulk?{' '}
+            <Link to="/wholesale" className="underline underline-offset-4 hover:text-foreground">
+              Wholesale pricing
+            </Link>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Footer link column with a mono uppercase heading. */
+function FooterCol({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{title}</p>
+      <nav aria-label={title} className="flex flex-col items-start gap-2 text-sm">
+        {children}
+      </nav>
+    </div>
+  );
+}
+
+/** One rail card: audience label, icon, title, one plain sentence. */
+function Step({ id, n, audience, icon, title, children }: {
+  id: string;
   n: string;
+  audience: string;
   icon: React.ReactNode;
   title: string;
   children: React.ReactNode;
 }) {
   return (
-    <li className="rise space-y-4">
+    <li id={id} className="rise w-72 shrink-0 snap-start rounded-lg border bg-card p-5 space-y-4 scroll-mt-24 md:w-auto">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">{audience}</p>
       <div className="flex items-center gap-3">
         <span aria-hidden="true" className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center text-primary">
           {icon}
@@ -179,7 +399,7 @@ function Step({ n, icon, title, children }: {
         <span className="font-mono text-xs text-muted-foreground" aria-hidden="true">{n}</span>
         <h3 className="font-display text-2xl tracking-tight">{title}</h3>
       </div>
-      <p className="text-muted-foreground leading-relaxed max-w-xs">{children}</p>
+      <p className="text-muted-foreground leading-relaxed">{children}</p>
     </li>
   );
 }
@@ -203,7 +423,7 @@ function Objection({ icon, children }: { icon: React.ReactNode; children: React.
  */
 function DispatchCard() {
   return (
-    <div aria-hidden="true" className="w-full max-w-md rounded-xl border border-sidebar-border bg-sidebar-accent/60 backdrop-blur p-4 space-y-3 shadow-lg">
+    <div aria-hidden="true" className="w-full rounded-xl border border-sidebar-border bg-sidebar-accent/60 backdrop-blur p-4 space-y-3 shadow-lg">
       <div className="flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
           Live dispatch
@@ -286,9 +506,9 @@ function QueueRow({ name, area, status, tone }: {
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-card/60 px-2 py-1.5 text-center">
-      <p className="text-[10px] uppercase tracking-wide text-sidebar-foreground/60">{label}</p>
-      <p className="font-display text-sm text-sidebar-foreground tabular-nums">{value}</p>
+    <div className="rounded-md bg-card/85 px-2 py-1.5 text-center">
+      <p className="text-[10px] uppercase tracking-wide text-foreground/60">{label}</p>
+      <p className="font-display text-sm text-foreground tabular-nums">{value}</p>
     </div>
   );
 }
