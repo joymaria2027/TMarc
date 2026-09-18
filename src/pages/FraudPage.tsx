@@ -175,7 +175,9 @@ export default function FraudPage() {
             const ackIds = new Set(ack[c.key] || []);
             const openSample = (c.sample || []).filter(r => !ackIds.has(entityIdOf(c.key, r)));
             const openCount = Math.max(0, c.count - ackIds.size);
-            const M = sevMeta[c.severity];
+            // RPC/DB severities are not constrained to the three known keys —
+            // fall back instead of white-screening on M.Icon of undefined.
+            const M = sevMeta[c.severity] ?? sevMeta.info;
             if (openCount === 0) {
               return (
                 <div key={c.key} className="flex items-center justify-between py-2 border-b last:border-0 opacity-60">
