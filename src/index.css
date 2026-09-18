@@ -178,6 +178,12 @@
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
 }
+@media (prefers-reduced-motion: reduce) {
+  .shimmer,
+  .animate-pulse {
+    animation: none;
+  }
+}
 
 /* Leaflet map fixes */
 .leaflet-container {

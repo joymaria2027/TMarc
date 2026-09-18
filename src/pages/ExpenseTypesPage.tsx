@@ -257,7 +257,13 @@ export default function ExpenseTypesPage() {
     return v?.fuel_type || c.new_fuel_type || c.old_fuel_type || '—';
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="space-y-4" role="status" aria-label="Loading expense types" aria-busy="true">
+      <div className="shimmer h-16 rounded-md" aria-hidden="true" />
+      <div className="shimmer h-32 rounded-md" aria-hidden="true" />
+      <span className="sr-only">Loading expense types…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -273,7 +279,7 @@ export default function ExpenseTypesPage() {
         <TabsList>
           <TabsTrigger value="types">Types</TabsTrigger>
           <TabsTrigger value="approvals" className="gap-1">
-            Fuel approvals {pendingChanges.length > 0 && <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">{pendingChanges.length}</Badge>}
+            Fuel approvals {pendingChanges.length > 0 && <Badge variant="destructive" className="h-5 px-1.5 text-xs tabular-nums">{pendingChanges.length}</Badge>}
           </TabsTrigger>
         </TabsList>
 
@@ -320,7 +326,7 @@ export default function ExpenseTypesPage() {
                         <div className="flex items-center gap-1 font-medium">
                           {v.is_default && <Star className="h-3 w-3 fill-primary text-primary" />}
                           {v.fuel_type}
-                          {!v.is_active && <Badge variant="secondary" className="text-[10px] px-1">off</Badge>}
+                          {!v.is_active && <Badge variant="secondary" className="text-[11px] px-1">off</Badge>}
                         </div>
                         <div><span className="text-xs text-muted-foreground">D</span>{v.price_per_litre ?? '—'}<span className="text-xs text-muted-foreground">/L</span></div>
                         <div><span className="text-xs text-muted-foreground">D</span>{v.cost_per_mile}<span className="text-xs text-muted-foreground">/mi</span></div>
@@ -355,7 +361,7 @@ export default function ExpenseTypesPage() {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     {c.status === 'pending' && <Badge className="gap-1 bg-warning/10 text-warning"><Clock className="h-3 w-3" />Pending</Badge>}
-                    {c.status === 'approved' && <Badge className="gap-1 bg-green-500/10 text-green-600"><CheckCircle2 className="h-3 w-3" />Approved</Badge>}
+                    {c.status === 'approved' && <Badge className="gap-1 bg-success/10 text-success"><CheckCircle2 className="h-3 w-3" />Approved</Badge>}
                     {c.status === 'rejected' && <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>}
                     {variantLabel(c) && <Badge variant="outline" className="gap-1"><Fuel className="h-3 w-3" />{variantLabel(c)}</Badge>}
                     <span className="text-xs text-muted-foreground">{format(new Date(c.created_at), 'MMM d, yyyy HH:mm')}</span>
@@ -364,7 +370,7 @@ export default function ExpenseTypesPage() {
                     <div className="flex gap-2">
                       {c.status === 'pending' && (
                         <>
-                          <Button size="sm" variant="outline" className="text-green-600" onClick={() => approve(c)}><CheckCircle2 className="h-3 w-3 mr-1" />Approve</Button>
+                          <Button size="sm" variant="outline" className="text-success" onClick={() => approve(c)}><CheckCircle2 className="h-3 w-3 mr-1" />Approve</Button>
                           <Button size="sm" variant="outline" className="text-destructive" onClick={() => reject(c)}><XCircle className="h-3 w-3 mr-1" />Reject</Button>
                         </>
                       )}
@@ -390,8 +396,8 @@ export default function ExpenseTypesPage() {
           <DialogHeader><DialogTitle>{creating ? 'New expense type' : `Edit ${editing?.name}`}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={form.name} onChange={e => {
+              <Label htmlFor="exp-type-name">Name</Label>
+              <Input id="exp-type-name" value={form.name} onChange={e => {
                 const name = e.target.value;
                 setForm(p => {
                   const lower = name.toLowerCase();
@@ -407,9 +413,9 @@ export default function ExpenseTypesPage() {
               }} />
             </div>
             <div className="space-y-2">
-              <Label>Applies to</Label>
+              <Label htmlFor="exp-type-applies">Applies to</Label>
               <Select value={form.applies_to} onValueChange={v => setForm(p => ({ ...p, applies_to: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="exp-type-applies"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="rider">Rider</SelectItem>
                   <SelectItem value="merchant_manager">Merchant manager</SelectItem>
@@ -444,8 +450,8 @@ export default function ExpenseTypesPage() {
                   <Label htmlFor="ismaint">Maintenance expense (defaults to spread over 100 deliveries)</Label>
                 </div>
                 <div className="space-y-2">
-                  <Label>Amortize over (deliveries)</Label>
-                  <Input type="number" min="1" value={form.amortize_over} onChange={e => setForm(p => ({ ...p, amortize_over: e.target.value }))} placeholder={String(recommended)} />
+                  <Label htmlFor="exp-type-amortize">Amortize over (deliveries)</Label>
+                  <Input id="exp-type-amortize" type="number" min="1" value={form.amortize_over} onChange={e => setForm(p => ({ ...p, amortize_over: e.target.value }))} placeholder={String(recommended)} />
                   <p className="text-xs text-muted-foreground">
                     Recommended: <strong>{recommended}</strong> deliveries
                     {recommended === 100 && ' (maintenance)'}
@@ -473,17 +479,17 @@ export default function ExpenseTypesPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Fuel type</Label>
-              <Input value={vForm.fuel_type} onChange={e => setVForm(p => ({ ...p, fuel_type: e.target.value }))} placeholder="Petrol, Diesel, Electric…" />
+              <Label htmlFor="fuel-type">Fuel type</Label>
+              <Input id="fuel-type" value={vForm.fuel_type} onChange={e => setVForm(p => ({ ...p, fuel_type: e.target.value }))} placeholder="Petrol, Diesel, Electric…" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Price / litre (D)</Label>
-                <Input type="number" step="0.01" value={vForm.price_per_litre} onChange={e => setVForm(p => ({ ...p, price_per_litre: e.target.value }))} />
+                <Label htmlFor="fuel-price">Price / litre (D)</Label>
+                <Input id="fuel-price" type="number" step="0.01" value={vForm.price_per_litre} onChange={e => setVForm(p => ({ ...p, price_per_litre: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Cost / mile (D)</Label>
-                <Input type="number" step="0.01" value={vForm.cost_per_mile} onChange={e => setVForm(p => ({ ...p, cost_per_mile: e.target.value }))} />
+                <Label htmlFor="fuel-cost">Cost / mile (D)</Label>
+                <Input id="fuel-cost" type="number" step="0.01" value={vForm.cost_per_mile} onChange={e => setVForm(p => ({ ...p, cost_per_mile: e.target.value }))} />
               </div>
             </div>
             {isAdmin && (

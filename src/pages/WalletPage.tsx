@@ -1,21 +1,26 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Wallet, ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Clock, XCircle, Loader2, History, TrendingUp, TrendingDown, KeyRound, ShieldCheck, ChevronDown, FolderOpen, Bike, Store, ShieldCheck as ShieldIcon, BarChart3, Search } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Wallet, ArrowDownToLine, History, KeyRound, ShieldCheck, Loader2, Bike, Store, ShieldCheck as ShieldIcon } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
 import { toast } from 'sonner';
+import WalletFolderCard, { WalletBalanceCard } from '@/components/wallet/WalletFolderCard';
+import WithdrawalRequestsTable from '@/components/wallet/WithdrawalRequestsTable';
+import TransactionHistoryTable from '@/components/wallet/TransactionHistoryTable';
+import {
+  rpcHasWithdrawalPin,
+  rpcSetWithdrawalPin,
+  rpcVerifyWithdrawalPin,
+} from '@/lib/rpcTypes';
+import type { HasWithdrawalPinResult } from '@/lib/rpcTypes';
 
 interface WalletRow {
   id: string;
@@ -28,6 +33,9 @@ interface WalletRow {
 }
 
 interface WithdrawalRow {
+  // TODO(data-layer): unify with WithdrawalRequestsTable's slimmer row —
+  // the child's onApprove/onFinalize callbacks currently widen-narrow against
+  // this fuller shape (app-tsc conflict at the table call site).
   id: string;
   wallet_id: string;
   requested_by: string;
@@ -98,7 +106,7 @@ export default function WalletPage() {
   const [processing, setProcessing] = useState(false);
 
   // PIN state
-  const [hasPin, setHasPin] = useState<boolean | null>(null);
+  const [hasPin, setHasPin] = useState<HasWithdrawalPinResult | null>(null);
   const [pinSetupOpen, setPinSetupOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -122,7 +130,7 @@ export default function WalletPage() {
     setTransactions((txRes.data || []) as TransactionRow[]);
 
     // Check if user has a withdrawal PIN
-    const { data: pinData } = await supabase.rpc('has_withdrawal_pin');
+    const { data: pinData } = await rpcHasWithdrawalPin();
     setHasPin(pinData ?? false);
 
     // Resolve party names
@@ -155,12 +163,17 @@ export default function WalletPage() {
 
   useEffect(() => {
     load();
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => load(), 600);
+    };
     const ch = supabase.channel('wallet-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(ch); };
   }, []);
 
   const getPartyLabel = (w: WalletRow) => {
@@ -198,7 +211,7 @@ export default function WalletPage() {
       return;
     }
     setSettingPin(true);
-    const { error } = await supabase.rpc('set_withdrawal_pin', { _pin: newPin });
+    const { error } = await rpcSetWithdrawalPin(newPin);
     setSettingPin(false);
     if (error) { toast.error(error.message); return; }
     toast.success('Withdrawal PIN set successfully');
@@ -236,7 +249,7 @@ export default function WalletPage() {
   const handlePinVerifyAndSubmit = async () => {
     if (verifyPin.length < 4) { toast.error('Enter your PIN'); return; }
     setVerifying(true);
-    const { data: valid, error: verifyError } = await supabase.rpc('verify_withdrawal_pin', { _pin: verifyPin });
+    const { data: valid, error: verifyError } = await rpcVerifyWithdrawalPin(verifyPin);
     if (verifyError) { setVerifying(false); toast.error(verifyError.message); return; }
     if (!valid) { setVerifying(false); toast.error('Incorrect PIN'); setVerifyPin(''); return; }
 
@@ -299,30 +312,16 @@ export default function WalletPage() {
     load();
   };
 
-  const statusBadge = (s: string) => {
-    const map: Record<string, string> = {
-      pending: 'secondary',
-      manager_approved: 'outline',
-      processing: 'outline',
-      completed: 'default',
-      rejected: 'destructive',
-    };
-    const labels: Record<string, string> = {
-      pending: 'Pending Manager',
-      manager_approved: 'Awaiting Accountant',
-      completed: 'Completed',
-      rejected: 'Rejected',
-    };
-    return <Badge variant={map[s] as any || 'secondary'} className="capitalize">{labels[s] || s}</Badge>;
-  };
+  // Withdrawal status rendering lives in WithdrawalRequestsTable (token-only badges + icons).
 
-  const statusIcon = (s: string) => {
-    if (s === 'completed') return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-    if (s === 'rejected') return <XCircle className="h-4 w-4 text-destructive" />;
-    return <Clock className="h-4 w-4 text-muted-foreground" />;
-  };
-
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading) return (
+    <div className="space-y-4" role="status" aria-label="Loading wallets" aria-busy="true">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="shimmer h-28 rounded-md" aria-hidden="true" />
+      ))}
+      <span className="sr-only">Loading wallets…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -348,7 +347,6 @@ export default function WalletPage() {
         <TabsContent value="balances" className="space-y-4 mt-0">
       {/* Wallet Cards – grouped into folders by party type */}
       {(() => {
-        // Aggregate wallets per logical entity (rider/merchant collapse multi-merchant rows into one)
         const groups = new Map<string, WalletRow[]>();
         myWallets.forEach(w => {
           const key = (w.party_type === 'rider' || w.party_type === 'merchant')
@@ -359,80 +357,18 @@ export default function WalletPage() {
           groups.set(key, arr);
         });
 
-        const renderCard = (key: string, ws: WalletRow[]) => {
-          const totalBalance = ws.reduce((s, w) => s + Number(w.balance), 0);
-          const totalIncome = ws.reduce((s, w) => s + transactions.filter(t => t.wallet_id === w.id && t.type === 'credit').reduce((a, t) => a + Number(t.amount), 0), 0);
-          const totalWithdrawn = ws.reduce((s, w) => s + transactions.filter(t => t.wallet_id === w.id && t.type === 'debit').reduce((a, t) => a + Number(t.amount), 0), 0);
-          const head = ws[0];
-          const headerLabel = head.party_type === 'rider' && head.party_id
-            ? `Rider: ${partyNames[head.party_id] || 'Rider'}`
-            : getPartyLabel(head);
-          const showBreakdown = ws.length > 1;
-          const canOwn = (w: WalletRow) => w.user_id === user?.id || isAdmin;
+        const canOwn = (w: WalletRow) => w.user_id === user?.id || isAdmin;
 
-          return (
-            <Card key={key} className="relative">
-              <CardHeader className="pb-2">
-                <CardDescription className="capitalize">{head.party_type}</CardDescription>
-                <CardTitle className="text-lg">{headerLabel}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="font-display text-4xl tracking-tight tabular-nums text-primary">D {totalBalance.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {showBreakdown ? `Across ${ws.length} merchants` : `Updated ${new Date(head.updated_at).toLocaleDateString()}`}
-                </p>
-
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-muted rounded p-1.5">
-                    <p className="text-muted-foreground">Total Income</p>
-                    <p className="font-semibold text-emerald-600">D {totalIncome.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-muted rounded p-1.5">
-                    <p className="text-muted-foreground">Withdrawn</p>
-                    <p className="font-semibold text-destructive">D {totalWithdrawn.toFixed(2)}</p>
-                  </div>
-                </div>
-
-                {showBreakdown && ws.some(w => w.merchant_id && partyNames[w.merchant_id]) ? (
-                  <div className="mt-3 space-y-1.5 border-t pt-2">
-                    <p className="text-xs font-semibold text-muted-foreground">Per merchant</p>
-                    {ws.filter(w => w.merchant_id && partyNames[w.merchant_id]).map(w => (
-                      <div key={w.id} className="flex items-center justify-between text-xs gap-2">
-                        <span className="truncate">{partyNames[w.merchant_id!]}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-medium">D {Number(w.balance).toFixed(2)}</span>
-                          {canOwn(w) && w.balance > 0 && (
-                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs gap-1" onClick={() => initiateWithdraw(w)}>
-                              <ArrowUpFromLine className="h-3 w-3" /> Withdraw
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  canOwn(head) && head.balance > 0 && (
-                    <Button size="sm" className="mt-3 gap-1" onClick={() => initiateWithdraw(head)}>
-                      <ArrowUpFromLine className="h-3.5 w-3.5" /> Request Withdrawal
-                    </Button>
-                  )
-                )}
-              </CardContent>
-            </Card>
-          );
-        };
-
-        // Categorize each group into a folder bucket
         const buckets: { id: string; label: string; icon: JSX.Element; entries: [string, WalletRow[]][] }[] = [
-          { id: 'riders', label: 'Riders', icon: <Bike className="h-4 w-4" />, entries: [] },
-          { id: 'merchants', label: 'Merchants', icon: <Store className="h-4 w-4" />, entries: [] },
-          { id: 'admin', label: 'Admin / Platform', icon: <ShieldIcon className="h-4 w-4" />, entries: [] },
+          { id: 'riders', label: 'Riders', icon: <Bike className="h-4 w-4" aria-hidden="true" />, entries: [] },
+          { id: 'merchants', label: 'Merchants', icon: <Store className="h-4 w-4" aria-hidden="true" />, entries: [] },
+          { id: 'admin', label: 'Admin / Platform', icon: <ShieldIcon className="h-4 w-4" aria-hidden="true" />, entries: [] },
         ];
         Array.from(groups.entries()).forEach(([k, ws]) => {
           const t = ws[0].party_type;
           if (t === 'rider') buckets[0].entries.push([k, ws]);
           else if (t === 'merchant') buckets[1].entries.push([k, ws]);
-          else buckets[2].entries.push([k, ws]); // platform, ucs_rides
+          else buckets[2].entries.push([k, ws]);
         });
 
         const nonEmpty = buckets.filter(b => b.entries.length > 0);
@@ -445,432 +381,76 @@ export default function WalletPage() {
         if (!useFolders) {
           return (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from(groups.entries()).map(([k, ws]) => renderCard(k, ws))}
+              {Array.from(groups.entries()).map(([k, ws]) => (
+                <WalletBalanceCard
+                  key={k}
+                  walletKey={k}
+                  wallets={ws}
+                  transactions={transactions}
+                  partyNames={partyNames}
+                  getPartyLabel={getPartyLabel}
+                  canOwn={canOwn}
+                  onWithdraw={initiateWithdraw}
+                />
+              ))}
             </div>
           );
         }
 
-        const matchesEntry = (ws: WalletRow[], q: string) => {
-          if (!q) return true;
-          const needle = q.toLowerCase();
-          const head = ws[0];
-          const baseLabel = head.party_type === 'rider' && head.party_id
-            ? (partyNames[head.party_id] || 'Rider')
-            : getPartyLabel(head);
-          if (baseLabel.toLowerCase().includes(needle)) return true;
-          // Match nested merchant names on rider per-merchant rows
-          return ws.some(w => w.merchant_id && (partyNames[w.merchant_id] || '').toLowerCase().includes(needle));
-        };
-
         return (
           <div className="space-y-4">
-            {nonEmpty.map(b => {
-              const totalBal = b.entries.reduce((s, [, ws]) => s + ws.reduce((a, w) => a + Number(w.balance), 0), 0);
-              const totalIncome = b.entries.reduce((s, [, ws]) => s + ws.reduce((a, w) => a + transactions.filter(t => t.wallet_id === w.id && t.type === 'credit').reduce((x, t) => x + Number(t.amount), 0), 0), 0);
-              const totalWithdrawn = b.entries.reduce((s, [, ws]) => s + ws.reduce((a, w) => a + transactions.filter(t => t.wallet_id === w.id && t.type === 'debit').reduce((x, t) => x + Number(t.amount), 0), 0), 0);
-              const q = folderSearch[b.id] || '';
-              const filtered = b.entries.filter(([, ws]) => matchesEntry(ws, q));
-              return (
-                <Collapsible key={b.id} defaultOpen>
-                  <Card>
-                    <CollapsibleTrigger className="w-full group">
-                      <CardHeader className="pb-3 flex-col sm:flex-row sm:items-center sm:justify-between gap-3 space-y-0">
-                        <div className="flex items-center gap-2">
-                          <FolderOpen className="h-4 w-4 text-primary" />
-                          {b.icon}
-                          <CardTitle className="text-base">{b.label}</CardTitle>
-                          <Badge variant="secondary" className="ml-1">{b.entries.length}</Badge>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Balance</p>
-                            <p className="font-display text-base tabular-nums text-primary leading-tight">D {totalBal.toFixed(2)}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Income</p>
-                            <p className="font-display text-base tabular-nums text-emerald-600 leading-tight">D {totalIncome.toFixed(2)}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Withdrawn</p>
-                            <p className="font-display text-base tabular-nums text-destructive leading-tight">D {totalWithdrawn.toFixed(2)}</p>
-                          </div>
-                          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
-                        </div>
-                      </CardHeader>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <CardContent className="pt-0 space-y-3">
-                        <Input
-                          placeholder={`Search ${b.label.toLowerCase()}…`}
-                          value={q}
-                          onChange={(e) => setFolderSearch(prev => ({ ...prev, [b.id]: e.target.value }))}
-                          className="max-w-xs h-8 text-sm"
-                        />
-                        {filtered.length === 0 ? (
-                          <p className="text-sm text-muted-foreground py-4">No wallets match "{q}".</p>
-                        ) : (
-                          <>
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                              {filtered.map(([k, ws]) => renderCard(k, ws))}
-                            </div>
-
-                            {/* Per-wallet transaction breakdown */}
-                            {(() => {
-                              type Row = { date: string; walletId: string; walletLabel: string; income: number; withdrawals: number };
-                              const rowsMap = new Map<string, Row>();
-                              filtered.forEach(([, ws]) => {
-                                ws.forEach(w => {
-                                  const label = w.party_type === 'rider' && w.party_id
-                                    ? `${partyNames[w.party_id] || 'Rider'}${w.merchant_id ? ' – ' + (partyNames[w.merchant_id] || 'Merchant') : ''}`
-                                    : getPartyLabel(w);
-                                  transactions.filter(t => t.wallet_id === w.id).forEach(t => {
-                                    const date = new Date(t.created_at).toISOString().slice(0, 10);
-                                    const key = `${date}__${w.id}`;
-                                    const existing = rowsMap.get(key) || { date, walletId: w.id, walletLabel: label, income: 0, withdrawals: 0 };
-                                    if (t.type === 'credit') existing.income += Number(t.amount);
-                                    else if (t.type === 'debit') existing.withdrawals += Number(t.amount);
-                                    rowsMap.set(key, existing);
-                                  });
-                                });
-                              });
-                              const rows = Array.from(rowsMap.values()).sort((a, b) => b.date.localeCompare(a.date) || a.walletLabel.localeCompare(b.walletLabel));
-                              const totalIn = rows.reduce((s, r) => s + r.income, 0);
-                              const totalOut = rows.reduce((s, r) => s + r.withdrawals, 0);
-                              return (
-                                <Collapsible className="mt-4">
-                                  <CollapsibleTrigger className="w-full group flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted/60">
-                                    <span className="flex items-center gap-2 font-medium">
-                                      <BarChart3 className="h-4 w-4 text-primary" />
-                                      Transaction breakdown
-                                      <Badge variant="secondary" className="ml-1">{rows.length}</Badge>
-                                    </span>
-                                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                                  </CollapsibleTrigger>
-                                  <CollapsibleContent>
-                                    {rows.length === 0 ? (
-                                      <p className="text-sm text-muted-foreground py-4 px-3">No transactions yet.</p>
-                                    ) : (
-                                      <div className="border rounded-md mt-2 overflow-hidden">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Date</TableHead>
-                                              <TableHead>Wallet</TableHead>
-                                              <TableHead className="text-right">Income (D)</TableHead>
-                                              <TableHead className="text-right">Withdrawals (D)</TableHead>
-                                              <TableHead className="text-right">Net (D)</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {rows.map((r, i) => (
-                                              <TableRow key={`${r.date}-${r.walletId}-${i}`}>
-                                                <TableCell className="whitespace-nowrap tabular-nums">{r.date}</TableCell>
-                                                <TableCell className="text-sm">{r.walletLabel}</TableCell>
-                                                <TableCell className="text-right tabular-nums text-emerald-600">{r.income > 0 ? r.income.toFixed(2) : '–'}</TableCell>
-                                                <TableCell className="text-right tabular-nums text-destructive">{r.withdrawals > 0 ? r.withdrawals.toFixed(2) : '–'}</TableCell>
-                                                <TableCell className="text-right tabular-nums font-medium">{(r.income - r.withdrawals).toFixed(2)}</TableCell>
-                                              </TableRow>
-                                            ))}
-                                          </TableBody>
-                                          <TableFooter>
-                                            <TableRow>
-                                              <TableCell colSpan={2} className="font-semibold">Totals</TableCell>
-                                              <TableCell className="text-right tabular-nums text-emerald-600 font-semibold">{totalIn.toFixed(2)}</TableCell>
-                                              <TableCell className="text-right tabular-nums text-destructive font-semibold">{totalOut.toFixed(2)}</TableCell>
-                                              <TableCell className="text-right tabular-nums font-semibold">{(totalIn - totalOut).toFixed(2)}</TableCell>
-                                            </TableRow>
-                                          </TableFooter>
-                                        </Table>
-                                      </div>
-                                    )}
-                                  </CollapsibleContent>
-                                </Collapsible>
-                              );
-                            })()}
-                          </>
-                        )}
-                      </CardContent>
-                    </CollapsibleContent>
-                  </Card>
-                </Collapsible>
-              );
-            })}
+            {nonEmpty.map(b => (
+              <WalletFolderCard
+                key={b.id}
+                bucket={b}
+                transactions={transactions}
+                partyNames={partyNames}
+                getPartyLabel={getPartyLabel}
+                canOwn={canOwn}
+                onWithdraw={initiateWithdraw}
+                search={folderSearch[b.id] || ''}
+                onSearchChange={(bucketId, value) => setFolderSearch(prev => ({ ...prev, [bucketId]: value }))}
+              />
+            ))}
           </div>
         );
       })()}
         </TabsContent>
 
         <TabsContent value="withdrawals" className="space-y-4 mt-0">
-          {/* Withdrawal Requests */}
-          <Card>
-            <CardHeader className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <CardTitle className="flex items-center gap-2"><ArrowDownToLine className="h-5 w-5" /> Withdrawal Requests</CardTitle>
-                <Badge variant="secondary">{withdrawals.length} total</Badge>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search wallet, status, method, notes, amount…"
-                    value={withdrawSearch}
-                    onChange={(e) => { setWithdrawSearch(e.target.value); setWithdrawPage(1); }}
-                    className="pl-9 h-9"
-                  />
-                </div>
-                <Select value={withdrawStatusFilter} onValueChange={(v) => { setWithdrawStatusFilter(v); setWithdrawPage(1); }}>
-                  <SelectTrigger className="w-full sm:w-[200px] h-9"><SelectValue placeholder="Status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="pending">Pending Manager</SelectItem>
-                    <SelectItem value="manager_approved">Awaiting Accountant</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {(() => {
-                const needle = withdrawSearch.trim().toLowerCase();
-                let filtered = withdrawals;
-                if (withdrawStatusFilter !== 'all') filtered = filtered.filter(wr => wr.status === withdrawStatusFilter);
-                if (needle) {
-                  filtered = filtered.filter(wr => {
-                    const wallet = wallets.find(w => w.id === wr.wallet_id);
-                    const label = wallet ? getPartyLabel(wallet).toLowerCase() : '';
-                    return label.includes(needle)
-                      || wr.status.toLowerCase().includes(needle)
-                      || (wr.payout_method || '').toLowerCase().includes(needle)
-                      || (wr.notes || '').toLowerCase().includes(needle)
-                      || String(wr.amount).includes(needle);
-                  });
-                }
-                if (filtered.length === 0) {
-                  return <p className="text-center text-muted-foreground py-6">No withdrawal requests match your search</p>;
-                }
-                const totalPages = Math.max(1, Math.ceil(filtered.length / WITHDRAW_PAGE_SIZE));
-                const page = Math.min(withdrawPage, totalPages);
-                const start = (page - 1) * WITHDRAW_PAGE_SIZE;
-                const paged = filtered.slice(start, start + WITHDRAW_PAGE_SIZE);
-                return (
-                  <div className="space-y-3">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b text-left text-muted-foreground">
-                            <th className="pb-2 pr-4">Date</th>
-                            <th className="pb-2 pr-4">Wallet</th>
-                            <th className="pb-2 pr-4">Amount</th>
-                            <th className="pb-2 pr-4">Status</th>
-                            <th className="pb-2 pr-4">Payout Method</th>
-                            <th className="pb-2 pr-4">Notes</th>
-                            {canProcess && <th className="pb-2">Actions</th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paged.map(wr => {
-                            const wallet = wallets.find(w => w.id === wr.wallet_id);
-                            return (
-                              <tr key={wr.id} className="border-b last:border-0">
-                                <td className="py-2 pr-4 whitespace-nowrap">{new Date(wr.created_at).toLocaleDateString()}</td>
-                                <td className="py-2 pr-4">{wallet ? getPartyLabel(wallet) : '–'}</td>
-                                <td className="py-2 pr-4 font-medium">D {Number(wr.amount).toFixed(2)}</td>
-                                <td className="py-2 pr-4">{statusBadge(wr.status)}</td>
-                                <td className="py-2 pr-4">{wr.payout_method || '–'}</td>
-                                <td className="py-2 pr-4 max-w-[200px] truncate">{wr.notes || '–'}</td>
-                                {canProcess && (
-                                  <td className="py-2">
-                                    {wr.status === 'pending' && canApprove && (
-                                      <Button size="sm" variant="outline" onClick={() => { setSelectedRequest(wr); setProcessMode('approve'); setProcessOpen(true); }}>
-                                        Approve
-                                      </Button>
-                                    )}
-                                    {wr.status === 'manager_approved' && canFinalize && (
-                                      <Button size="sm" onClick={() => { setSelectedRequest(wr); setProcessMode('finalize'); setProcessOpen(true); }}>
-                                        Finalize
-                                      </Button>
-                                    )}
-                                    {wr.status === 'pending' && !canApprove && (
-                                      <span className="text-xs text-muted-foreground">Awaiting manager</span>
-                                    )}
-                                    {wr.status === 'manager_approved' && !canFinalize && (
-                                      <span className="text-xs text-muted-foreground">Awaiting accountant</span>
-                                    )}
-                                    {(wr.status === 'completed' || wr.status === 'rejected') && (
-                                      <span className="flex items-center gap-1">{statusIcon(wr.status)}</span>
-                                    )}
-                                  </td>
-                                )}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
-                      <span>Showing {start + 1}–{Math.min(start + WITHDRAW_PAGE_SIZE, filtered.length)} of {filtered.length}</span>
-                      {totalPages > 1 && (
-                        <Pagination className="mx-0 w-auto justify-end">
-                          <PaginationContent>
-                            <PaginationItem>
-                              <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setWithdrawPage(Math.max(1, page - 1)); }} />
-                            </PaginationItem>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1)
-                              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                              .map((p, idx, arr) => (
-                                <span key={p} className="contents">
-                                  {idx > 0 && arr[idx - 1] !== p - 1 && (
-                                    <PaginationItem><PaginationEllipsis /></PaginationItem>
-                                  )}
-                                  <PaginationItem>
-                                    <PaginationLink href="#" isActive={p === page} onClick={(e) => { e.preventDefault(); setWithdrawPage(p); }}>{p}</PaginationLink>
-                                  </PaginationItem>
-                                </span>
-                              ))}
-                            <PaginationItem>
-                              <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setWithdrawPage(Math.min(totalPages, page + 1)); }} />
-                            </PaginationItem>
-                          </PaginationContent>
-                        </Pagination>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
+          <WithdrawalRequestsTable
+            withdrawals={withdrawals}
+            wallets={wallets}
+            getPartyLabel={getPartyLabel}
+            canProcess={canProcess}
+            canApprove={canApprove}
+            canFinalize={canFinalize}
+            search={withdrawSearch}
+            onSearchChange={(v) => { setWithdrawSearch(v); setWithdrawPage(1); }}
+            statusFilter={withdrawStatusFilter}
+            onStatusFilterChange={(v) => { setWithdrawStatusFilter(v); setWithdrawPage(1); }}
+            page={withdrawPage}
+            onPageChange={setWithdrawPage}
+            onApprove={(wr) => { setSelectedRequest(wr); setProcessMode('approve'); setProcessOpen(true); }}
+            onFinalize={(wr) => { setSelectedRequest(wr); setProcessMode('finalize'); setProcessOpen(true); }}
+            pageSize={WITHDRAW_PAGE_SIZE}
+          />
         </TabsContent>
 
         <TabsContent value="transactions" className="space-y-4 mt-0">
-          {/* Transaction History */}
-          <Card>
-            <CardHeader className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Transaction History</CardTitle>
-                <Select value={txFilter} onValueChange={(v) => { setTxFilter(v); setTxPage(1); }}>
-                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Filter" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Transactions</SelectItem>
-                    <SelectItem value="credit">Credits Only</SelectItem>
-                    <SelectItem value="debit">Debits Only</SelectItem>
-                    {myWallets.map(w => (
-                      <SelectItem key={w.id} value={w.id}>{getPartyLabel(w)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search description, wallet, reference, amount…"
-                  value={txSearch}
-                  onChange={(e) => { setTxSearch(e.target.value); setTxPage(1); }}
-                  className="pl-9 h-9"
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {(() => {
-                const myWalletIds = myWallets.map(w => w.id);
-                let filtered = transactions.filter(t => myWalletIds.includes(t.wallet_id));
-                if (txFilter === 'credit') filtered = filtered.filter(t => t.type === 'credit');
-                else if (txFilter === 'debit') filtered = filtered.filter(t => t.type === 'debit');
-                else if (txFilter !== 'all') filtered = filtered.filter(t => t.wallet_id === txFilter);
-
-                const needle = txSearch.trim().toLowerCase();
-                if (needle) {
-                  filtered = filtered.filter(tx => {
-                    const wallet = wallets.find(w => w.id === tx.wallet_id);
-                    const label = wallet ? getPartyLabel(wallet).toLowerCase() : '';
-                    return (tx.description || '').toLowerCase().includes(needle)
-                      || label.includes(needle)
-                      || String(tx.amount).includes(needle)
-                      || (tx.delivery_id || '').toLowerCase().includes(needle)
-                      || (tx.withdrawal_request_id || '').toLowerCase().includes(needle);
-                  });
-                }
-
-                if (filtered.length === 0) return <p className="text-center text-muted-foreground py-6">No transactions match your search</p>;
-
-                const totalPages = Math.max(1, Math.ceil(filtered.length / TX_PAGE_SIZE));
-                const page = Math.min(txPage, totalPages);
-                const start = (page - 1) * TX_PAGE_SIZE;
-                const paged = filtered.slice(start, start + TX_PAGE_SIZE);
-
-                return (
-                  <div className="space-y-3">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b text-left text-muted-foreground">
-                            <th className="pb-2 pr-4">Date & Time</th>
-                            <th className="pb-2 pr-4">Type</th>
-                            <th className="pb-2 pr-4">Wallet</th>
-                            <th className="pb-2 pr-4">Amount</th>
-                            <th className="pb-2 pr-4">Description</th>
-                            <th className="pb-2">Reference</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paged.map(tx => {
-                            const wallet = wallets.find(w => w.id === tx.wallet_id);
-                            return (
-                              <tr key={tx.id} className="border-b last:border-0">
-                                <td className="py-2 pr-4 whitespace-nowrap">{new Date(tx.created_at).toLocaleString()}</td>
-                                <td className="py-2 pr-4">
-                                  <span className={`flex items-center gap-1 font-medium ${tx.type === 'credit' ? 'text-emerald-600' : 'text-destructive'}`}>
-                                    {tx.type === 'credit' ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                                    {tx.type === 'credit' ? 'Credit' : 'Debit'}
-                                  </span>
-                                </td>
-                                <td className="py-2 pr-4">{wallet ? getPartyLabel(wallet) : '–'}</td>
-                                <td className={`py-2 pr-4 font-medium ${tx.type === 'credit' ? 'text-emerald-600' : 'text-destructive'}`}>
-                                  {tx.type === 'credit' ? '+' : '-'} D {Number(tx.amount).toFixed(2)}
-                                </td>
-                                <td className="py-2 pr-4 max-w-[250px] truncate">{tx.description}</td>
-                                <td className="py-2 text-xs text-muted-foreground">
-                                  {tx.delivery_id ? `Delivery: ${tx.delivery_id.slice(0, 8)}` : ''}
-                                  {tx.withdrawal_request_id ? `Withdrawal: ${tx.withdrawal_request_id.slice(0, 8)}` : ''}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
-                      <span>Showing {start + 1}–{Math.min(start + TX_PAGE_SIZE, filtered.length)} of {filtered.length}</span>
-                      {totalPages > 1 && (
-                        <Pagination className="mx-0 w-auto justify-end">
-                          <PaginationContent>
-                            <PaginationItem>
-                              <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setTxPage(Math.max(1, page - 1)); }} />
-                            </PaginationItem>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1)
-                              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                              .map((p, idx, arr) => (
-                                <span key={p} className="contents">
-                                  {idx > 0 && arr[idx - 1] !== p - 1 && (
-                                    <PaginationItem><PaginationEllipsis /></PaginationItem>
-                                  )}
-                                  <PaginationItem>
-                                    <PaginationLink href="#" isActive={p === page} onClick={(e) => { e.preventDefault(); setTxPage(p); }}>{p}</PaginationLink>
-                                  </PaginationItem>
-                                </span>
-                              ))}
-                            <PaginationItem>
-                              <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setTxPage(Math.min(totalPages, page + 1)); }} />
-                            </PaginationItem>
-                          </PaginationContent>
-                        </Pagination>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
+          <TransactionHistoryTable
+            transactions={transactions}
+            wallets={wallets}
+            myWallets={myWallets}
+            getPartyLabel={getPartyLabel}
+            filter={txFilter}
+            onFilterChange={(v) => { setTxFilter(v); setTxPage(1); }}
+            search={txSearch}
+            onSearchChange={(v) => { setTxSearch(v); setTxPage(1); }}
+            page={txPage}
+            onPageChange={setTxPage}
+            pageSize={TX_PAGE_SIZE}
+          />
         </TabsContent>
       </Tabs>
 
@@ -880,22 +460,22 @@ export default function WalletPage() {
           <DialogHeader><DialogTitle>Request Withdrawal</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Wallet</Label>
+              <p className="text-xs text-muted-foreground">Wallet</p>
               <p className="text-sm font-medium">{selectedWallet ? getPartyLabel(selectedWallet) : ''}</p>
               <p className="text-xs text-muted-foreground">Available: D {selectedWallet ? Number(selectedWallet.balance).toFixed(2) : '0.00'}</p>
             </div>
             <div>
-              <Label>Amount</Label>
+              <Label htmlFor="withdraw-amount">Amount</Label>
               <div className="flex gap-2">
-                <Input type="number" min="0" max={selectedWallet?.balance} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="0.00" className="flex-1" />
+                <Input id="withdraw-amount" type="number" min="0" max={selectedWallet?.balance} value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="0.00" className="flex-1" />
                 <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setWithdrawAmount(String(selectedWallet?.balance ?? 0))}>
                   Withdraw All
                 </Button>
               </div>
             </div>
             <div>
-              <Label>Notes (optional)</Label>
-              <Textarea value={withdrawNotes} onChange={e => setWithdrawNotes(e.target.value)} placeholder="Any notes for the accountant..." />
+              <Label htmlFor="withdraw-notes">Notes (optional)</Label>
+              <Textarea id="withdraw-notes" value={withdrawNotes} onChange={e => setWithdrawNotes(e.target.value)} placeholder="Any notes for the accountant..." />
             </div>
           </div>
           <DialogFooter>
@@ -928,9 +508,9 @@ export default function WalletPage() {
             {processMode === 'finalize' && (
               <>
                 <div>
-                  <Label>Payout Method</Label>
+                  <Label htmlFor="payout-method">Payout Method</Label>
                   <Select value={payoutMethod} onValueChange={setPayoutMethod}>
-                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                    <SelectTrigger id="payout-method"><SelectValue placeholder="Select method" /></SelectTrigger>
                     <SelectContent>
                       {PAYOUT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                     </SelectContent>
@@ -938,13 +518,13 @@ export default function WalletPage() {
                 </div>
                 {payoutMethod === 'Bank Transfer' && (
                   <div>
-                    <Label>Bank Name</Label>
-                    <Input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="e.g. Sierra Leone Commercial Bank" />
+                    <Label htmlFor="bank-name">Bank Name</Label>
+                    <Input id="bank-name" value={bankName} onChange={e => setBankName(e.target.value)} placeholder="e.g. Sierra Leone Commercial Bank" />
                   </div>
                 )}
                 <div>
-                  <Label>Payout Reference (optional)</Label>
-                  <Input value={payoutRef} onChange={e => setPayoutRef(e.target.value)} placeholder="Transaction ID or reference" />
+                  <Label htmlFor="payout-ref">Payout Reference (optional)</Label>
+                  <Input id="payout-ref" value={payoutRef} onChange={e => setPayoutRef(e.target.value)} placeholder="Transaction ID or reference" />
                 </div>
               </>
             )}

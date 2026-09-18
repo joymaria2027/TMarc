@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowRight, MapPin, Receipt, Wallet } from 'lucide-react';
+import { validateAuthField, getEmailAutocomplete, getPasswordAutocomplete } from './auth.helpers';
 
 export default function Auth() {
   const { user, loading } = useAuth();
@@ -20,24 +21,50 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
   const { signIn, signUp } = useAuth();
 
   if (loading)
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div role="status" aria-label="Loading sign-in page" className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   if (user) return <Navigate to={next} replace />;
 
+  const validateSignIn = () => {
+    const errs: Record<string, string | null> = {
+      'email-in': validateAuthField('email', email, 'signin'),
+      'pass-in': validateAuthField('password', password, 'signin'),
+    };
+    setFieldErrors((p) => ({ ...p, ...errs }));
+    return !errs['email-in'] && !errs['pass-in'];
+  };
+
+  const validateSignUp = () => {
+    const errs: Record<string, string | null> = {
+      'name-up': validateAuthField('fullName', fullName, 'signup'),
+      'email-up': validateAuthField('email', email, 'signup'),
+      'pass-up': validateAuthField('password', password, 'signup'),
+    };
+    setFieldErrors((p) => ({ ...p, ...errs }));
+    return !errs['name-up'] && !errs['email-up'] && !errs['pass-up'];
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateSignIn()) {
+      toast.error('Please fix the highlighted fields.');
+      return;
+    }
     setSubmitting(true);
     try {
       await signIn(email, password);
       toast.success('Signed in');
     } catch (err: any) {
-      toast.error(err.message);
+      const msg = err?.message ?? 'Sign-in failed.';
+      setFieldErrors((p) => ({ ...p, 'pass-in': msg }));
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -45,6 +72,10 @@ export default function Auth() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateSignUp()) {
+      toast.error('Please fix the highlighted fields.');
+      return;
+    }
     setSubmitting(true);
     try {
       await signUp(email, password, fullName);
@@ -55,7 +86,9 @@ export default function Auth() {
       }
       toast.success('Account created. Check your email to verify.');
     } catch (err: any) {
-      toast.error(err.message);
+      const msg = err?.message ?? 'Sign-up failed.';
+      setFieldErrors((p) => ({ ...p, 'email-up': msg }));
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -109,7 +142,7 @@ export default function Auth() {
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Sign in to continue
             </p>
-            <h2 className="font-display text-3xl tracking-tight">Welcome back.</h2>
+            <h2 className="font-display text-2xl sm:text-3xl tracking-tight">Welcome back.</h2>
           </div>
 
           <Tabs defaultValue={initialTab} className="w-full">
@@ -119,14 +152,36 @@ export default function Auth() {
             </TabsList>
 
             <TabsContent value="signin" className="mt-6">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <Field id="email-in" label="Email" type="email" value={email} onChange={setEmail} />
-                <Field id="pass-in" label="Password" type="password" value={password} onChange={setPassword} />
+              <form onSubmit={handleSignIn} className="space-y-4" noValidate>
+                <Field
+                  id="email-in"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(v) => {
+                    setEmail(v);
+                    setFieldErrors((p) => ({ ...p, 'email-in': null }));
+                  }}
+                  autoComplete={getEmailAutocomplete()}
+                  error={fieldErrors['email-in']}
+                />
+                <Field
+                  id="pass-in"
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(v) => {
+                    setPassword(v);
+                    setFieldErrors((p) => ({ ...p, 'pass-in': null }));
+                  }}
+                  autoComplete={getPasswordAutocomplete('signin')}
+                  error={fieldErrors['pass-in']}
+                />
                 <Button type="submit" className="w-full group" size="lg" disabled={submitting}>
                   {submitting ? 'Signing in…' : (
                     <>
                       Sign In
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </>
                   )}
                 </Button>
@@ -134,15 +189,48 @@ export default function Auth() {
             </TabsContent>
 
             <TabsContent value="signup" className="mt-6">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <Field id="name-up" label="Full name" value={fullName} onChange={setFullName} />
-                <Field id="email-up" label="Email" type="email" value={email} onChange={setEmail} />
-                <Field id="pass-up" label="Password" type="password" value={password} onChange={setPassword} minLength={6} />
+              <form onSubmit={handleSignUp} className="space-y-4" noValidate>
+                <Field
+                  id="name-up"
+                  label="Full name"
+                  value={fullName}
+                  onChange={(v) => {
+                    setFullName(v);
+                    setFieldErrors((p) => ({ ...p, 'name-up': null }));
+                  }}
+                  autoComplete="name"
+                  error={fieldErrors['name-up']}
+                />
+                <Field
+                  id="email-up"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(v) => {
+                    setEmail(v);
+                    setFieldErrors((p) => ({ ...p, 'email-up': null }));
+                  }}
+                  autoComplete={getEmailAutocomplete()}
+                  error={fieldErrors['email-up']}
+                />
+                <Field
+                  id="pass-up"
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(v) => {
+                    setPassword(v);
+                    setFieldErrors((p) => ({ ...p, 'pass-up': null }));
+                  }}
+                  minLength={6}
+                  autoComplete={getPasswordAutocomplete('signup')}
+                  error={fieldErrors['pass-up']}
+                />
                 <Button type="submit" className="w-full group" size="lg" disabled={submitting}>
                   {submitting ? 'Creating account…' : (
                     <>
                       Create Account
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </>
                   )}
                 </Button>
@@ -159,8 +247,18 @@ export default function Auth() {
 }
 
 function Field({
-  id, label, type = 'text', value, onChange, minLength,
-}: { id: string; label: string; type?: string; value: string; onChange: (v: string) => void; minLength?: number }) {
+  id, label, type = 'text', value, onChange, minLength, autoComplete, error,
+}: {
+  id: string;
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  minLength?: number;
+  autoComplete?: string;
+  error?: string | null;
+}) {
+  const messageId = `${id}-message`;
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-xs font-medium text-muted-foreground">{label}</Label>
@@ -171,8 +269,16 @@ function Field({
         onChange={e => onChange(e.target.value)}
         required
         minLength={minLength}
+        autoComplete={autoComplete}
+        aria-invalid={!!error}
+        aria-describedby={error ? messageId : undefined}
         className="h-11"
       />
+      {error && (
+        <p id={messageId} role="alert" aria-live="polite" className="text-sm font-medium text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -180,7 +286,7 @@ function Field({
 function Feature({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-2 text-sm text-sidebar-foreground/85">
-      <span className="h-7 w-7 rounded-md bg-sidebar-accent flex items-center justify-center text-primary">
+      <span aria-hidden="true" className="h-7 w-7 rounded-md bg-sidebar-accent flex items-center justify-center text-primary">
         {icon}
       </span>
       {label}

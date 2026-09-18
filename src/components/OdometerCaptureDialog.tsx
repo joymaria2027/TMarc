@@ -59,13 +59,13 @@ export default function OdometerCaptureDialog({ open, onOpenChange, title, descr
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Current mileage (miles)</Label>
-            <Input type="number" step="0.1" min="0" value={miles} onChange={e => setMiles(e.target.value)} placeholder="e.g. 12345.6" />
+            <Label htmlFor="odometer-miles">Current mileage (miles)</Label>
+            <Input id="odometer-miles" type="number" step="0.1" min="0" value={miles} onChange={e => setMiles(e.target.value)} placeholder="e.g. 12345.6" />
             {minMiles != null && <p className="text-xs text-muted-foreground">Start reading was {minMiles} mi</p>}
           </div>
           <div className="space-y-2">
-            <Label>Odometer photo</Label>
-            <Input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={e => setFile(e.target.files?.[0] || null)} />
+            <Label htmlFor="odometer-photo">Odometer photo</Label>
+            <Input id="odometer-photo" ref={fileRef} type="file" accept="image/*" capture="environment" onChange={e => setFile(e.target.files?.[0] || null)} />
             {file && <p className="text-xs text-muted-foreground flex items-center gap-1"><Camera className="h-3 w-3" />{file.name}</p>}
           </div>
         </div>

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Receipt, CheckCircle2, DollarSign, User, TrendingDown, Building2, CreditCard } from 'lucide-react';
+import { Receipt } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import SettlementSummaryCards from '@/components/settlements/SettlementSummaryCards';
+import MerchantSettlementCard from '@/components/settlements/MerchantSettlementCard';
+import RiderSettlementCard from '@/components/settlements/RiderSettlementCard';
+import DeliverySettlementRow from '@/components/settlements/DeliverySettlementRow';
 
 interface SettlementRow {
   id: string;
@@ -59,12 +61,18 @@ interface MerchantSummary {
   deliveries: SettlementRow[];
 }
 
+export const DELIVERIES_PAGE_SIZE = 20;
+
 export default function SettlementsPage() {
   const { user, hasRole } = useAuth();
   const [rows, setRows] = useState<SettlementRow[]>([]);
+  const [deliveriesVisible, setDeliveriesVisible] = useState(DELIVERIES_PAGE_SIZE);
   const [riderSummaries, setRiderSummaries] = useState<RiderSummary[]>([]);
   const [merchantSummaries, setMerchantSummaries] = useState<MerchantSummary[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
+  const [restExpenseItemsMap, setRestExpenseItemsMap] = useState<Map<string, any[]>>(new Map());
+  const [riderExpenseItemsMap, setRiderExpenseItemsMap] = useState<Map<string, any[]>>(new Map());
+  const [deliveryExpenseItemsMap, setDeliveryExpenseItemsMap] = useState<Map<string, any[]>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const isAdmin = hasRole('admin');
@@ -158,7 +166,7 @@ export default function SettlementsPage() {
       if (!riderMap.has(row.rider_id)) {
         const rider = riders.find((r: any) => r.id === row.rider_id);
         const profile = rider ? profiles.find((p: any) => p.user_id === rider.user_id) : null;
-        const riderExpenses = allExpenses.filter((e: any) => e.rider_id === row.rider_id && (e.status === 'approved' || e.status === 'verified'));
+        const riderExpenses = expenses.filter((e: any) => e.rider_id === row.rider_id && (e.status === 'approved' || e.status === 'verified'));
         const totalExpenses = riderExpenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
 
         riderMap.set(row.rider_id, {
@@ -193,7 +201,7 @@ export default function SettlementsPage() {
     for (const row of merged) {
       if (!restMap.has(row.merchant_id)) {
         // Sum verified expenses for this merchant
-        const restExpenses = allExpenses.filter((e: any) => e.merchant_id === row.merchant_id && (e.status === 'approved' || e.status === 'verified'));
+        const restExpenses = expenses.filter((e: any) => e.merchant_id === row.merchant_id && (e.status === 'approved' || e.status === 'verified'));
         const totalRestExpenses = restExpenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
 
         restMap.set(row.merchant_id, {
@@ -231,19 +239,43 @@ export default function SettlementsPage() {
     setRows(merged);
     setRiderSummaries(Array.from(riderMap.values()).sort((a, b) => b.total_revenue - a.total_revenue));
     setMerchantSummaries(Array.from(restMap.values()).sort((a, b) => b.total_revenue - a.total_revenue));
+    // Compute expense item maps for detailed breakdowns
+    const restItemsMap = new Map<string, any[]>();
+    for (const rs of restMap.values()) {
+      const items = expenses.filter((e: any) => e.merchant_id === rs.merchant_id && (e.status === 'approved' || e.status === 'verified'));
+      restItemsMap.set(rs.merchant_id, items);
+    }
+    const riderItemsMap = new Map<string, any[]>();
+    for (const rs of riderMap.values()) {
+      const items = expenses.filter((e: any) => e.rider_id === rs.rider_id && (e.status === 'approved' || e.status === 'verified'));
+      riderItemsMap.set(rs.rider_id, items);
+    }
+    const deliveryItemsMap = new Map<string, any[]>();
+    for (const row of merged) {
+      const items = expenses.filter((e: any) => e.deducted_in_delivery_id === row.id);
+      if (items.length > 0) deliveryItemsMap.set(row.id, items);
+    }
+    setRestExpenseItemsMap(restItemsMap);
+    setRiderExpenseItemsMap(riderItemsMap);
+    setDeliveryExpenseItemsMap(deliveryItemsMap);
     setLoading(false);
   };
 
   useEffect(() => {
     load();
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => load(), 600);
+    };
     const channel = supabase
       .channel('settlements-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'revenue_sharing' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'revenue_sharing' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(channel); };
   }, []);
 
   const approveSettlement = async (id: string) => {
@@ -271,6 +303,21 @@ export default function SettlementsPage() {
     if (!d.payment_method) return null;
     const label = PAYMENT_LABELS[d.payment_method] || d.payment_method;
     return d.payment_method === 'bank_transfer' && d.payment_bank_name ? `${label} (${d.payment_bank_name})` : label;
+  };
+
+  const merchantNameById = (merchantId: string) =>
+    merchantSummaries.find(r => r.merchant_id === merchantId)?.merchant_name || '';
+
+  const handleIssuePayout = async (summary: RiderSummary) => {
+    const unapprovedIds = summary.deliveries.filter(d => !d.settlement_approved && d.sharing).map(d => d.id);
+    for (const id of unapprovedIds) {
+      await supabase.from('deliveries').update({
+        settlement_approved: true,
+        settlement_approved_by: user?.id,
+      }).eq('id', id);
+    }
+    toast.success(`Net payout of D${summary.net_payout.toFixed(2)} issued to ${summary.rider_name} – wallet updated`);
+    load();
   };
 
   // Build a map of per-merchant expense totals for use in individual delivery breakdowns
@@ -303,7 +350,14 @@ export default function SettlementsPage() {
   // Determine default tab based on role
   const defaultTab = (isManagerOnly || isAccountantOnly) ? 'merchants' : 'riders';
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="space-y-4" role="status" aria-label="Loading settlements" aria-busy="true">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="shimmer h-28 rounded-md" aria-hidden="true" />
+      ))}
+      <span className="sr-only">Loading settlements…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -316,24 +370,12 @@ export default function SettlementsPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Deliveries</p>
-          <p className="font-display text-3xl tabular-nums mt-1">{rows.length}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total Revenue</p>
-          <p className="font-display text-3xl tabular-nums mt-1">D{totalRevenue.toLocaleString()}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Approved</p>
-          <p className="font-display text-3xl tabular-nums mt-1 text-accent">{approvedCount}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Merchants</p>
-          <p className="font-display text-3xl tabular-nums mt-1">{merchantSummaries.length}</p>
-        </CardContent></Card>
-      </div>
+      <SettlementSummaryCards
+        totalDeliveries={rows.length}
+        totalRevenue={totalRevenue}
+        approvedCount={approvedCount}
+        merchantCount={merchantSummaries.length}
+      />
 
       <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList>
@@ -345,94 +387,14 @@ export default function SettlementsPage() {
         {/* Merchant Summary Tab */}
         <TabsContent value="merchants" className="space-y-4">
           {merchantSummaries.map(rs => (
-            <Card key={rs.merchant_id}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-semibold">{rs.merchant_name}</p>
-                      <p className="text-xs text-muted-foreground">{rs.total_deliveries} deliveries</p>
-                    </div>
-                  </div>
-                  <Badge variant="outline" className="text-sm font-semibold">
-                    Total: D{rs.total_revenue.toLocaleString()}
-                  </Badge>
-                </div>
-
-                {/* Expense deduction row */}
-                {rs.total_expenses > 0 && (
-                  <div className="bg-destructive/10 rounded p-2 text-sm space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3" />Rider Expenses (approved)</span>
-                      <span className="font-semibold text-destructive">-D{rs.total_expenses.toLocaleString()}</span>
-                    </div>
-                    <details className="text-xs">
-                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View expense details</summary>
-                      <div className="mt-1 space-y-1">
-                        {allExpenses.filter((e: any) => e.merchant_id === rs.merchant_id && (e.status === 'approved' || e.status === 'verified')).map((e: any) => (
-                          <div key={e.id} className="flex justify-between py-0.5 border-b border-destructive/10 last:border-0">
-                            <span>{e.description}</span>
-                            <span className="font-medium text-destructive">-D{Number(e.amount).toFixed(2)}{e.deducted_in_delivery_id ? ' ✓' : ''}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  </div>
-                )}
-                <div className="flex items-center justify-between bg-muted rounded p-2 text-sm">
-                  <span className="text-muted-foreground font-medium">Net Revenue (after expenses)</span>
-                  <span className="font-bold text-primary">D{rs.net_revenue.toLocaleString()}</span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">Merchant Share</p>
-                    <p className="font-semibold text-sm text-primary">D{rs.merchant_share.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">Rider Share</p>
-                    <p className="font-semibold text-sm">D{rs.rider_share.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">Platform Share</p>
-                    <p className="font-semibold text-sm">D{rs.platform_share.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">UCS Rides</p>
-                    <p className="font-semibold text-sm">D{rs.ucs_share.toFixed(2)}</p>
-                  </div>
-                </div>
-
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-                    View {rs.total_deliveries} delivery details
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {rs.deliveries.map(d => (
-                      <div key={d.id} className="border rounded p-2 flex items-center justify-between flex-wrap gap-1">
-                        <div>
-                          <span className="font-medium">{d.order_reference || d.id.slice(0, 8)}</span>
-                          {paymentLabel(d) && (
-                            <span className="ml-2 text-muted-foreground inline-flex items-center gap-0.5"><CreditCard className="h-3 w-3" />{paymentLabel(d)}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span>D{d.tariff.toLocaleString()}</span>
-                          {d.settlement_approved ? (
-                            <CheckCircle2 className="h-3 w-3 text-accent" />
-                          ) : (
-                            canApprove && d.sharing && (
-                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => approveSettlement(d.id)}>Approve</Button>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              </CardContent>
-            </Card>
+            <MerchantSettlementCard
+              key={rs.merchant_id}
+              summary={rs}
+              expenseItems={(restExpenseItemsMap.get(rs.merchant_id) || [])}
+              canApprove={canApprove}
+              onApprove={approveSettlement}
+              paymentLabel={paymentLabel}
+            />
           ))}
           {merchantSummaries.length === 0 && (
             <div className="text-center py-10 text-muted-foreground">
@@ -445,115 +407,17 @@ export default function SettlementsPage() {
         {/* Rider Summary Tab */}
         <TabsContent value="riders" className="space-y-4">
           {riderSummaries.map(rs => (
-            <Card key={rs.rider_id}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <User className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="font-semibold">{rs.rider_name}</p>
-                      <p className="text-xs text-muted-foreground">{rs.total_deliveries} deliveries</p>
-                    </div>
-                  </div>
-                  <Badge variant={rs.net_payout >= 0 ? 'default' : 'destructive'} className="text-sm">
-                    Net: D{rs.net_payout.toFixed(2)}
-                  </Badge>
-                </div>
-
-                {rs.total_expenses > 0 && (
-                  <div className="bg-destructive/10 rounded p-2 text-sm space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3" />Approved Expenses</span>
-                      <span className="font-semibold text-destructive">-D{rs.total_expenses.toLocaleString()}</span>
-                    </div>
-                    <details className="text-xs">
-                      <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View expense details</summary>
-                      <div className="mt-1 space-y-1">
-                        {allExpenses.filter((e: any) => e.rider_id === rs.rider_id && (e.status === 'approved' || e.status === 'verified')).map((e: any) => (
-                          <div key={e.id} className="flex justify-between py-0.5 border-b border-destructive/10 last:border-0">
-                            <span>{e.description} {e.merchant_id ? `(${merchantSummaries.find(r => r.merchant_id === e.merchant_id)?.merchant_name || ''})` : ''}</span>
-                            <span className="font-medium text-destructive">-D{Number(e.amount).toFixed(2)}{e.deducted_in_delivery_id ? ' ✓' : ''}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  </div>
-                )}
-                <div className="flex items-center justify-between bg-muted rounded p-2 text-sm">
-                  <span className="text-muted-foreground font-medium">Net Revenue (after expenses)</span>
-                  <span className="font-bold text-primary">D{rs.net_revenue.toLocaleString()}</span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">Total Tariffs</p>
-                    <p className="font-semibold text-sm">D{rs.total_revenue.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">Rider Share</p>
-                    <p className="font-semibold text-sm text-primary">D{rs.rider_share.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-muted rounded p-2">
-                    <p className="text-muted-foreground">Net Payout</p>
-                    <p className={`font-semibold text-sm ${rs.net_payout >= 0 ? 'text-accent' : 'text-destructive'}`}>
-                      D{rs.net_payout.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-                    View {rs.total_deliveries} delivery details
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {rs.deliveries.map(d => (
-                      <div key={d.id} className="border rounded p-2 flex items-center justify-between flex-wrap gap-1">
-                        <div>
-                          <span className="font-medium">{d.order_reference || d.id.slice(0, 8)}</span>
-                          <span className="text-muted-foreground ml-2">{d.merchant_name}</span>
-                          {paymentLabel(d) && (
-                            <span className="ml-2 text-muted-foreground inline-flex items-center gap-0.5"><CreditCard className="h-3 w-3" />{paymentLabel(d)}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span>D{d.tariff.toLocaleString()}</span>
-                          {d.sharing && <span className="text-primary">→ D{payout(d.tariff, d.sharing.rider_percentage)}</span>}
-                          {d.settlement_approved ? (
-                            <CheckCircle2 className="h-3 w-3 text-accent" />
-                          ) : (
-                            canApprove && d.sharing && (
-                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => approveSettlement(d.id)}>Approve</Button>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-
-                {canApprove && (() => {
-                  const unapproved = rs.deliveries.filter(d => !d.settlement_approved && d.sharing);
-                  const allApproved = unapproved.length === 0;
-                  return allApproved ? (
-                    <Badge variant="outline" className="text-accent gap-1"><CheckCircle2 className="h-3 w-3" />Payout Issued</Badge>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={async () => {
-                      const ids = unapproved.map(d => d.id);
-                      for (const id of ids) {
-                        await supabase.from('deliveries').update({
-                          settlement_approved: true,
-                          settlement_approved_by: user?.id,
-                        }).eq('id', id);
-                      }
-                      toast.success(`Net payout of D${rs.net_payout.toFixed(2)} issued to ${rs.rider_name} – wallet updated`);
-                      load();
-                    }}>
-                      <DollarSign className="h-3 w-3 mr-1" />Issue Net Payout
-                    </Button>
-                  );
-                })()}
-              </CardContent>
-            </Card>
+            <RiderSettlementCard
+              key={rs.rider_id}
+              summary={rs}
+              expenseItems={(riderExpenseItemsMap.get(rs.rider_id) || [])}
+              merchantNameById={merchantNameById}
+              canApprove={canApprove}
+              onApprove={approveSettlement}
+              onIssuePayout={handleIssuePayout}
+              paymentLabel={paymentLabel}
+              payout={payout}
+            />
           ))}
           {riderSummaries.length === 0 && (
             <div className="text-center py-10 text-muted-foreground">
@@ -565,91 +429,35 @@ export default function SettlementsPage() {
 
         {/* All Deliveries Tab */}
         <TabsContent value="deliveries" className="space-y-3">
-          {rows.map(d => (
-            <Card key={d.id}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <p className="font-medium text-sm">{d.order_reference || d.id.slice(0, 8)}</p>
-                    <p className="text-xs text-muted-foreground">{d.merchant_name}</p>
-                    <p className="text-xs text-muted-foreground">{d.pickup_address} → {d.dropoff_address}</p>
-                    {d.delivered_at && <p className="text-xs text-muted-foreground">Delivered: {new Date(d.delivered_at).toLocaleString()}</p>}
-                    {paymentLabel(d) && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1"><CreditCard className="h-3 w-3" />Payment: {paymentLabel(d)}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="font-semibold">D{d.tariff.toLocaleString()}</Badge>
-                    {d.sharing ? (
-                      <Badge variant="secondary" className="text-xs">Ratio set</Badge>
-                    ) : (
-                      <Badge variant="destructive" className="text-xs">No ratio</Badge>
-                    )}
-                    {d.settlement_approved ? (
-                      <Badge className="bg-accent/10 text-accent"><CheckCircle2 className="h-3 w-3 mr-1" />Approved</Badge>
-                    ) : (
-                      canApprove && d.sharing && (
-                        <Button size="sm" onClick={() => approveSettlement(d.id)}>Approve</Button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {d.sharing && (
-                  <div className="border-t pt-3">
-                    {(restExpenseMap.get(d.merchant_id) || 0) > 0 && (
-                      <div className="bg-destructive/10 rounded p-2 mb-2 space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground flex items-center gap-1"><TrendingDown className="h-3 w-3" />Expense deduction</span>
-                          <span className="text-destructive font-semibold">-D{(d.tariff - getNetTariff(d)).toFixed(2)}</span>
-                        </div>
-                        {allExpenses.filter((e: any) => e.deducted_in_delivery_id === d.id).length > 0 && (
-                          <div className="text-xs space-y-0.5 pt-1 border-t border-destructive/10">
-                            {allExpenses.filter((e: any) => e.deducted_in_delivery_id === d.id).map((e: any) => (
-                              <div key={e.id} className="flex justify-between">
-                                <span className="text-muted-foreground">{e.description}</span>
-                                <span className="text-destructive">-D{Number(e.amount).toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <p className="text-xs font-semibold mb-2 flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" /> Payout Breakdown (Net D{getNetTariff(d).toFixed(2)})
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                      <div className="bg-muted rounded p-2">
-                        <p className="text-muted-foreground">Rider ({d.sharing.rider_percentage}%)</p>
-                        <p className="font-semibold">D{payout(getNetTariff(d), d.sharing.rider_percentage)}</p>
-                      </div>
-                      <div className="bg-muted rounded p-2">
-                        <p className="text-muted-foreground">Merchant ({d.sharing.merchant_percentage}%)</p>
-                        <p className="font-semibold">D{payout(getNetTariff(d), d.sharing.merchant_percentage)}</p>
-                      </div>
-                      <div className="bg-muted rounded p-2">
-                        <p className="text-muted-foreground">Platform ({d.sharing.platform_percentage}%)</p>
-                        <p className="font-semibold">D{payout(getNetTariff(d), d.sharing.platform_percentage)}</p>
-                      </div>
-                      <div className="bg-muted rounded p-2">
-                        <p className="text-muted-foreground">UCS Rides ({d.sharing.ucs_rides_percentage}%)</p>
-                        <p className="font-semibold">D{payout(getNetTariff(d), d.sharing.ucs_rides_percentage)}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {!d.sharing && (
-                  <p className="text-xs text-muted-foreground border-t pt-2">Set a sharing ratio for {d.merchant_name} in Revenue Sharing to enable auto-calculation</p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+          {rows.slice(0, deliveriesVisible).map(d => {
+            const netTariff = getNetTariff(d);
+            const deduction = d.tariff - netTariff;
+            const hasDeduction = (restExpenseMap.get(d.merchant_id) || 0) > 0;
+            return (
+              <DeliverySettlementRow
+                key={d.id}
+                delivery={d}
+                canApprove={canApprove}
+                onApprove={approveSettlement}
+                paymentLabel={paymentLabel}
+                payout={payout}
+                netTariff={netTariff}
+                expenseDeduction={deduction}
+                deliveryExpenses={(deliveryExpenseItemsMap.get(d.id) || [])}
+                hasExpenseDeduction={hasDeduction}
+              />
+            );
+          })}
           {rows.length === 0 && (
             <div className="text-center py-10 text-muted-foreground">
               <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No delivered orders to settle</p>
             </div>
+          )}
+          {deliveriesVisible < rows.length && (
+            <Button variant="outline" className="w-full" onClick={() => setDeliveriesVisible(v => v + DELIVERIES_PAGE_SIZE)}>
+              Show more ({rows.length - deliveriesVisible} remaining)
+            </Button>
           )}
         </TabsContent>
       </Tabs>

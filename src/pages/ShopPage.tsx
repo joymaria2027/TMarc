@@ -2,15 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import StorefrontLayout from "@/components/StorefrontLayout";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import ProductCard from "@/components/ProductCard";
 import { getProductImageUrl } from "@/lib/productImage";
+import { paginate, pageCount } from "@/lib/pagination";
 import { useCart } from "@/lib/cart";
 import { useWholesale } from "@/lib/wholesale";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 12;
 
 interface Product {
   id: string; merchant_id: string; name: string; description: string | null;
@@ -35,10 +39,13 @@ export default function ShopPage() {
   const [sort, setSort] = useState<Sort>("newest");
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [announcement, setAnnouncement] = useState("");
   const { add } = useCart();
   const { isWholesaler, quote } = useWholesale();
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const [p, m, bt, c] = await Promise.all([
         supabase.from("products")
@@ -49,19 +56,21 @@ export default function ShopPage() {
         supabase.from("business_types").select("id,name").eq("is_active", true),
         supabase.from("product_categories").select("id,name,merchant_id"),
       ]);
+      if (cancelled) return;
       const list = (p.data || []) as any as Product[];
       setProducts(list);
       setMerchants((m.data || []) as Merchant[]);
       setBusinessTypes((bt.data || []) as BusinessType[]);
       setCategories((c.data || []) as Category[]);
       setLoading(false);
-      const urls: Record<string, string> = {};
-      await Promise.all(list.map(async p => {
-        const u = await getProductImageUrl(p.image_path);
-        if (u) urls[p.id] = u;
-      }));
-      setImageUrls(urls);
+      // Incremental render: paint each image URL as it resolves.
+      list.forEach(async item => {
+        const u = await getProductImageUrl(item.image_path);
+        if (cancelled || !u) return;
+        setImageUrls(prev => (prev[item.id] ? prev : { ...prev, [item.id]: u }));
+      });
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const merchantsWithProducts = useMemo(() => {
@@ -85,6 +94,19 @@ export default function ShopPage() {
   const canBuy = (p: Product) =>
     p.available_today && (!p.track_inventory || p.quantity > 0);
 
+  const totalPages = pageCount(filtered.length, PAGE_SIZE);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const visible = paginate(filtered, safePage, PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [search, btFilter, catFilter, sort]);
+
+  const handleAdd = (p: Product) => {
+    const q = quote(p);
+    add({ product_id: p.id, merchant_id: p.merchant_id, merchant_name: p.merchants?.name, name: p.name, price: q.price, quantity: q.isWholesale ? q.minQty : 1, image_path: p.image_path });
+    toast.success("Added to cart");
+    setAnnouncement(`${p.name} added to cart`);
+  };
+
   // dedupe category names across merchants for the filter
   const categoryOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -94,26 +116,33 @@ export default function ShopPage() {
 
   return (
     <StorefrontLayout>
+      {/* Screen-reader announcements for cart + filtering */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
+      </div>
       <div className="space-y-8">
         <div className="space-y-2">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">Marketplace</p>
-          <h1 className="font-display text-4xl tracking-tight">Shop products</h1>
+          <h1 className="font-display text-4xl tracking-tight">Good food, close by</h1>
+          <p className="text-muted-foreground max-w-xl">
+            Order from approved neighborhood kitchens — pickup or delivery, tracked to your door.
+          </p>
           {isWholesaler && (
             <Badge className="mt-1">Wholesale pricing active</Badge>
           )}
         </div>
 
         {merchantsWithProducts.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-xl">Browse by restaurant</h2>
-              <span className="text-xs text-muted-foreground">{merchantsWithProducts.length} open</span>
+          <section aria-label="Open restaurants" className="space-y-3">
+            <div className="flex items-baseline justify-between flex-wrap gap-2">
+              <h2 className="font-display text-xl">Open near you</h2>
+              <span className="text-xs text-muted-foreground" role="status">{merchantsWithProducts.length} open</span>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
               {merchantsWithProducts.map(m => (
                 <Link key={m.id} to={`/shop/m/${m.id}`}
-                  className="shrink-0 w-44 rounded-lg border bg-card p-3 hover:shadow-md transition-shadow">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                  className="shrink-0 w-44 rounded-lg border bg-card p-3 hover:shadow-md transition-shadow min-h-[44px]">
+                  <div className="h-16 w-16 rounded-full bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center mb-2" aria-hidden="true">
                     <span className="font-display text-xl text-primary">{m.name.charAt(0)}</span>
                   </div>
                   <p className="font-semibold leading-tight truncate">{m.name}</p>
@@ -124,79 +153,101 @@ export default function ShopPage() {
           </section>
         )}
 
-        <div className="flex flex-wrap gap-2 items-center">
-          <Input placeholder="Search products or merchants…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
-          <Select value={btFilter} onValueChange={setBtFilter}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="Business type" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All business types</SelectItem>
-              {businessTypes.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={catFilter} onValueChange={setCatFilter}>
-            <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {categoryOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={sort} onValueChange={v => setSort(v as Sort)}>
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest</SelectItem>
-              <SelectItem value="price_asc">Price: low to high</SelectItem>
-              <SelectItem value="price_desc">Price: high to low</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <form role="search" aria-label="Search and filter products" className="flex flex-wrap gap-2 items-center" onSubmit={e => e.preventDefault()}>
+          <div>
+            <Label htmlFor="shop-search" className="sr-only">Search products or merchants</Label>
+            <Input id="shop-search" type="search" placeholder="Search products or merchants…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" autoComplete="off" />
+          </div>
+          <div>
+            <Label htmlFor="shop-bt-filter" className="sr-only">Filter by business type</Label>
+            <Select value={btFilter} onValueChange={setBtFilter}>
+              <SelectTrigger id="shop-bt-filter" className="w-44 h-11"><SelectValue placeholder="Business type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All business types</SelectItem>
+                {businessTypes.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="shop-cat-filter" className="sr-only">Filter by category</Label>
+            <Select value={catFilter} onValueChange={setCatFilter}>
+              <SelectTrigger id="shop-cat-filter" className="w-44 h-11"><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categoryOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="shop-sort" className="sr-only">Sort products</Label>
+            <Select value={sort} onValueChange={v => setSort(v as Sort)}>
+              <SelectTrigger id="shop-sort" className="w-44 h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest</SelectItem>
+                <SelectItem value="price_asc">Price: low to high</SelectItem>
+                <SelectItem value="price_desc">Price: high to low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </form>
 
         {loading ? (
-          <p className="text-muted-foreground">Loading…</p>
-        ) : filtered.length === 0 ? (
-          <p className="text-muted-foreground">No products match your filters.</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map(p => (
-              <Card key={p.id} className="overflow-hidden flex flex-col h-full">
-                <Link to={`/shop/p/${p.id}`} className="block relative w-full bg-muted" style={{ aspectRatio: "4 / 3" }}>
-                  {imageUrls[p.id] ? (
-                    <img src={imageUrls[p.id]} alt={p.name} className="absolute inset-0 w-full h-full object-cover object-center" loading="lazy" />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">No image</div>
-                  )}
-                </Link>
-                <CardContent className="p-4 flex-1 flex flex-col gap-2">
-                  <Link to={`/shop/m/${p.merchant_id}`} className="text-xs text-muted-foreground hover:underline truncate min-h-[1rem]">{p.merchants?.name}</Link>
-                  <Link to={`/shop/p/${p.id}`}>
-                    <h3 className="font-semibold leading-tight hover:underline line-clamp-2 min-h-[2.5rem]">{p.name}</h3>
-                  </Link>
-                  <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">{p.description || ""}</p>
-                  <div className="flex items-center justify-between pt-2 mt-auto">
-                    <span className="font-display text-lg flex items-baseline gap-2">
-                      D {quote(p).price.toFixed(2)}
-                      {quote(p).isWholesale && (
-                        <span className="text-xs text-muted-foreground line-through font-sans">D {Number(p.price).toFixed(2)}</span>
-                      )}
-                    </span>
-                    {!p.available_today
-                      ? <Badge variant="secondary">Closed today</Badge>
-                      : p.track_inventory && p.quantity <= 0
-                      ? <Badge variant="destructive">Out of stock</Badge>
-                      : p.track_inventory
-                      ? <Badge variant="outline">{p.quantity} in stock</Badge>
-                      : null}
-                  </div>
-                  {quote(p).isWholesale && (
-                    <p className="text-xs text-primary">Wholesale · min {quote(p).minQty}</p>
-                  )}
-                  <Button
-                    size="sm" className="w-full" disabled={!canBuy(p)}
-                    onClick={() => { add({ product_id: p.id, merchant_id: p.merchant_id, merchant_name: p.merchants?.name, name: p.name, price: quote(p).price, quantity: quote(p).isWholesale ? quote(p).minQty : 1, image_path: p.image_path }); toast.success("Added to cart"); }}
-                  >Add to cart</Button>
-                </CardContent>
-              </Card>
+          <div role="status" aria-live="polite" aria-label="Loading products" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <span className="sr-only">Loading products…</span>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-lg border bg-card overflow-hidden" aria-hidden="true">
+                <div className="shimmer w-full" style={{ aspectRatio: "4 / 3" }} />
+                <div className="p-4 space-y-2">
+                  <div className="shimmer h-4 rounded w-3/4" />
+                  <div className="shimmer h-3 rounded w-1/2" />
+                  <div className="shimmer h-9 rounded w-full" />
+                </div>
+              </div>
             ))}
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-lg border bg-card p-8 text-center space-y-2">
+            <p role="status" className="font-medium">No dishes match those filters</p>
+            <p className="text-sm text-muted-foreground">Try clearing the search or choosing a different category — new kitchens open daily.</p>
+            <Button variant="outline" onClick={() => { setSearch(""); setBtFilter("all"); setCatFilter("all"); setSort("newest"); }}>
+              Clear filters
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p role="status" className="text-sm text-muted-foreground">
+              Showing {visible.length} of {filtered.length} {filtered.length === 1 ? "dish" : "dishes"}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {visible.map(p => {
+                const q = quote(p);
+                return (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    merchantName={p.merchants?.name}
+                    imageUrl={imageUrls[p.id] ?? null}
+                    quote={{ price: q.price, retailPrice: Number(p.price), isWholesale: q.isWholesale, minQty: q.minQty }}
+                    canBuy={canBuy(p)}
+                    onAdd={() => handleAdd(p)}
+                  />
+                );
+              })}
+            </div>
+            {totalPages > 1 && (
+              <nav aria-label="Product pages" className="flex items-center justify-center gap-2 pt-2">
+                <Button variant="outline" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)} aria-label="Previous page">
+                  Previous
+                </Button>
+                <span role="status" className="text-sm text-muted-foreground tabular-nums">
+                  Page {safePage} of {totalPages}
+                </span>
+                <Button variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)} aria-label="Next page">
+                  Next
+                </Button>
+              </nav>
+            )}
+          </>
         )}
       </div>
     </StorefrontLayout>

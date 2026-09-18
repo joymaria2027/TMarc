@@ -116,7 +116,7 @@ export default function ReceiptUpload({ deliveryId, orderReference, userId, onUp
 
                 {preview ? (
                   <div className="relative">
-                    <img src={preview} alt="Receipt preview" className="w-full rounded-lg max-h-64 object-contain bg-muted" />
+                    <img src={preview} alt="Receipt preview" loading="lazy" decoding="async" className="w-full rounded-lg max-h-64 object-contain bg-muted" />
                     <Button
                       variant="secondary"
                       size="sm"

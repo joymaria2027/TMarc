@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,10 +8,19 @@ import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import { Loader2, CheckCircle2, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+function humanizePaymentStatus(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "paid") return "paid";
+  if (s === "failed") return "failed";
+  return "pending";
+}
+
 export default function CheckoutStatusPage() {
   const { orderId } = useParams();
   const [order, setOrder] = useState<any>(null);
   const [openingPayment, setOpeningPayment] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
+  const prevStatus = useRef<string | null>(null);
 
   const load = async () => {
     if (!orderId) return;
@@ -21,6 +30,11 @@ export default function CheckoutStatusPage() {
       .eq("id", orderId)
       .maybeSingle();
     setOrder(data);
+    const next = ((data as any)?.payment_status ?? "pending").toLowerCase();
+    if (prevStatus.current && prevStatus.current !== next) {
+      setAnnouncement(`Payment is now ${humanizePaymentStatus(next)}`);
+    }
+    prevStatus.current = next;
   };
 
   useEffect(() => {
@@ -44,8 +58,12 @@ export default function CheckoutStatusPage() {
   if (!order) {
     return (
       <StorefrontLayout>
-        <div className="flex items-center gap-2 p-8">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading your order…
+        <div role="status" aria-live="polite" className="max-w-xl mx-auto space-y-3 p-2">
+          <span className="sr-only">Loading your order…</span>
+          <div className="flex items-center gap-2 p-8" aria-hidden="true">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading your order…
+          </div>
+          <div className="shimmer h-40 rounded-lg" aria-hidden="true" />
         </div>
       </StorefrontLayout>
     );
@@ -71,20 +89,24 @@ export default function CheckoutStatusPage() {
 
   return (
     <StorefrontLayout>
+      {/* Screen-reader announcements for payment-status changes */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
+      </div>
       <div className="max-w-xl mx-auto space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Order {order.order_reference}</span>
+            <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="min-w-0 truncate">Order {order.order_reference}</span>
               <PaymentStatusBadge status={order.payment_status} />
             </CardTitle>
-            <p className="text-sm text-muted-foreground">{order.merchants?.name}</p>
+            <p className="text-sm text-muted-foreground truncate">{order.merchants?.name}</p>
           </CardHeader>
           <CardContent className="space-y-3">
             {status === "pending" && (
-              <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded">
-                <Loader2 className="h-5 w-5 animate-spin text-amber-600" />
-                <div className="text-sm">
+              <div role="status" className="flex items-center gap-3 p-4 bg-warning/15 border border-warning/40 dark:bg-warning/25 rounded">
+                <Loader2 className="h-5 w-5 animate-spin text-warning-foreground shrink-0" aria-hidden="true" />
+                <div className="text-sm min-w-0">
                   <p className="font-medium">Waiting for payment confirmation</p>
                   <p className="text-muted-foreground">
                     This page updates automatically once ModemPay confirms your payment. If the ModemPay checkout did not open, reopen it below.
@@ -93,37 +115,37 @@ export default function CheckoutStatusPage() {
               </div>
             )}
             {status === "paid" && (
-              <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <div className="text-sm">
+              <div role="status" className="flex items-center gap-3 p-4 bg-success/10 border border-success/40 dark:bg-success/25 rounded">
+                <CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />
+                <div className="text-sm min-w-0">
                   <p className="font-medium">Payment confirmed</p>
                   <p className="text-muted-foreground">The merchant has been notified and will start preparing your order.</p>
                 </div>
               </div>
             )}
             {status === "failed" && (
-              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded">
-                <XCircle className="h-5 w-5 text-red-600" />
-                <div className="text-sm">
+              <div role="alert" className="flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/40 dark:bg-destructive/20 rounded">
+                <XCircle className="h-5 w-5 text-destructive shrink-0" aria-hidden="true" />
+                <div className="text-sm min-w-0">
                   <p className="font-medium">Payment failed</p>
                   <p className="text-muted-foreground">Please try again from your cart or contact support.</p>
                 </div>
               </div>
             )}
             <div className="grid grid-cols-2 gap-2 text-sm border-t pt-3">
-              <span className="text-muted-foreground">Subtotal</span><span className="text-right">D {Number(order.subtotal).toFixed(2)}</span>
-              <span className="text-muted-foreground">Delivery fee</span><span className="text-right">D {Number(order.delivery_fee).toFixed(2)}</span>
-              <span className="font-medium">Total</span><span className="text-right font-medium">D {Number(order.total).toFixed(2)}</span>
-              {order.payment_reference && (<><span className="text-muted-foreground">Reference</span><span className="text-right font-mono text-xs">{order.payment_reference}</span></>)}
+              <span className="text-muted-foreground">Subtotal</span><span className="text-right tabular-nums">D {Number(order.subtotal).toFixed(2)}</span>
+              <span className="text-muted-foreground">Delivery fee</span><span className="text-right tabular-nums">D {Number(order.delivery_fee).toFixed(2)}</span>
+              <span className="font-medium">Total</span><span className="text-right font-medium tabular-nums">D {Number(order.total).toFixed(2)}</span>
+              {order.payment_reference && (<><span className="text-muted-foreground">Reference</span><span className="text-right font-mono text-xs truncate">{order.payment_reference}</span></>)}
             </div>
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               {status === "pending" && (
                 <>
                   <Button variant="outline" className="flex-1" onClick={load}>
-                    <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+                    <RefreshCw className="h-4 w-4 mr-1" aria-hidden="true" /> Refresh
                   </Button>
                   <Button className="flex-1" onClick={openPayment} disabled={openingPayment}>
-                    {openingPayment ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ExternalLink className="h-4 w-4 mr-1" />}
+                    {openingPayment ? <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" /> : <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />}
                     Open ModemPay
                   </Button>
                 </>

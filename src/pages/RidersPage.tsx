@@ -4,12 +4,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { UserPlus, Users, Search, Bike, Car, MoreVertical, Plus, X } from 'lucide-react';
+
+export const RIDERS_PAGE_SIZE = 24;
 
 export default function RidersPage() {
   const [riders, setRiders] = useState<any[]>([]);
@@ -22,6 +25,7 @@ export default function RidersPage() {
   const [vehicleType, setVehicleType] = useState('motorcycle');
   const [licensePlate, setLicensePlate] = useState('');
   const [selectedMerchant, setSelectedMerchant] = useState('');
+  const [visibleCount, setVisibleCount] = useState(RIDERS_PAGE_SIZE);
 
   const load = async () => {
     const { data: ridersData } = await supabase.from('riders').select('*');
@@ -105,7 +109,13 @@ export default function RidersPage() {
       r.rider_code?.toLowerCase().includes(q));
   });
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div role="status" aria-label="Loading riders" className="space-y-3 py-6">
+      <Skeleton className="shimmer h-20 w-full rounded-lg" />
+      <Skeleton className="shimmer h-20 w-full rounded-lg" />
+      <span className="sr-only">Loading riders…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -114,21 +124,22 @@ export default function RidersPage() {
           <h1 className="text-2xl font-bold">Riders</h1>
           <p className="text-muted-foreground">{riders.length} registered • {riders.filter(r => r.is_online).length} online</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search riders..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-48" />
+            <Label htmlFor="riders-search" className="sr-only">Search riders</Label>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input id="riders-search" placeholder="Search riders..." value={search} onChange={e => { setSearch(e.target.value); setVisibleCount(RIDERS_PAGE_SIZE); }} className="pl-9 w-48" />
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><UserPlus className="h-4 w-4 mr-2" />Add Rider</Button></DialogTrigger>
+            <DialogTrigger asChild><Button><UserPlus className="h-4 w-4 mr-2" aria-hidden="true" />Add Rider</Button></DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add New Rider</DialogTitle></DialogHeader>
               <div className="space-y-4">
-                <div className="space-y-2"><Label>User Email</Label><Input placeholder="rider@example.com" value={email} onChange={e => setEmail(e.target.value)} /></div>
+                <div className="space-y-2"><Label htmlFor="new-rider-email">User Email</Label><Input id="new-rider-email" placeholder="rider@example.com" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></div>
                 <div className="space-y-2">
-                  <Label>Vehicle Type</Label>
+                  <Label htmlFor="new-rider-vehicle">Vehicle Type</Label>
                   <Select value={vehicleType} onValueChange={setVehicleType}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="new-rider-vehicle" className="h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="motorcycle">Motorcycle</SelectItem>
                       <SelectItem value="bicycle">Bicycle</SelectItem>
@@ -138,9 +149,9 @@ export default function RidersPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Assign to Merchant</Label>
+                  <Label htmlFor="new-rider-merchant">Assign to Merchant</Label>
                   <Select value={selectedMerchant} onValueChange={setSelectedMerchant}>
-                    <SelectTrigger><SelectValue placeholder="Select merchant" /></SelectTrigger>
+                    <SelectTrigger id="new-rider-merchant" className="h-11"><SelectValue placeholder="Select merchant" /></SelectTrigger>
                     <SelectContent>
                       {merchants.map(r => (
                         <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
@@ -148,8 +159,8 @@ export default function RidersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2"><Label>License Plate</Label><Input value={licensePlate} onChange={e => setLicensePlate(e.target.value)} /></div>
-                <Button onClick={createRider} className="w-full">Create Rider</Button>
+                <div className="space-y-2"><Label htmlFor="new-rider-plate">License Plate</Label><Input id="new-rider-plate" value={licensePlate} onChange={e => setLicensePlate(e.target.value)} /></div>
+                <Button onClick={createRider} className="w-full min-h-[44px]">Create Rider</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -157,26 +168,27 @@ export default function RidersPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map(r => {
+        {filtered.slice(0, visibleCount).map(r => {
           const unassignedMerchants = merchants.filter(rest => !r.assignedMerchantIds.includes(rest.id));
+          const riderLabel = r.profile?.full_name || r.rider_code || 'rider';
           return (
             <Card key={r.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${r.is_online ? 'bg-accent/10' : 'bg-muted'}`}>
+                    <div className={`p-2 rounded-lg ${r.is_online ? 'bg-accent/10' : 'bg-muted'}`} aria-hidden="true">
                       {vehicleIcon(r.vehicle_type)}
                     </div>
                     <div>
                       <span className="font-medium">{r.profile?.full_name || 'Unknown'}</span>
                       <p className="text-xs text-muted-foreground">{r.profile?.email}</p>
-                      <p className="text-xs font-mono text-primary">{r.rider_code}</p>
+                      <p className="text-xs font-mono text-primary tabular-nums">{r.rider_code}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <div className="flex flex-col items-end gap-1">
                       <Badge variant={r.is_active ? 'default' : 'secondary'}>{r.is_active ? 'Active' : 'Inactive'}</Badge>
-                      {r.is_online && <Badge className="bg-accent/10 text-accent border-accent/20 text-xs">Online</Badge>}
+                      {r.is_online && <Badge className="bg-accent/10 text-accent-foreground border border-accent/30 text-xs">Online</Badge>}
                     </div>
                   </div>
                 </div>
@@ -191,8 +203,8 @@ export default function RidersPage() {
                       return (
                         <Badge key={i} variant="outline" className="text-xs gap-1 pr-1">
                           {restName}
-                          <button onClick={() => unassignMerchant(r.id, restId)} className="ml-0.5 hover:text-destructive">
-                            <X className="h-3 w-3" />
+                          <button onClick={() => unassignMerchant(r.id, restId)} aria-label={`Remove ${restName} from ${riderLabel}`} className="ml-0.5 hover:text-destructive min-h-[44px] min-w-[44px] inline-flex items-center justify-center">
+                            <X className="h-3 w-3" aria-hidden="true" />
                           </button>
                         </Badge>
                       );
@@ -202,8 +214,8 @@ export default function RidersPage() {
                 {unassignedMerchants.length > 0 && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="mt-2 h-7 text-xs gap-1">
-                        <Plus className="h-3 w-3" /> Assign Merchant
+                      <Button variant="ghost" size="sm" className="mt-2 min-h-[44px] text-xs gap-1">
+                        <Plus className="h-3 w-3" aria-hidden="true" /> Assign Merchant
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
@@ -218,11 +230,11 @@ export default function RidersPage() {
                   </DropdownMenu>
                 )}
                 {r.last_location_update && (
-                  <p className="text-xs text-muted-foreground mt-1">Last seen: {new Date(r.last_location_update).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Last seen: <time dateTime={r.last_location_update}>{new Date(r.last_location_update).toLocaleString()}</time></p>
                 )}
                 {fuelVariants.length > 0 && (
                   <div className="mt-3 flex items-center gap-2">
-                    <Label className="text-xs text-muted-foreground shrink-0">Fuel</Label>
+                    <Label htmlFor={`fuel-${r.id}`} className="text-xs text-muted-foreground shrink-0">Fuel</Label>
                     <Select
                       value={r.fuel_variant_id || 'none'}
                       onValueChange={async (v) => {
@@ -233,7 +245,7 @@ export default function RidersPage() {
                         toast.success('Fuel variant updated');
                       }}
                     >
-                      <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Use default" /></SelectTrigger>
+                      <SelectTrigger id={`fuel-${r.id}`} className="h-11 text-xs"><SelectValue placeholder="Use default" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Use default</SelectItem>
                         {fuelVariants.map(v => (
@@ -244,7 +256,7 @@ export default function RidersPage() {
                   </div>
                 )}
                 <div className="mt-3">
-                  <Button size="sm" variant={r.is_active ? 'destructive' : 'default'} onClick={async () => {
+                  <Button size="sm" variant={r.is_active ? 'destructive' : 'default'} className="min-h-[44px]" aria-label={`${r.is_active ? 'Deactivate' : 'Activate'} rider ${riderLabel}`} onClick={async () => {
                     await supabase.from('riders').update({ is_active: !r.is_active }).eq('id', r.id);
                     setRiders(prev => prev.map(x => x.id === r.id ? { ...x, is_active: !r.is_active } : x));
                     toast.success(r.is_active ? 'Rider deactivated' : 'Rider activated');

@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { toast } from 'sonner';
 import { Upload, Plus, DollarSign, FileText, CheckCircle2, XCircle, Bell, Clock, History, Fuel, ChevronDown, ChevronUp, Eye, MapPin } from 'lucide-react';
 import DeliveryMap from '@/components/DeliveryMap';
+import ExpenseFormDialog from '@/components/expenses/ExpenseFormDialog';
+import ExpenseRow from '@/components/expenses/ExpenseRow';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 
@@ -28,6 +31,8 @@ export default function RiderExpensesPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const prevConsumedRef = useRef<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [expensesVisible, setExpensesVisible] = useState(20);
+  const EXPENSES_PAGE_SIZE = 20;
   const [selectedDelivery, setSelectedDelivery] = useState<any | null>(null);
   const [selectedWaypoints, setSelectedWaypoints] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -95,16 +100,21 @@ export default function RiderExpensesPage() {
 
   useEffect(() => {
     load();
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => load(), 600);
+    };
     const channel = supabase
       .channel('expenses-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expense_alerts' }, () => load())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rider_expense_consumptions' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_expenses' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expense_alerts' }, () => scheduleReload())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rider_expense_consumptions' }, () => scheduleReload())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'deliveries' }, (payload: any) => {
-        if (payload?.new?.settlement_approved === true) load();
+        if (payload?.new?.settlement_approved === true) scheduleReload();
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(channel); };
   }, []);
 
   const getRiderName = (riderId: string) => {
@@ -240,13 +250,22 @@ export default function RiderExpensesPage() {
     load();
   };
 
+  const handleOpenReceipt = async (expense: { receipt_url?: string | null }) => {
+    const key = expense.receipt_url as string;
+    if (!key) return;
+    const path = key.includes('/receipts/') ? key.split('/receipts/')[1] : key;
+    const { data, error } = await supabase.storage.from('receipts').createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) { toast.error('Could not open receipt'); return; }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const markAlertRead = async (alertId: string) => {
     await supabase.from('expense_alerts').update({ is_read: true }).eq('id', alertId);
     setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
   const statusBadge = (status: string) => {
-    if (status === 'verified') return <Badge className="bg-green-500/10 text-green-600 border-green-500/20 gap-1"><CheckCircle2 className="h-3 w-3" />Verified</Badge>;
+    if (status === 'verified') return <Badge className="bg-success/10 text-success border-success/30 gap-1"><CheckCircle2 className="h-3 w-3" />Verified</Badge>;
     if (status === 'rejected') return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Rejected</Badge>;
     return <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" />Pending</Badge>;
   };
@@ -259,7 +278,14 @@ export default function RiderExpensesPage() {
       })
     : riders;
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div role="status" aria-label="Loading rider expenses" className="space-y-3 py-6">
+      <Skeleton className="shimmer h-20 w-full rounded-lg" />
+      <Skeleton className="shimmer h-20 w-full rounded-lg" />
+      <Skeleton className="shimmer h-20 w-full rounded-lg" />
+      <span className="sr-only">Loading rider expenses…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -269,72 +295,19 @@ export default function RiderExpensesPage() {
           <p className="text-muted-foreground">Maker-checker expense management with receipt verification</p>
         </div>
         {canUpload && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" />Add Expense</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Record Rider Expense</DialogTitle></DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Merchant <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Select value={form.merchant_id || 'none'} onValueChange={v => setForm(p => ({ ...p, merchant_id: v === 'none' ? '' : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select merchant (optional)" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— None —</SelectItem>
-                      {merchants.map(r => (
-                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Rider <span className="text-destructive">*</span></Label>
-                  <Select value={form.rider_id} onValueChange={v => setForm(p => ({ ...p, rider_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select rider" /></SelectTrigger>
-                    <SelectContent>
-                      {ridersForMerchant.map(r => (
-                        <SelectItem key={r.id} value={r.id}>{r.profile?.full_name || r.license_plate || r.id.slice(0, 8)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Expense type <span className="text-destructive">*</span></Label>
-                  <Select value={form.expense_type_id} onValueChange={v => setForm(p => ({ ...p, expense_type_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select expense type" /></SelectTrigger>
-                    <SelectContent>
-                      {expenseTypes.map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}{t.is_fuel ? ' ⛽' : ''}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Fuel, maintenance, etc." />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Amount</Label>
-                    <Input type="number" step="0.01" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Date</Label>
-                    <Input type="date" value={form.expense_date} onChange={e => setForm(p => ({ ...p, expense_date: e.target.value }))} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Receipt (optional)</Label>
-                  <Input ref={fileRef} type="file" accept="image/*,.pdf" onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
-                  {receiptFile && <p className="text-xs text-muted-foreground">{receiptFile.name}</p>}
-                </div>
-                <Button onClick={createExpense} className="w-full" disabled={uploading}>
-                  {uploading ? 'Uploading...' : 'Save Expense'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <ExpenseFormDialog
+            open={open}
+            onOpenChange={setOpen}
+            form={form}
+            onFormChange={(patch) => setForm(prev => ({ ...prev, ...patch }))}
+            merchants={merchants}
+            riders={ridersForMerchant}
+            expenseTypes={expenseTypes}
+            receiptFileName={receiptFile?.name || null}
+            onReceiptFile={(f) => setReceiptFile(f)}
+            onSubmit={createExpense}
+            uploading={uploading}
+          />
         )}
       </div>
 
@@ -343,109 +316,31 @@ export default function RiderExpensesPage() {
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="history" className="gap-1"><History className="h-3 w-3" />Consumption history</TabsTrigger>
           <TabsTrigger value="alerts" className="gap-1">
-            Alerts {alerts.length > 0 && <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">{alerts.length}</Badge>}
+            Alerts {alerts.length > 0 && <Badge variant="destructive" className="h-5 px-1.5 text-xs">{alerts.length}</Badge>}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="expenses" className="space-y-3 mt-4">
-          {expenses.map(e => {
+          {expenses.slice(0, expensesVisible).map(e => {
             const rowCons = consumptions.filter(c => c.rider_expense_id === e.id);
             const isHi = !!highlighted[e.id];
             return (
-            <Card key={e.id} className={isHi ? 'ring-2 ring-primary animate-pulse' : ''}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm">{e.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Rider: {getRiderName(e.rider_id)}
-                      {e.merchant_id && ` • Merchant: ${getMerchantName(e.merchant_id)}`}
-                      {' • '}{e.expense_date}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                    <Badge variant="outline" className="gap-1"><DollarSign className="h-3 w-3" />D{Number(e.amount).toLocaleString()}</Badge>
-                    {Number(e.consumed_amount || 0) > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        Remaining D{(Number(e.amount) - Number(e.consumed_amount || 0)).toLocaleString()} / D{Number(e.amount).toLocaleString()}
-                      </Badge>
-                    )}
-                    {statusBadge(e.status)}
-                    {e.receipt_url ? (
-                      <Badge
-                        className="gap-1 cursor-pointer"
-                        onClick={async () => {
-                          const key = e.receipt_url as string;
-                          // Support legacy rows that stored a full public URL
-                          const path = key.includes('/receipts/') ? key.split('/receipts/')[1] : key;
-                          const { data, error } = await supabase.storage.from('receipts').createSignedUrl(path, 60);
-                          if (error || !data?.signedUrl) { toast.error('Could not open receipt'); return; }
-                          window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
-                        }}
-                      >
-                        <FileText className="h-3 w-3" />Receipt
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">No receipt</Badge>
-                    )}
-
-                  </div>
-                </div>
-                {/* Deduction status */}
-                {e.deducted_in_delivery_id ? (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs bg-accent/10 text-accent rounded p-1.5">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Deducted in settlement for delivery <span className="font-semibold">{e.deducted_in_delivery_id.slice(0, 8)}</span>
-                  </div>
-                ) : (e.status === 'approved' || e.status === 'verified') ? (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs bg-warning/10 text-warning rounded p-1.5">
-                    <Clock className="h-3 w-3" />
-                    Approved – will be deducted from next settlement
-                  </div>
-                ) : null}
-                {/* Per-expense consumption disclosure */}
-                {rowCons.length > 0 && (
-                  <Collapsible open={expandedRow === e.id} onOpenChange={(o) => setExpandedRow(o ? e.id : null)}>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm" className="mt-2 h-7 text-xs gap-1">
-                        {expandedRow === e.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        View {rowCons.length} deduction{rowCons.length === 1 ? '' : 's'}
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="mt-2 space-y-1 text-xs border-l-2 border-muted pl-3">
-                        {rowCons.map(c => (
-                          <div key={c.id} className="flex justify-between gap-2 items-center">
-                            <span className="text-muted-foreground">
-                              {format(new Date(c.created_at), 'MMM d HH:mm')} • delivery {deliveryLabel(c.delivery_id)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              {c.kind === 'fuel' ? <Fuel className="h-3 w-3" /> : null}
-                              <Badge variant="outline" className="h-4 px-1 text-[10px]">{c.kind}</Badge>
-                              <span className="font-medium">D{Number(c.amount_consumed).toLocaleString()}</span>
-                              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => viewDelivery(c.delivery_id)} title="View delivery">
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
-                {/* Verify/Reject buttons for merchant managers on pending expenses */}
-                {canVerify && e.status === 'pending' && (
-                  <div className="flex gap-2 mt-3 pt-3 border-t">
-                    <Button size="sm" variant="outline" className="gap-1 text-green-600" onClick={() => verifyExpense(e, 'verified')}>
-                      <CheckCircle2 className="h-3 w-3" />Verify
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 text-destructive" onClick={() => verifyExpense(e, 'rejected')}>
-                      <XCircle className="h-3 w-3" />Reject
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              <ExpenseRow
+                key={e.id}
+                expense={e}
+                riderName={getRiderName(e.rider_id)}
+                merchantName={e.merchant_id ? getMerchantName(e.merchant_id) : null}
+                consumptions={rowCons}
+                isHighlighted={isHi}
+                expanded={expandedRow === e.id}
+                onToggleExpand={(open) => setExpandedRow(open ? e.id : null)}
+                canVerify={canVerify}
+                onVerify={(exp) => verifyExpense(exp, 'verified')}
+                onReject={(exp) => verifyExpense(exp, 'rejected')}
+                onOpenReceipt={handleOpenReceipt}
+                onViewDelivery={viewDelivery}
+                deliveryLabel={deliveryLabel}
+              />
             );
           })}
           {expenses.length === 0 && (
@@ -453,6 +348,11 @@ export default function RiderExpensesPage() {
               <Upload className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p>No expenses recorded yet</p>
             </div>
+          )}
+          {expensesVisible < expenses.length && (
+            <Button variant="outline" className="w-full" onClick={() => setExpensesVisible(v => v + EXPENSES_PAGE_SIZE)}>
+              Show more ({expenses.length - expensesVisible} remaining)
+            </Button>
           )}
         </TabsContent>
 
@@ -481,7 +381,7 @@ export default function RiderExpensesPage() {
                         <div key={c.id} className="flex items-center justify-between gap-2 py-1 border-b last:border-0">
                           <div className="flex items-center gap-2 min-w-0">
                             {c.kind === 'fuel' ? <Fuel className="h-3 w-3 text-primary" /> : <DollarSign className="h-3 w-3 text-muted-foreground" />}
-                            <Badge variant="outline" className="h-4 px-1 text-[10px]">{c.kind}</Badge>
+                            <Badge variant="outline" className="h-4 px-1 text-xs">{c.kind}</Badge>
                             <span className="truncate">{exp?.description || c.rider_expense_id.slice(0, 8)}</span>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -489,9 +389,7 @@ export default function RiderExpensesPage() {
                             {remainingAfter != null && (
                               <span className="text-muted-foreground">remaining D{remainingAfter.toLocaleString()}</span>
                             )}
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => viewDelivery(did)} title="View delivery">
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" aria-label={`View delivery ${did.slice(0, 8)}`} onClick={() => viewDelivery(did)}><Eye className="h-3.5 w-3.5" aria-hidden="true" /></Button>
                           </div>
                         </div>
                       );
@@ -563,7 +461,7 @@ export default function RiderExpensesPage() {
                   No location data available
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Status:</span> <Badge variant="outline">{selectedDelivery.status?.replace('_', ' ') || '—'}</Badge></div>
                 <div><span className="text-muted-foreground">Waypoints:</span> {selectedWaypoints.length}</div>
                 <div className="col-span-2"><span className="text-muted-foreground">Pickup:</span> {selectedDelivery.pickup_address || '—'}</div>
@@ -575,7 +473,7 @@ export default function RiderExpensesPage() {
                 <div><span className="text-muted-foreground">Dispatched:</span> {selectedDelivery.dispatched_at ? format(new Date(selectedDelivery.dispatched_at), 'MMM d, HH:mm') : '—'}</div>
                 <div><span className="text-muted-foreground">Picked up:</span> {selectedDelivery.picked_up_at ? format(new Date(selectedDelivery.picked_up_at), 'MMM d, HH:mm') : '—'}</div>
                 <div><span className="text-muted-foreground">Delivered:</span> {selectedDelivery.delivered_at ? format(new Date(selectedDelivery.delivered_at), 'MMM d, HH:mm') : '—'}</div>
-                <div><span className="text-muted-foreground">Settlement:</span> {selectedDelivery.settlement_approved ? '✅ Approved' : 'Pending'}</div>
+                <div><span className="text-muted-foreground">Settlement:</span> {selectedDelivery.settlement_approved ? 'Approved' : 'Pending'}</div>
                 <div><span className="text-muted-foreground">Customer:</span> {selectedDelivery.customer_name || '—'}</div>
                 <div><span className="text-muted-foreground">Phone:</span> {selectedDelivery.customer_phone || '—'}</div>
                 <div className="col-span-2"><span className="text-muted-foreground">Payment:</span> {selectedDelivery.payment_method ? (selectedDelivery.payment_method === 'bank_transfer' && selectedDelivery.payment_bank_name ? `Bank (${selectedDelivery.payment_bank_name})` : selectedDelivery.payment_method) : '—'}</div>

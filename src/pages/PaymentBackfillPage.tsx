@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Download, PlayCircle, RefreshCw, Search } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface ReportRow {
   order_id: string;
@@ -55,13 +56,13 @@ const money = (n: number | null | undefined) => `D ${Number(n ?? 0).toFixed(2)}`
 const when = (s: string | null) => (s ? new Date(s).toLocaleString() : '—');
 
 function statusBadge(status: ReportRow['status']) {
-  if (status === 'credited') return <Badge className="bg-emerald-600 hover:bg-emerald-600">Credited</Badge>;
+  if (status === 'credited') return <Badge className="bg-success/15 text-success border-success/30">Credited</Badge>;
   if (status === 'missing') return <Badge variant="destructive">Missing</Badge>;
-  return <Badge className="bg-amber-500 hover:bg-amber-500">Mismatch</Badge>;
+  return <Badge className="bg-warning/15 text-warning border-warning/30">Mismatch</Badge>;
 }
 
 function outcomeBadge(outcome: string) {
-  if (outcome === 'credited') return <Badge className="bg-emerald-600 hover:bg-emerald-600">Credited</Badge>;
+  if (outcome === 'credited') return <Badge className="bg-success/15 text-success border-success/30">Credited</Badge>;
   if (outcome === 'skipped') return <Badge variant="secondary">Already credited</Badge>;
   return <Badge variant="destructive">{outcome}</Badge>;
 }
@@ -82,6 +83,7 @@ export default function PaymentBackfillPage() {
   const [activeRun, setActiveRun] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const params = () => ({
     _from: from ? new Date(from).toISOString() : null,
@@ -137,7 +139,7 @@ export default function PaymentBackfillPage() {
       toast.info('Nothing to backfill in this range');
       return;
     }
-    if (!window.confirm(`Credit ${preview.length} order(s) totalling ${money(previewTotal)} to merchant wallets?`)) return;
+    setConfirmOpen(false);
     setRunning(true);
     const { data, error } = await supabase.rpc('run_wallet_backfill', params() as never);
     setRunning(false);
@@ -198,17 +200,17 @@ export default function PaymentBackfillPage() {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-5">
           <div>
-            <Label className="text-xs">From</Label>
-            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} />
+            <Label htmlFor="bf-from" className="text-xs">From</Label>
+            <Input id="bf-from" type="date" value={from} onChange={e => setFrom(e.target.value)} />
           </div>
           <div>
-            <Label className="text-xs">To</Label>
-            <Input type="date" value={to} onChange={e => setTo(e.target.value)} />
+            <Label htmlFor="bf-to" className="text-xs">To</Label>
+            <Input id="bf-to" type="date" value={to} onChange={e => setTo(e.target.value)} />
           </div>
           <div>
-            <Label className="text-xs">Merchant</Label>
+            <Label htmlFor="bf-merchant" className="text-xs">Merchant</Label>
             <Select value={merchantId} onValueChange={setMerchantId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="bf-merchant"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All merchants</SelectItem>
                 {merchants.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
@@ -216,9 +218,9 @@ export default function PaymentBackfillPage() {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">Status</Label>
+            <Label htmlFor="bf-status" className="text-xs">Status</Label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="bf-status"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="credited">Credited</SelectItem>
@@ -231,17 +233,17 @@ export default function PaymentBackfillPage() {
             <Button onClick={loadReport} disabled={loading} className="flex-1">
               <Search className="h-4 w-4 mr-2" />Preview
             </Button>
-            <Button variant="outline" onClick={exportCsv} disabled={!filtered.length}>
-              <Download className="h-4 w-4" />
+            <Button variant="outline" onClick={exportCsv} disabled={!filtered.length} aria-label="Export report as CSV">
+              <Download className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Credited</p><p className="text-2xl font-bold text-emerald-600">{counts.credited}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Missing credit</p><p className="text-2xl font-bold text-destructive">{counts.missing}</p><p className="text-xs text-muted-foreground">{money(previewTotal)} outstanding</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Amount mismatch</p><p className="text-2xl font-bold text-amber-600">{counts.mismatch}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Credited</p><p className="text-2xl font-bold text-success tabular-nums">{counts.credited}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Missing credit</p><p className="text-2xl font-bold text-destructive tabular-nums">{counts.missing}</p><p className="text-xs text-muted-foreground">{money(previewTotal)} outstanding</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Amount mismatch</p><p className="text-2xl font-bold text-warning tabular-nums">{counts.mismatch}</p></CardContent></Card>
       </div>
 
       {canRun && (
@@ -252,13 +254,28 @@ export default function PaymentBackfillPage() {
                 ? `${preview.length} paid order(s) in this range have no merchant credit — ${money(previewTotal)} to apply.`
                 : 'Every paid order in this range is already credited.'}
             </p>
-            <Button onClick={runBackfill} disabled={running || !preview.length}>
-              {running ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-2" />}
+            <Button onClick={() => setConfirmOpen(true)} disabled={running || !preview.length}>
+              {running ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" /> : <PlayCircle className="h-4 w-4 mr-2" aria-hidden="true" />}
               Run backfill
             </Button>
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run wallet backfill?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will credit {preview.length} order(s) totalling {money(previewTotal)} to merchant wallets. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={runBackfill}>Credit {money(previewTotal)}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Tabs defaultValue="report">
         <TabsList>
@@ -329,7 +346,7 @@ export default function PaymentBackfillPage() {
                         {run.range_to ? new Date(run.range_to).toLocaleDateString() : 'now'}
                       </TableCell>
                       <TableCell className="text-right">{run.total_orders}</TableCell>
-                      <TableCell className="text-right text-emerald-600">{run.credited_count}</TableCell>
+                      <TableCell className="text-right text-success tabular-nums">{run.credited_count}</TableCell>
                       <TableCell className="text-right">{run.skipped_count}</TableCell>
                       <TableCell className="text-right text-destructive">{run.failed_count}</TableCell>
                       <TableCell className="text-right">{money(run.credited_amount)}</TableCell>

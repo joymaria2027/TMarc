@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+
+export const AUDIT_PAGE_SIZE = 20;
+export function paginateAudit<T>(rows: T[], page: number, pageSize = AUDIT_PAGE_SIZE): T[] {
+  return rows.slice(page * pageSize, page * pageSize + pageSize);
+}
 
 interface AuditRow {
   id: string;
@@ -43,6 +50,13 @@ export default function DispatchAuditPage() {
   const [type, setType] = useState("all");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(0);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { void load(); }, 400);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -70,9 +84,20 @@ export default function DispatchAuditPage() {
   useEffect(() => {
     load();
     const ch = supabase.channel("dispatch-audit")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "dispatch_audit_log" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "dispatch_audit_log" }, (payload) => {
+        // Patch state for the common case instead of a full 1000-row reload.
+        const row = (payload as { new?: AuditRow }).new;
+        if (row && row.id) {
+          setRows(prev => (prev.some(r => r.id === row.id) ? prev : [row, ...prev].slice(0, 1000)));
+        } else {
+          scheduleReload();
+        }
+      })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      supabase.removeChannel(ch);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -99,18 +124,22 @@ export default function DispatchAuditPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="font-display text-3xl">Dispatch audit log</h1>
-        <Button variant="outline" size="sm" onClick={load}>
-          <RefreshCw className="h-4 w-4 mr-2" />Refresh
+        <Button variant="outline" size="sm" onClick={load} aria-label="Refresh audit log">
+          <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />Refresh
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <Input
-          placeholder="Search by order reference…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
+      <div className="flex flex-wrap gap-2 items-end">
+        <div className="min-w-0 flex-1 basis-56">
+          <Label htmlFor="audit-search" className="sr-only">Search by order reference</Label>
+          <Input
+            id="audit-search"
+            placeholder="Search by order reference…"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            className="max-w-xs"
+          />
+        </div>
         <div className="flex flex-wrap gap-1">
           {EVENT_TYPES.map(t => (
             <Button key={t} size="sm" variant={type === t ? "default" : "outline"} onClick={() => setType(t)}>
@@ -121,36 +150,52 @@ export default function DispatchAuditPage() {
       </div>
 
       {loading ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">Loading…</CardContent></Card>
+        <div role="status" aria-label="Loading audit entries" className="space-y-2">
+          <Skeleton className="shimmer h-16 w-full rounded-lg" />
+          <Skeleton className="shimmer h-16 w-full rounded-lg" />
+          <span className="sr-only">Loading audit entries…</span>
+        </div>
       ) : grouped.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-muted-foreground">No audit entries yet.</CardContent></Card>
-      ) : grouped.map(([key, events]) => {
+      ) : (() => {
+        const visible = paginateAudit(grouped, page);
+        const pageCount = Math.max(1, Math.ceil(grouped.length / AUDIT_PAGE_SIZE));
+        return (
+          <>
+            {visible.map(([key, events]) => {
         const ref = orders[key] || key.slice(0, 8);
         const isOpen = open[key] ?? false;
+        const panelId = `audit-panel-${key.slice(0, 8)}`;
         return (
           <Card key={key}>
-            <CardHeader
-              className="cursor-pointer flex flex-row items-center justify-between py-3"
-              onClick={() => setOpen(o => ({ ...o, [key]: !isOpen }))}
-            >
-              <CardTitle className="text-base flex items-center gap-2">
-                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                {ref}
-                <Badge variant="secondary">{events.length} events</Badge>
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">
-                {new Date(events[0].created_at).toLocaleString()}
-              </span>
+            <CardHeader className="py-3">
+              <Button
+                variant="ghost"
+                className="flex w-full items-center justify-between gap-2 p-0 h-auto min-h-[44px] text-left"
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                aria-label={`${isOpen ? 'Collapse' : 'Expand'} audit trail for order ${ref}, ${events.length} events`}
+                onClick={() => setOpen(o => ({ ...o, [key]: !isOpen }))}
+              >
+                <CardTitle className="text-base flex items-center gap-2">
+                  {isOpen ? <ChevronDown className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
+                  {ref}
+                  <Badge variant="secondary" className="tabular-nums">{events.length} events</Badge>
+                </CardTitle>
+                <span className="text-xs text-muted-foreground">
+                  <time dateTime={events[0].created_at}>{new Date(events[0].created_at).toLocaleString()}</time>
+                </span>
+              </Button>
             </CardHeader>
             {isOpen && (
-              <CardContent className="space-y-2">
+              <CardContent id={panelId} className="space-y-2">
                 {[...events].reverse().map(e => (
                   <div key={e.id} className="border rounded-md p-2 text-sm flex flex-wrap items-center gap-2">
                     <Badge variant={eventVariant(e.event_type)}>{EVENT_LABEL[e.event_type] || e.event_type}</Badge>
-                    <span className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground"><time dateTime={e.created_at}>{new Date(e.created_at).toLocaleString()}</time></span>
                     {e.rider_id && <span className="text-xs">Rider {riders[e.rider_id] || e.rider_id.slice(0, 8)}</span>}
                     {e.detail && Object.keys(e.detail).length > 0 && (
-                      <code className="text-[11px] text-muted-foreground break-all">
+                      <code className="text-xs text-muted-foreground break-all">
                         {JSON.stringify(e.detail)}
                       </code>
                     )}
@@ -161,6 +206,18 @@ export default function DispatchAuditPage() {
           </Card>
         );
       })}
+            <div className="flex items-center justify-between gap-2 pt-2 flex-wrap" role="navigation" aria-label="Audit pages">
+              <p className="text-xs text-muted-foreground tabular-nums" role="status">
+                Page {page + 1} of {pageCount} · {grouped.length} orders
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage(p => p + 1)}>Show more</Button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

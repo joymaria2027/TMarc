@@ -91,7 +91,7 @@ export default function WebhookEventsPage() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <CollapsibleTrigger asChild>
-                    <Button size="icon" variant="ghost"><ChevronDown className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="ghost" aria-label={`Toggle details for webhook event ${e.event_type ?? 'unknown'}`}><ChevronDown className="h-4 w-4" aria-hidden="true" /></Button>
                   </CollapsibleTrigger>
                   <div>
                     <CardTitle className="text-sm font-mono">{e.event_type ?? "unknown"}</CardTitle>
@@ -110,7 +110,7 @@ export default function WebhookEventsPage() {
             <CollapsibleContent>
               <CardContent className="space-y-2 text-xs pt-0">
                 {e.processing_error && (
-                  <div className="p-2 bg-red-50 border border-red-200 rounded text-red-800 font-mono whitespace-pre-wrap">{e.processing_error}</div>
+                  <div role="alert" className="p-2 bg-destructive/10 border border-destructive/30 rounded text-destructive font-mono whitespace-pre-wrap">{e.processing_error}</div>
                 )}
                 <div className="grid grid-cols-2 gap-1">
                   <span className="text-muted-foreground">Event id</span><span className="font-mono truncate">{e.event_id ?? "—"}</span>
@@ -132,12 +132,12 @@ export default function WebhookEventsPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    processed: "bg-green-100 text-green-800 border-green-300",
-    duplicate: "bg-blue-100 text-blue-800 border-blue-300",
-    ignored: "bg-gray-100 text-gray-700 border-gray-300",
-    failed: "bg-red-100 text-red-800 border-red-300",
-    invalid_signature: "bg-red-100 text-red-800 border-red-300",
-    pending: "bg-amber-100 text-amber-800 border-amber-300",
+    processed: "bg-success/15 text-success border-success/30",
+    duplicate: "bg-info/15 text-info border-info/30",
+    ignored: "bg-muted text-muted-foreground border-border",
+    failed: "bg-destructive/10 text-destructive border-destructive/30",
+    invalid_signature: "bg-destructive/10 text-destructive border-destructive/30",
+    pending: "bg-warning/15 text-warning border-warning/30",
   };
   return <Badge variant="outline" className={map[status] ?? ""}>{status}</Badge>;
 }
@@ -145,6 +145,6 @@ function StatusBadge({ status }: { status: string }) {
 function SignatureBadge({ valid }: { valid: boolean | null }) {
   if (valid === null || valid === undefined) return <Badge variant="outline">no sig</Badge>;
   return valid
-    ? <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">sig ok</Badge>
-    : <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">sig bad</Badge>;
+    ? <Badge variant="outline" className="bg-success/15 text-success border-success/30">sig ok</Badge>
+    : <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">sig bad</Badge>;
 }

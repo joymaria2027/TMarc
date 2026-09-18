@@ -136,7 +136,7 @@ export default function RiderDispatchOffers() {
                     {secsLeft > 0 ? `${Math.floor(secsLeft / 60)}:${String(secsLeft % 60).padStart(2, "0")} left` : "expiring"}
                   </span>
                 ) : (
-                  <Badge variant="secondary" className="text-[10px]">Open to all riders</Badge>
+                  <Badge variant="secondary" className="text-[11px]">Open to all riders</Badge>
                 )}
               </div>
               {o.dropoff_address && <p className="text-xs text-muted-foreground">→ {o.dropoff_address}</p>}

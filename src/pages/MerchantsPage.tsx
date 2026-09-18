@@ -1,17 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Building2, Plus, DollarSign, Truck, Edit2, UserCheck, Tag, QrCode, GitBranch } from 'lucide-react';
+import { Building2, Plus, DollarSign, Truck, Edit2, UserCheck, Tag, QrCode, GitBranch, X } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import StoreQrDialog from '@/components/StoreQrDialog';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  groupMerchants, paginateList, validateMerchantForm, validateDeliveryForm,
+  validateTariffForm, type Errors,
+} from './merchantGroup.helpers';
+
+export const MERCHANT_PAGE_SIZE = 9;
 
 export default function MerchantsPage() {
   const { user, hasRole } = useAuth();
@@ -33,20 +44,27 @@ export default function MerchantsPage() {
   const [selectedMerchant, setSelectedMerchant] = useState<any>(null);
   const [editingTariff, setEditingTariff] = useState<any>(null);
   const [form, setForm] = useState({ name: '', address: '', phone: '', latitude: '', longitude: '', business_type_id: '' });
+  const [formErrors, setFormErrors] = useState<Errors>({});
   const [tariffForm, setTariffForm] = useState({ location_name: '', tariff_amount: '' });
+  const [tariffErrors, setTariffErrors] = useState<Errors>({});
   const [deliveryForm, setDeliveryForm] = useState({
     pickup_address: '', dropoff_address: '', order_reference: '',
     rider_id: '', tariff_id: '', customer_name: '', customer_phone: '',
   });
+  const [deliveryErrors, setDeliveryErrors] = useState<Errors>({});
   const [qrMerchant, setQrMerchant] = useState<any>(null);
   const [subOpen, setSubOpen] = useState(false);
   const [subParent, setSubParent] = useState<any>(null);
   const [subForm, setSubForm] = useState({ name: '', address: '', phone: '', latitude: '', longitude: '' });
+  const [subErrors, setSubErrors] = useState<Errors>({});
+  const [page, setPage] = useState(0);
+  const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const isAdmin = hasRole('admin');
   const isManager = hasRole('company_manager');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [restRes, tariffRes, riderRes, rrRes, btRes] = await Promise.all([
       supabase.from('merchants').select('*').order('name'),
       supabase.from('merchant_tariffs').select('*').order('location_name'),
@@ -89,22 +107,40 @@ export default function MerchantsPage() {
     }
 
     setLoading(false);
-  };
+  }, [isAdmin]);
+
+  // Debounced reload: realtime fan-in (merchants, tariffs, deliveries,
+  // merchant_riders) collapses bursts into one fetch. Payload scoping happens
+  // in the channel handlers below; deliveries only touch visible merchants.
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLoad = useCallback(() => {
+    if (loadTimer.current) clearTimeout(loadTimer.current);
+    loadTimer.current = setTimeout(() => { load(); }, 350);
+  }, [load]);
 
   useEffect(() => {
     load();
     const channel = supabase
       .channel('merchants-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchants' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_tariffs' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_riders' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchants' }, () => scheduleLoad())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_tariffs' }, () => scheduleLoad())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleLoad())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_riders' }, () => scheduleLoad())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    return () => {
+      if (loadTimer.current) clearTimeout(loadTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [load, scheduleLoad]);
+
+  useEffect(() => { setPage(0); }, [filterType]);
 
   const createMerchant = async () => {
-    if (!form.business_type_id) { toast.error('Please select a business type'); return; }
+    const errs = validateMerchantForm(form);
+    if (!form.name.trim()) errs.name = 'Name is required';
+    if (!form.address.trim()) errs.address = 'Address is required';
+    setFormErrors(errs);
+    if (Object.keys(errs).length) return;
     const { error } = await supabase.from('merchants').insert({
       name: form.name, address: form.address, phone: form.phone || null,
       latitude: form.latitude ? parseFloat(form.latitude) : null,
@@ -116,6 +152,7 @@ export default function MerchantsPage() {
     toast.success('Merchant added');
     setOpen(false);
     setForm({ name: '', address: '', phone: '', latitude: '', longitude: '', business_type_id: '' });
+    setFormErrors({});
     load();
   };
 
@@ -146,7 +183,11 @@ export default function MerchantsPage() {
 
   const createSubMerchant = async () => {
     if (!subParent || !user) return;
-    if (!subForm.name.trim() || !subForm.address.trim()) { toast.error('Name and address are required'); return; }
+    const errs: Errors = {};
+    if (!subForm.name.trim()) errs.name = 'Name is required';
+    if (!subForm.address.trim()) errs.address = 'Address is required';
+    setSubErrors(errs);
+    if (Object.keys(errs).length) return;
     const { error } = await supabase.from('merchants').insert({
       name: subForm.name.trim(),
       address: subForm.address.trim(),
@@ -161,6 +202,7 @@ export default function MerchantsPage() {
     toast.success('Sub-merchant created');
     setSubOpen(false);
     setSubForm({ name: '', address: '', phone: '', latitude: '', longitude: '' });
+    setSubErrors({});
     load();
   };
 
@@ -168,6 +210,9 @@ export default function MerchantsPage() {
 
   const addTariff = async () => {
     if (!selectedMerchant || !user) return;
+    const errs = validateTariffForm(tariffForm);
+    setTariffErrors(errs);
+    if (Object.keys(errs).length) return;
     const { error } = await supabase.from('merchant_tariffs').insert({
       merchant_id: selectedMerchant.id,
       location_name: tariffForm.location_name,
@@ -178,11 +223,15 @@ export default function MerchantsPage() {
     toast.success('Tariff added – stakeholders notified');
     setTariffOpen(false);
     setTariffForm({ location_name: '', tariff_amount: '' });
+    setTariffErrors({});
     load();
   };
 
   const updateTariff = async () => {
     if (!editingTariff) return;
+    const errs = validateTariffForm({ location_name: editingTariff.location_name || 'zone', tariff_amount: tariffForm.tariff_amount });
+    setTariffErrors(errs.tariff_amount ? { tariff_amount: errs.tariff_amount } : {});
+    if (errs.tariff_amount) return;
     const { error } = await supabase.from('merchant_tariffs').update({
       tariff_amount: parseFloat(tariffForm.tariff_amount),
     }).eq('id', editingTariff.id);
@@ -191,19 +240,16 @@ export default function MerchantsPage() {
     setEditTariffOpen(false);
     setEditingTariff(null);
     setTariffForm({ location_name: '', tariff_amount: '' });
+    setTariffErrors({});
     load();
   };
 
   const createDelivery = async () => {
     if (!selectedMerchant) return;
-    if (!deliveryForm.rider_id) {
-      toast.error('Please assign a rider');
-      return;
-    }
-    const customerName = deliveryForm.customer_name.trim();
-    const customerPhone = deliveryForm.customer_phone.trim();
-    if (!customerName) { toast.error('Customer name is required'); return; }
-    if (!/^[+\d][\d\s\-]{6,19}$/.test(customerPhone)) { toast.error('Enter a valid customer phone number'); return; }
+    const errs = validateDeliveryForm(deliveryForm);
+    if (!deliveryForm.dropoff_address.trim()) errs.dropoff_address = 'Drop-off address is required';
+    setDeliveryErrors(errs);
+    if (Object.keys(errs).length) return;
     const selectedTariff = tariffs.find(t => t.id === deliveryForm.tariff_id);
     const { error } = await supabase.from('deliveries').insert({
       merchant_id: selectedMerchant.id,
@@ -211,8 +257,8 @@ export default function MerchantsPage() {
       dropoff_address: deliveryForm.dropoff_address,
       order_reference: deliveryForm.order_reference || null,
       rider_id: deliveryForm.rider_id,
-      customer_name: customerName,
-      customer_phone: customerPhone,
+      customer_name: deliveryForm.customer_name.trim(),
+      customer_phone: deliveryForm.customer_phone.trim(),
       status: 'dispatched',
       dispatched_at: new Date().toISOString(),
       estimated_tariff: selectedTariff ? selectedTariff.tariff_amount : null,
@@ -223,6 +269,7 @@ export default function MerchantsPage() {
     toast.success('Delivery created & dispatched to rider');
     setDeliveryOpen(false);
     setDeliveryForm({ pickup_address: '', dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
+    setDeliveryErrors({});
     load();
   };
 
@@ -276,43 +323,97 @@ export default function MerchantsPage() {
     return riderProfiles[rider.user_id]?.full_name || riderId.slice(0, 8);
   };
 
-  const merchantTariffs = (id: string) => tariffs.filter(t => t.merchant_id === id);
+  // Memoized tariff lookup: avoids O(merchants × tariffs) filter per render.
+  const tariffsByMerchant = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const t of tariffs) {
+      const list = map.get(t.merchant_id);
+      if (list) list.push(t);
+      else map.set(t.merchant_id, [t]);
+    }
+    return map;
+  }, [tariffs]);
+  const merchantTariffs = useCallback((id: string) => tariffsByMerchant.get(id) || [], [tariffsByMerchant]);
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  // Grouped + paginated merchant list (group order preserved).
+  const allGroups = useMemo(
+    () => groupMerchants(merchants, businessTypes, filterType, { isAdmin, userId: user?.id }),
+    [merchants, businessTypes, filterType, isAdmin, user?.id],
+  );
+  const totalCount = useMemo(() => allGroups.reduce((n, g) => n + g.items.length, 0), [allGroups]);
+  const groupPages = Math.max(1, Math.ceil(totalCount / MERCHANT_PAGE_SIZE));
+  const safePage = Math.min(page, groupPages - 1);
+  const visibleGroups = useMemo(() => {
+    const flat: { groupId: string; item: any }[] = [];
+    for (const g of allGroups) for (const item of g.items) flat.push({ groupId: g.id, item });
+    const slice = paginateList(flat, safePage, MERCHANT_PAGE_SIZE);
+    const byId = new Map(allGroups.map(g => [g.id, { ...g, items: [] as any[] }]));
+    for (const row of slice) byId.get(row.groupId)?.items.push(row.item);
+    return allGroups.map(g => byId.get(g.id)!).filter(g => g.items.length > 0);
+  }, [allGroups, safePage]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20" role="status">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" aria-hidden="true" />
+      <span className="sr-only">Loading merchants…</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Merchants</h1>
           <p className="text-muted-foreground">Manage partner merchants & tariffs</p>
         </div>
         {isAdmin && (
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Add Merchant</Button></DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add Merchant</DialogTitle></DialogHeader>
+            <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" aria-hidden="true" />Add Merchant</Button></DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add Merchant</DialogTitle>
+                <DialogDescription>Register a partner merchant. Name, address and business type are required.</DialogDescription>
+              </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Business Type *</Label>
+                  <Label htmlFor="merchant-business-type">Business Type *</Label>
                   <Select value={form.business_type_id} onValueChange={v => setForm(p => ({ ...p, business_type_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select business type" /></SelectTrigger>
+                    <SelectTrigger id="merchant-business-type" aria-required="true" aria-invalid={!!formErrors.business_type_id} aria-describedby={formErrors.business_type_id ? 'merchant-business-type-error' : undefined}><SelectValue placeholder="Select business type" /></SelectTrigger>
                     <SelectContent>
                       {businessTypes.map(bt => (
                         <SelectItem key={bt.id} value={bt.id}>{bt.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {businessTypes.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No business types yet. Create one under "Business Types".</p>
-                  )}
+                  {formErrors.business_type_id
+                    ? <p id="merchant-business-type-error" className="text-xs text-destructive">{formErrors.business_type_id}</p>
+                    : businessTypes.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No business types yet. Create one under "Business Types".</p>
+                    )}
                 </div>
-                <div className="space-y-2"><Label>Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>Address</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2"><Label>Latitude</Label><Input type="number" step="any" value={form.latitude} onChange={e => setForm(p => ({ ...p, latitude: e.target.value }))} /></div>
-                  <div className="space-y-2"><Label>Longitude</Label><Input type="number" step="any" value={form.longitude} onChange={e => setForm(p => ({ ...p, longitude: e.target.value }))} /></div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-name">Name *</Label>
+                  <Input id="merchant-name" required aria-required="true" aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? 'merchant-name-error' : undefined} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                  {formErrors.name && <p id="merchant-name-error" className="text-xs text-destructive">{formErrors.name}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-address">Address *</Label>
+                  <Input id="merchant-address" required aria-required="true" aria-invalid={!!formErrors.address} aria-describedby={formErrors.address ? 'merchant-address-error' : undefined} value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+                  {formErrors.address && <p id="merchant-address-error" className="text-xs text-destructive">{formErrors.address}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-phone">Phone</Label>
+                  <Input id="merchant-phone" type="tel" autoComplete="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="merchant-lat">Latitude</Label>
+                    <Input id="merchant-lat" type="number" step="any" value={form.latitude} onChange={e => setForm(p => ({ ...p, latitude: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="merchant-lng">Longitude</Label>
+                    <Input id="merchant-lng" type="number" step="any" value={form.longitude} onChange={e => setForm(p => ({ ...p, longitude: e.target.value }))} />
+                  </div>
                 </div>
                 <Button onClick={createMerchant} className="w-full">Add Merchant</Button>
               </div>
@@ -322,9 +423,9 @@ export default function MerchantsPage() {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <Label className="text-sm">Filter by business type:</Label>
+        <Label htmlFor="merchant-filter-type" className="text-sm">Filter by business type:</Label>
         <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-56 h-8"><SelectValue /></SelectTrigger>
+          <SelectTrigger id="merchant-filter-type" className="w-56 min-h-[44px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Business Types</SelectItem>
             {businessTypes.map(bt => <SelectItem key={bt.id} value={bt.id}>{bt.name}</SelectItem>)}
@@ -333,262 +434,290 @@ export default function MerchantsPage() {
         </Select>
       </div>
 
-      {(() => {
-        const myIds = merchants.filter(r => r.manager_user_id === user?.id).map(r => r.id);
-        const baseList = (isAdmin ? merchants : merchants.filter(r => r.manager_user_id === user?.id || (r.parent_merchant_id && myIds.includes(r.parent_merchant_id))));
-        const filtered = filterType === 'all' ? baseList
-          : filterType === 'unassigned' ? baseList.filter(c => !c.business_type_id)
-          : baseList.filter(c => c.business_type_id === filterType);
-        const groups: { id: string; name: string; items: any[] }[] = [];
-        businessTypes.forEach(bt => {
-          const items = filtered.filter(c => c.business_type_id === bt.id);
-          if (items.length) groups.push({ id: bt.id, name: bt.name, items });
-        });
-        const unassigned = filtered.filter(c => !c.business_type_id);
-        if (unassigned.length) groups.push({ id: 'unassigned', name: 'Unassigned', items: unassigned });
-        if (groups.length === 0) {
-          return (
-            <div className="text-center py-10 text-muted-foreground">
-              <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No merchants to show</p>
-            </div>
-          );
-        }
-        return groups.map(group => (
-          <section key={group.id} className="space-y-3">
-            <div className="flex items-center gap-2 border-b pb-2">
-              <Tag className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">{group.name}</h2>
-              <Badge variant="secondary">{group.items.length}</Badge>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {group.items.map(r => {
-          const rTariffs = merchantTariffs(r.id);
-          return (
-            <Card key={r.id}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium">{r.name}</span>
-                  <div className="flex items-center gap-1">
-                    {r.approval_status === 'pending' && <Badge variant="outline">Pending review</Badge>}
-                    {r.approval_status === 'rejected' && <Badge variant="destructive">Rejected</Badge>}
-                    <Badge variant={r.is_active ? 'default' : 'secondary'}>{r.is_active ? 'Active' : 'Inactive'}</Badge>
-                  </div>
-                </div>
-                {r.approval_status === 'rejected' && r.rejection_reason && (
-                  <p className="text-xs text-destructive">Reason: {r.rejection_reason}</p>
-                )}
-                {isAdmin && r.approval_status !== 'approved' && (
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => reviewMerchant(r.id, true)}>Approve &amp; publish</Button>
-                    <Button size="sm" variant="destructive" onClick={() => {
-                      const reason = window.prompt('Reason for rejecting this store?') || undefined;
-                      reviewMerchant(r.id, false, reason);
-                    }}>Reject</Button>
-                  </div>
-                )}
-                {r.parent_merchant_id && (
-                  <Badge variant="outline" className="text-xs gap-1">
-                    <GitBranch className="h-3 w-3" />
-                    Branch of {merchants.find(m => m.id === r.parent_merchant_id)?.name || 'parent'}
-                  </Badge>
-                )}
-                <p className="text-sm text-muted-foreground">{r.address}</p>
-                {r.phone && <p className="text-sm text-muted-foreground">{r.phone}</p>}
-
-                {isAdmin && !r.parent_merchant_id && (
-                  <div className="flex items-center justify-between rounded-md border px-2 py-1.5">
-                    <span className="text-xs text-muted-foreground">Can create sub-merchants</span>
-                    <Switch checked={!!r.can_create_submerchants} onCheckedChange={v => toggleSubPermission(r.id, v)} />
-                  </div>
-                )}
-
-
-                {/* Business type */}
-                <div className="flex items-center gap-2 text-xs">
-                  <Tag className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    Type: {businessTypes.find(bt => bt.id === r.business_type_id)?.name || 'Unassigned'}
-                  </span>
-                </div>
-                {isAdmin && businessTypes.length > 0 && (
-                  <Select
-                    value={r.business_type_id || ''}
-                    onValueChange={v => assignBusinessType(r.id, v)}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Set business type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {businessTypes.map(bt => (
-                        <SelectItem key={bt.id} value={bt.id}>{bt.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                {/* Accountant info */}
-                <div className="flex items-center gap-2 text-xs">
-                  <UserCheck className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    Accountant: {getAccountantName(r.accountant_user_id) || 'Not assigned'}
-                  </span>
-                </div>
-
-                {/* Manager info */}
-                <div className="flex items-center gap-2 text-xs">
-                  <UserCheck className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    Manager: {getManagerName(r.manager_user_id) || 'Not assigned'}
-                  </span>
-                </div>
-
-                {/* Manager assignment (admin only) */}
-                {isAdmin && managerUsers.length > 0 && (
-                  <Select
-                    value={r.manager_user_id || ''}
-                    onValueChange={v => assignManager(r.id, v || null)}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Assign merchant manager" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {managerUsers.map(m => (
-                        <SelectItem key={m.user_id} value={m.user_id}>{m.full_name || m.email}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                {/* Accountant assignment (admin only) */}
-                {isAdmin && accountantUsers.length > 0 && (
-                  <Select
-                    value={r.accountant_user_id || ''}
-                    onValueChange={v => assignAccountant(r.id, v || null)}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Assign accountant" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accountantUsers.map(a => (
-                        <SelectItem key={a.user_id} value={a.user_id}>{a.full_name || a.email}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                {/* Assigned Riders */}
-                <div className="border-t pt-2">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1"><Truck className="h-3 w-3" />Assigned Riders</p>
-                  {(merchantRiders[r.id] || []).length > 0 ? (
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      {(merchantRiders[r.id] || []).map(riderId => (
-                        <Badge key={riderId} variant="secondary" className="text-xs gap-1">
-                          {getRiderName(riderId)}
-                          {isAdmin && (
-                            <button onClick={() => unassignRiderFromMerchant(r.id, riderId)} className="ml-1 hover:text-destructive">×</button>
-                          )}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mb-1">No riders assigned</p>
-                  )}
-                  {isAdmin && riders.length > 0 && (
-                    <Select onValueChange={v => assignRiderToMerchant(r.id, v)}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Assign rider..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {riders.filter(rd => !(merchantRiders[r.id] || []).includes(rd.id)).map(rd => (
-                          <SelectItem key={rd.id} value={rd.id}>
-                            {riderProfiles[rd.user_id]?.full_name || rd.id.slice(0, 8)} – {rd.vehicle_type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-
-                {/* Tariffs section */}
-                {rTariffs.length > 0 && (
-                  <div className="border-t pt-2">
-                    <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1"><DollarSign className="h-3 w-3" />Delivery Tariffs</p>
-                    <div className="space-y-1">
-                      {rTariffs.map(t => (
-                        <div key={t.id} className="flex items-center justify-between text-sm">
-                          <span>{t.location_name}</span>
-                          <div className="flex items-center gap-1">
-                            <Badge variant="outline">D{Number(t.tariff_amount).toLocaleString()}</Badge>
-                            {(isAdmin || (isManager && r.manager_user_id === user?.id)) && (
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => {
-                                setEditingTariff(t);
-                                setTariffForm({ location_name: t.location_name, tariff_amount: String(t.tariff_amount) });
-                                setEditTariffOpen(true);
-                              }}><Edit2 className="h-3 w-3" /></Button>
-                            )}
+      {allGroups.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground" role="status">
+          <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" aria-hidden="true" />
+          <p>No merchants to show</p>
+          <p className="text-sm mt-1">{filterType !== 'all' ? 'Try a different business-type filter.' : 'Add your first merchant to get started.'}</p>
+        </div>
+      ) : (
+        <>
+          {visibleGroups.map(group => (
+            <section key={group.id} className="space-y-3" aria-label={group.name}>
+              <div className="flex items-center gap-2 border-b pb-2 flex-wrap">
+                <Tag className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <h2 className="text-lg font-semibold">{group.name}</h2>
+                <Badge variant="secondary" className="text-xs">{group.items.length}</Badge>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {group.items.map(r => {
+                  const rTariffs = merchantTariffs(r.id);
+                  return (
+                    <Card key={r.id}>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+                          <span className="font-medium">{r.name}</span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {r.approval_status === 'pending' && <Badge variant="outline" className="text-xs">Pending review</Badge>}
+                            {r.approval_status === 'rejected' && <Badge variant="destructive" className="text-xs">Rejected</Badge>}
+                            <Badge variant={r.is_active ? 'default' : 'secondary'} className="text-xs">{r.is_active ? 'Active' : 'Inactive'}</Badge>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        {r.approval_status === 'rejected' && r.rejection_reason && (
+                          <p className="text-xs text-destructive">Reason: {r.rejection_reason}</p>
+                        )}
+                        {isAdmin && r.approval_status !== 'approved' && (
+                          <div className="flex gap-2 flex-wrap">
+                            <Button size="sm" onClick={() => reviewMerchant(r.id, true)}>Approve &amp; publish</Button>
+                            <Button size="sm" variant="destructive" onClick={() => { setRejectTarget(r); setRejectReason(''); }}>Reject</Button>
+                          </div>
+                        )}
+                        {r.parent_merchant_id && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <GitBranch className="h-3 w-3" aria-hidden="true" />
+                            Branch of {merchants.find(m => m.id === r.parent_merchant_id)?.name || 'parent'}
+                          </Badge>
+                        )}
+                        <p className="text-sm text-muted-foreground">{r.address}</p>
+                        {r.phone && <p className="text-sm text-muted-foreground">{r.phone}</p>}
 
-                {/* Action buttons */}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {r.approval_status === 'approved' && (
-                    <Button size="sm" variant="outline" onClick={() => setQrMerchant(r)}>
-                      <QrCode className="h-3 w-3 mr-1" />Store QR
-                    </Button>
-                  )}
-                  {r.can_create_submerchants && !r.parent_merchant_id && r.manager_user_id === user?.id && (
-                    <Button size="sm" variant="outline" onClick={() => { setSubParent(r); setSubForm({ name: '', address: '', phone: '', latitude: '', longitude: '' }); setSubOpen(true); }}>
-                      <GitBranch className="h-3 w-3 mr-1" />Add Sub-merchant
-                    </Button>
-                  )}
-                  {(isAdmin || (isManager && r.manager_user_id === user?.id)) && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => {
-                        setSelectedMerchant(r);
-                        setTariffForm({ location_name: '', tariff_amount: '' });
-                        setTariffOpen(true);
-                      }}>
-                        <DollarSign className="h-3 w-3 mr-1" />Set Tariff
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => {
-                        setSelectedMerchant(r);
-                        setDeliveryForm({ pickup_address: r.address, dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
-                        setDeliveryOpen(true);
-                      }}>
-                        <Truck className="h-3 w-3 mr-1" />Create Delivery
-                      </Button>
-                    </>
-                  )}
-                  {isAdmin && (
-                    <Button size="sm" variant={r.is_active ? 'destructive' : 'default'} onClick={async () => {
-                      await supabase.from('merchants').update({ is_active: !r.is_active }).eq('id', r.id);
-                      setMerchants(prev => prev.map(x => x.id === r.id ? { ...x, is_active: !r.is_active } : x));
-                      toast.success(r.is_active ? 'Deactivated' : 'Activated');
-                    }}>
-                      {r.is_active ? 'Deactivate' : 'Activate'}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-              })}
+                        {isAdmin && !r.parent_merchant_id && (
+                          <div className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5">
+                            <Label htmlFor={`sub-perm-${r.id}`} className="text-xs text-muted-foreground">Can create sub-merchants</Label>
+                            <Switch id={`sub-perm-${r.id}`} checked={!!r.can_create_submerchants} onCheckedChange={v => toggleSubPermission(r.id, v)} aria-label={`Allow ${r.name} to create sub-merchants`} />
+                          </div>
+                        )}
+
+
+                        {/* Business type */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <Tag className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                          <span className="text-muted-foreground">
+                            Type: {businessTypes.find(bt => bt.id === r.business_type_id)?.name || 'Unassigned'}
+                          </span>
+                        </div>
+                        {isAdmin && businessTypes.length > 0 && (
+                          <div className="space-y-1">
+                            <Label htmlFor={`biz-type-${r.id}`} className="sr-only">Set business type for {r.name}</Label>
+                            <Select
+                              value={r.business_type_id || ''}
+                              onValueChange={v => assignBusinessType(r.id, v)}
+                            >
+                              <SelectTrigger id={`biz-type-${r.id}`} className="min-h-[44px] text-xs">
+                                <SelectValue placeholder="Set business type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {businessTypes.map(bt => (
+                                  <SelectItem key={bt.id} value={bt.id}>{bt.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Accountant info */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <UserCheck className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                          <span className="text-muted-foreground">
+                            Accountant: {getAccountantName(r.accountant_user_id) || 'Not assigned'}
+                          </span>
+                        </div>
+
+                        {/* Manager info */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <UserCheck className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                          <span className="text-muted-foreground">
+                            Manager: {getManagerName(r.manager_user_id) || 'Not assigned'}
+                          </span>
+                        </div>
+
+                        {/* Manager assignment (admin only) */}
+                        {isAdmin && managerUsers.length > 0 && (
+                          <div className="space-y-1">
+                            <Label htmlFor={`mgr-${r.id}`} className="sr-only">Assign merchant manager for {r.name}</Label>
+                            <Select
+                              value={r.manager_user_id || ''}
+                              onValueChange={v => assignManager(r.id, v || null)}
+                            >
+                              <SelectTrigger id={`mgr-${r.id}`} className="min-h-[44px] text-xs">
+                                <SelectValue placeholder="Assign merchant manager" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {managerUsers.map(m => (
+                                  <SelectItem key={m.user_id} value={m.user_id}>{m.full_name || m.email}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Accountant assignment (admin only) */}
+                        {isAdmin && accountantUsers.length > 0 && (
+                          <div className="space-y-1">
+                            <Label htmlFor={`acct-${r.id}`} className="sr-only">Assign accountant for {r.name}</Label>
+                            <Select
+                              value={r.accountant_user_id || ''}
+                              onValueChange={v => assignAccountant(r.id, v || null)}
+                            >
+                              <SelectTrigger id={`acct-${r.id}`} className="min-h-[44px] text-xs">
+                                <SelectValue placeholder="Assign accountant" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {accountantUsers.map(a => (
+                                  <SelectItem key={a.user_id} value={a.user_id}>{a.full_name || a.email}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* Assigned Riders */}
+                        <div className="border-t pt-2">
+                          <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1"><Truck className="h-3 w-3" aria-hidden="true" />Assigned Riders</p>
+                          {(merchantRiders[r.id] || []).length > 0 ? (
+                            <div className="flex flex-wrap gap-1 mb-1">
+                              {(merchantRiders[r.id] || []).map(riderId => (
+                                <Badge key={riderId} variant="secondary" className="text-xs gap-1">
+                                  {getRiderName(riderId)}
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => unassignRiderFromMerchant(r.id, riderId)}
+                                      className="ml-1 inline-flex h-9 w-9 items-center justify-center rounded hover:text-destructive"
+                                      aria-label={`Remove rider ${getRiderName(riderId)} from ${r.name}`}
+                                    >
+                                      <X className="h-3 w-3" aria-hidden="true" />
+                                    </button>
+                                  )}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mb-1">No riders assigned</p>
+                          )}
+                          {isAdmin && riders.length > 0 && (
+                            <div className="space-y-1">
+                              <Label htmlFor={`rider-${r.id}`} className="sr-only">Assign rider to {r.name}</Label>
+                              <Select onValueChange={v => assignRiderToMerchant(r.id, v)}>
+                                <SelectTrigger id={`rider-${r.id}`} className="min-h-[44px] text-xs">
+                                  <SelectValue placeholder="Assign rider..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {riders.filter(rd => !(merchantRiders[r.id] || []).includes(rd.id)).map(rd => (
+                                    <SelectItem key={rd.id} value={rd.id}>
+                                      {riderProfiles[rd.user_id]?.full_name || rd.id.slice(0, 8)} – {rd.vehicle_type}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Tariffs section */}
+                        {rTariffs.length > 0 && (
+                          <div className="border-t pt-2">
+                            <p className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1"><DollarSign className="h-3 w-3" aria-hidden="true" />Delivery Tariffs</p>
+                            <div className="space-y-1">
+                              {rTariffs.map(t => (
+                                <div key={t.id} className="flex items-center justify-between text-sm gap-2">
+                                  <span>{t.location_name}</span>
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant="outline" className="text-xs tabular-nums">D{Number(t.tariff_amount).toLocaleString()}</Badge>
+                                    {(isAdmin || (isManager && r.manager_user_id === user?.id)) && (
+                                      <Button size="icon" variant="ghost" className="h-9 w-9" aria-label={`Edit tariff ${t.location_name}`} onClick={() => {
+                                        setEditingTariff(t);
+                                        setTariffForm({ location_name: t.location_name, tariff_amount: String(t.tariff_amount) });
+                                        setTariffErrors({});
+                                        setEditTariffOpen(true);
+                                      }}><Edit2 className="h-3 w-3" aria-hidden="true" /></Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {r.approval_status === 'approved' && (
+                            <Button size="sm" variant="outline" onClick={() => setQrMerchant(r)}>
+                              <QrCode className="h-3 w-3 mr-1" aria-hidden="true" />Store QR
+                            </Button>
+                          )}
+                          {r.can_create_submerchants && !r.parent_merchant_id && r.manager_user_id === user?.id && (
+                            <Button size="sm" variant="outline" onClick={() => { setSubParent(r); setSubForm({ name: '', address: '', phone: '', latitude: '', longitude: '' }); setSubErrors({}); setSubOpen(true); }}>
+                              <GitBranch className="h-3 w-3 mr-1" aria-hidden="true" />Add Sub-merchant
+                            </Button>
+                          )}
+                          {(isAdmin || (isManager && r.manager_user_id === user?.id)) && (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setSelectedMerchant(r);
+                                setTariffForm({ location_name: '', tariff_amount: '' });
+                                setTariffErrors({});
+                                setTariffOpen(true);
+                              }}>
+                                <DollarSign className="h-3 w-3 mr-1" aria-hidden="true" />Set Tariff
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => {
+                                setSelectedMerchant(r);
+                                setDeliveryForm({ pickup_address: r.address, dropoff_address: '', order_reference: '', rider_id: '', tariff_id: '', customer_name: '', customer_phone: '' });
+                                setDeliveryErrors({});
+                                setDeliveryOpen(true);
+                              }}>
+                                <Truck className="h-3 w-3 mr-1" aria-hidden="true" />Create Delivery
+                              </Button>
+                            </>
+                          )}
+                          {isAdmin && (
+                            <Button size="sm" variant={r.is_active ? 'destructive' : 'default'} aria-label={`${r.is_active ? 'Deactivate' : 'Activate'} ${r.name}`} onClick={async () => {
+                              await supabase.from('merchants').update({ is_active: !r.is_active }).eq('id', r.id);
+                              setMerchants(prev => prev.map(x => x.id === r.id ? { ...x, is_active: !r.is_active } : x));
+                              toast.success(r.is_active ? 'Deactivated' : 'Activated');
+                            }}>
+                              {r.is_active ? 'Deactivate' : 'Activate'}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+          {groupPages > 1 && (
+            <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+              <span className="text-xs text-muted-foreground" role="status">Page {safePage + 1} of {groupPages} · {totalCount} merchants</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={safePage === 0} aria-label="Previous merchants page" onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="outline" disabled={safePage + 1 >= groupPages} aria-label="Next merchants page" onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
             </div>
-          </section>
-        ));
-      })()}
+          )}
+        </>
+      )}
 
       {/* Add Tariff Dialog */}
       <Dialog open={tariffOpen} onOpenChange={setTariffOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Set Delivery Tariff – {selectedMerchant?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Set Delivery Tariff – {selectedMerchant?.name}</DialogTitle>
+            <DialogDescription>Zone tariffs apply to deliveries from this store.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Location / Zone Name</Label><Input placeholder="e.g. Lekki, Ikeja, Surulere" value={tariffForm.location_name} onChange={e => setTariffForm(p => ({ ...p, location_name: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Tariff Amount (GMD)</Label><Input type="number" step="0.01" value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label htmlFor="tariff-zone">Location / Zone Name *</Label>
+              <Input id="tariff-zone" required aria-required="true" aria-invalid={!!tariffErrors.location_name} aria-describedby={tariffErrors.location_name ? 'tariff-zone-error' : undefined} placeholder="e.g. Lekki, Ikeja, Surulere" value={tariffForm.location_name} onChange={e => setTariffForm(p => ({ ...p, location_name: e.target.value }))} />
+              {tariffErrors.location_name && <p id="tariff-zone-error" className="text-xs text-destructive">{tariffErrors.location_name}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tariff-amount">Tariff Amount (GMD) *</Label>
+              <Input id="tariff-amount" required aria-required="true" type="number" step="0.01" min={0} aria-invalid={!!tariffErrors.tariff_amount} aria-describedby={tariffErrors.tariff_amount ? 'tariff-amount-error' : undefined} value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} />
+              {tariffErrors.tariff_amount && <p id="tariff-amount-error" className="text-xs text-destructive">{tariffErrors.tariff_amount}</p>}
+            </div>
             <Button onClick={addTariff} className="w-full">Save Tariff</Button>
           </div>
         </DialogContent>
@@ -596,10 +725,17 @@ export default function MerchantsPage() {
 
       {/* Edit Tariff Dialog */}
       <Dialog open={editTariffOpen} onOpenChange={setEditTariffOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Update Tariff – {editingTariff?.location_name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Update Tariff – {editingTariff?.location_name}</DialogTitle>
+            <DialogDescription>Stakeholders are notified when a tariff changes.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>New Tariff Amount (GMD)</Label><Input type="number" step="0.01" value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label htmlFor="tariff-edit-amount">New Tariff Amount (GMD) *</Label>
+              <Input id="tariff-edit-amount" required aria-required="true" type="number" step="0.01" min={0} aria-invalid={!!tariffErrors.tariff_amount} aria-describedby={tariffErrors.tariff_amount ? 'tariff-edit-amount-error' : undefined} value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} />
+              {tariffErrors.tariff_amount && <p id="tariff-edit-amount-error" className="text-xs text-destructive">{tariffErrors.tariff_amount}</p>}
+            </div>
             <Button onClick={updateTariff} className="w-full">Update Tariff</Button>
           </div>
         </DialogContent>
@@ -607,23 +743,44 @@ export default function MerchantsPage() {
 
       {/* Create Delivery Dialog */}
       <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Create Delivery – {selectedMerchant?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Delivery – {selectedMerchant?.name}</DialogTitle>
+            <DialogDescription>Dispatch a delivery to a rider assigned to this store.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Pickup Address</Label><Input value={deliveryForm.pickup_address} onChange={e => setDeliveryForm(p => ({ ...p, pickup_address: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Drop-off Address</Label><Input value={deliveryForm.dropoff_address} onChange={e => setDeliveryForm(p => ({ ...p, dropoff_address: e.target.value }))} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>Customer Name *</Label><Input required value={deliveryForm.customer_name} onChange={e => setDeliveryForm(p => ({ ...p, customer_name: e.target.value }))} /></div>
-              <div className="space-y-2"><Label>Customer Phone *</Label><Input required type="tel" inputMode="tel" maxLength={20} placeholder="+220…" value={deliveryForm.customer_phone} onChange={e => setDeliveryForm(p => ({ ...p, customer_phone: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label htmlFor="delivery-pickup">Pickup Address</Label>
+              <Input id="delivery-pickup" value={deliveryForm.pickup_address} onChange={e => setDeliveryForm(p => ({ ...p, pickup_address: e.target.value }))} />
             </div>
-            <div className="space-y-2"><Label>Order Reference</Label><Input value={deliveryForm.order_reference} onChange={e => setDeliveryForm(p => ({ ...p, order_reference: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label htmlFor="delivery-dropoff">Drop-off Address *</Label>
+              <Input id="delivery-dropoff" required aria-required="true" aria-invalid={!!deliveryErrors.dropoff_address} aria-describedby={deliveryErrors.dropoff_address ? 'delivery-dropoff-error' : undefined} value={deliveryForm.dropoff_address} onChange={e => setDeliveryForm(p => ({ ...p, dropoff_address: e.target.value }))} />
+              {deliveryErrors.dropoff_address && <p id="delivery-dropoff-error" className="text-xs text-destructive">{deliveryErrors.dropoff_address}</p>}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="delivery-customer">Customer Name *</Label>
+                <Input id="delivery-customer" required aria-required="true" autoComplete="name" aria-invalid={!!deliveryErrors.customer_name} aria-describedby={deliveryErrors.customer_name ? 'delivery-customer-error' : undefined} value={deliveryForm.customer_name} onChange={e => setDeliveryForm(p => ({ ...p, customer_name: e.target.value }))} />
+                {deliveryErrors.customer_name && <p id="delivery-customer-error" className="text-xs text-destructive">{deliveryErrors.customer_name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delivery-phone">Customer Phone *</Label>
+                <Input id="delivery-phone" required aria-required="true" type="tel" inputMode="tel" autoComplete="tel" maxLength={20} placeholder="+220…" aria-invalid={!!deliveryErrors.customer_phone} aria-describedby={deliveryErrors.customer_phone ? 'delivery-phone-error' : undefined} value={deliveryForm.customer_phone} onChange={e => setDeliveryForm(p => ({ ...p, customer_phone: e.target.value }))} />
+                {deliveryErrors.customer_phone && <p id="delivery-phone-error" className="text-xs text-destructive">{deliveryErrors.customer_phone}</p>}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="delivery-ref">Order Reference</Label>
+              <Input id="delivery-ref" value={deliveryForm.order_reference} onChange={e => setDeliveryForm(p => ({ ...p, order_reference: e.target.value }))} />
+            </div>
 
             {/* Tariff selection */}
             {selectedMerchant && merchantTariffs(selectedMerchant.id).length > 0 && (
               <div className="space-y-2">
-                <Label>Delivery Tariff</Label>
+                <Label htmlFor="delivery-tariff">Delivery Tariff</Label>
                 <Select value={deliveryForm.tariff_id} onValueChange={v => setDeliveryForm(p => ({ ...p, tariff_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select tariff zone" /></SelectTrigger>
+                  <SelectTrigger id="delivery-tariff" className="min-h-[44px]"><SelectValue placeholder="Select tariff zone" /></SelectTrigger>
                   <SelectContent>
                     {merchantTariffs(selectedMerchant.id).map(t => (
                       <SelectItem key={t.id} value={t.id}>{t.location_name} – D{Number(t.tariff_amount).toLocaleString()}</SelectItem>
@@ -635,24 +792,27 @@ export default function MerchantsPage() {
 
             {/* Rider assignment — only riders assigned to this merchant */}
             <div className="space-y-2">
-              <Label>Assign Rider *</Label>
+              <Label htmlFor="delivery-rider">Assign Rider *</Label>
               {selectedMerchant && (merchantRiders[selectedMerchant.id] || []).length === 0 ? (
                 <p className="text-xs text-muted-foreground border rounded-md p-2">
                   No riders are assigned to this merchant yet. Ask an admin to assign riders.
                 </p>
               ) : (
-                <Select value={deliveryForm.rider_id} onValueChange={v => setDeliveryForm(p => ({ ...p, rider_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select rider" /></SelectTrigger>
-                  <SelectContent>
-                    {riders
-                      .filter(r => selectedMerchant ? (merchantRiders[selectedMerchant.id] || []).includes(r.id) : true)
-                      .map(r => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {riderProfiles[r.user_id]?.full_name || r.id.slice(0, 8)} – {r.vehicle_type}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Select value={deliveryForm.rider_id} onValueChange={v => setDeliveryForm(p => ({ ...p, rider_id: v }))}>
+                    <SelectTrigger id="delivery-rider" className="min-h-[44px]" aria-required="true" aria-invalid={!!deliveryErrors.rider_id} aria-describedby={deliveryErrors.rider_id ? 'delivery-rider-error' : undefined}><SelectValue placeholder="Select rider" /></SelectTrigger>
+                    <SelectContent>
+                      {riders
+                        .filter(r => selectedMerchant ? (merchantRiders[selectedMerchant.id] || []).includes(r.id) : true)
+                        .map(r => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {riderProfiles[r.user_id]?.full_name || r.id.slice(0, 8)} – {r.vehicle_type}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {deliveryErrors.rider_id && <p id="delivery-rider-error" className="text-xs text-destructive">{deliveryErrors.rider_id}</p>}
+                </>
               )}
             </div>
 
@@ -663,21 +823,69 @@ export default function MerchantsPage() {
 
       {/* Create Sub-merchant Dialog */}
       <Dialog open={subOpen} onOpenChange={setSubOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Sub-merchant under {subParent?.name}</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Sub-merchant under {subParent?.name}</DialogTitle>
+            <DialogDescription>The branch goes live immediately and inherits the parent's business type. You stay its manager.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Name *</Label><Input value={subForm.name} onChange={e => setSubForm(p => ({ ...p, name: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Address *</Label><Input value={subForm.address} onChange={e => setSubForm(p => ({ ...p, address: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Phone</Label><Input value={subForm.phone} onChange={e => setSubForm(p => ({ ...p, phone: e.target.value }))} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>Latitude</Label><Input type="number" step="any" placeholder={subParent?.latitude ?? ''} value={subForm.latitude} onChange={e => setSubForm(p => ({ ...p, latitude: e.target.value }))} /></div>
-              <div className="space-y-2"><Label>Longitude</Label><Input type="number" step="any" placeholder={subParent?.longitude ?? ''} value={subForm.longitude} onChange={e => setSubForm(p => ({ ...p, longitude: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label htmlFor="sub-name">Name *</Label>
+              <Input id="sub-name" required aria-required="true" aria-invalid={!!subErrors.name} aria-describedby={subErrors.name ? 'sub-name-error' : undefined} value={subForm.name} onChange={e => setSubForm(p => ({ ...p, name: e.target.value }))} />
+              {subErrors.name && <p id="sub-name-error" className="text-xs text-destructive">{subErrors.name}</p>}
             </div>
-            <p className="text-xs text-muted-foreground">The branch goes live immediately and inherits the parent's business type. You stay its manager.</p>
+            <div className="space-y-2">
+              <Label htmlFor="sub-address">Address *</Label>
+              <Input id="sub-address" required aria-required="true" aria-invalid={!!subErrors.address} aria-describedby={subErrors.address ? 'sub-address-error' : undefined} value={subForm.address} onChange={e => setSubForm(p => ({ ...p, address: e.target.value }))} />
+              {subErrors.address && <p id="sub-address-error" className="text-xs text-destructive">{subErrors.address}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sub-phone">Phone</Label>
+              <Input id="sub-phone" type="tel" autoComplete="tel" value={subForm.phone} onChange={e => setSubForm(p => ({ ...p, phone: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="sub-lat">Latitude</Label>
+                <Input id="sub-lat" type="number" step="any" placeholder={subParent?.latitude ?? ''} value={subForm.latitude} onChange={e => setSubForm(p => ({ ...p, latitude: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sub-lng">Longitude</Label>
+                <Input id="sub-lng" type="number" step="any" placeholder={subParent?.longitude ?? ''} value={subForm.longitude} onChange={e => setSubForm(p => ({ ...p, longitude: e.target.value }))} />
+              </div>
+            </div>
             <Button onClick={createSubMerchant} className="w-full">Create Sub-merchant</Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Reject Sub-merchant Dialog (accessible replacement for native prompt) */}
+      <AlertDialog open={!!rejectTarget} onOpenChange={v => { if (!v) setRejectTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject {rejectTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The store stays hidden until approved. Add a reason so the manager knows what to fix.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="reject-reason">Rejection reason</Label>
+            <Textarea
+              id="reject-reason"
+              placeholder="e.g. address could not be verified"
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { reviewMerchant(rejectTarget.id, false, rejectReason.trim() || undefined); setRejectTarget(null); }}
+            >
+              Reject store
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {qrMerchant && (
         <StoreQrDialog

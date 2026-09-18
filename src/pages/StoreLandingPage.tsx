@@ -36,7 +36,12 @@ export default function StoreLandingPage() {
   if (state.loading) {
     return (
       <StorefrontLayout>
-        <p className="text-muted-foreground">Opening store…</p>
+        <div role="status" aria-live="polite" aria-label="Opening store" className="max-w-md mx-auto py-16 space-y-4">
+          <span className="sr-only">Opening store…</span>
+          <div className="shimmer h-10 w-10 rounded-full mx-auto" aria-hidden="true" />
+          <div className="shimmer h-8 rounded w-2/3 mx-auto" aria-hidden="true" />
+          <div className="shimmer h-4 rounded w-1/2 mx-auto" aria-hidden="true" />
+        </div>
       </StorefrontLayout>
     );
   }
@@ -45,10 +50,14 @@ export default function StoreLandingPage() {
 
   return (
     <StorefrontLayout>
+      {/* Screen-reader announcement for the store outcome */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {state.reason || "Store unavailable"}
+      </div>
       <div className="max-w-md mx-auto text-center py-16 space-y-4">
-        <StoreIcon className="h-10 w-10 mx-auto text-muted-foreground" />
+        <StoreIcon className="h-10 w-10 mx-auto text-muted-foreground" aria-hidden="true" />
         <h1 className="font-display text-3xl tracking-tight">{state.name || "Store unavailable"}</h1>
-        <p className="text-muted-foreground">{state.reason}</p>
+        <p role="status" className="text-muted-foreground">{state.reason}</p>
         <Button asChild><Link to="/shop">Browse other stores</Link></Button>
       </div>
     </StorefrontLayout>

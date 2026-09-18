@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, Search, CheckCircle2, AlertCircle, Receipt, ArrowDownCircle, ArrowUpCircle, Scale } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatMoney } from '@/lib/finance';
 
 type Recon = {
   id: string;
@@ -40,6 +42,11 @@ export default function ReconciliationPage() {
   const [search, setSearch] = useState('');
   const [notesRow, setNotesRow] = useState<Recon | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => load(), 600);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -58,9 +65,12 @@ export default function ReconciliationPage() {
     load();
     const ch = supabase
       .channel('recon-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_reconciliations' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_reconciliations' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      supabase.removeChannel(ch);
+    };
   }, [allowed]);
 
   const filtered = useMemo(() => rows.filter(r => {
@@ -114,7 +124,13 @@ export default function ReconciliationPage() {
   };
 
   if (!allowed) return <div className="p-6 text-muted-foreground">You do not have access to reconciliation.</div>;
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="space-y-4" role="status" aria-label="Loading reconciliation">
+      <div className="shimmer h-20 rounded-md" aria-hidden="true" />
+      <div className="shimmer h-64 rounded-md" aria-hidden="true" />
+      <span className="sr-only">Loading reconciliation…</span>
+    </div>
+  );
 
   const statusBadge = (s: Recon['status']) => {
     const map: Record<string, string> = {
@@ -126,7 +142,7 @@ export default function ReconciliationPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-busy={false}>
       <div>
         <h1 className="text-2xl font-bold">Reconciliation</h1>
         <p className="text-muted-foreground">Match delivery payments and payouts against bank statements.</p>
@@ -134,37 +150,42 @@ export default function ReconciliationPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <ArrowDownCircle className="h-8 w-8 text-accent" />
-          <div><p className="text-xs text-muted-foreground">Received</p><p className="text-lg font-semibold">D{totals.received.toLocaleString()}</p></div>
+          <ArrowDownCircle className="h-8 w-8 text-accent" aria-hidden="true" />
+          <div><p className="text-xs text-muted-foreground">Received</p><p className="text-lg font-semibold tabular-nums text-right">{formatMoney(totals.received)}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <ArrowUpCircle className="h-8 w-8 text-primary" />
-          <div><p className="text-xs text-muted-foreground">Paid Out</p><p className="text-lg font-semibold">D{totals.paidOut.toLocaleString()}</p></div>
+          <ArrowUpCircle className="h-8 w-8 text-primary" aria-hidden="true" />
+          <div><p className="text-xs text-muted-foreground">Paid Out</p><p className="text-lg font-semibold tabular-nums text-right">{formatMoney(totals.paidOut)}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <Scale className="h-8 w-8 text-info" />
-          <div><p className="text-xs text-muted-foreground">Net</p><p className="text-lg font-semibold">D{totals.net.toLocaleString()}</p></div>
+          <Scale className="h-8 w-8 text-info" aria-hidden="true" />
+          <div><p className="text-xs text-muted-foreground">Net</p><p className="text-lg font-semibold tabular-nums text-right">{formatMoney(totals.net)}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <AlertCircle className="h-8 w-8 text-warning" />
-          <div><p className="text-xs text-muted-foreground">Unmatched</p><p className="text-lg font-semibold">{totals.unmatched}</p></div>
+          <AlertCircle className="h-8 w-8 text-warning" aria-hidden="true" />
+          <div><p className="text-xs text-muted-foreground">Unmatched</p><p className="text-lg font-semibold tabular-nums text-right">{totals.unmatched}</p></div>
         </CardContent></Card>
       </div>
+      <p className="text-xs text-muted-foreground">Showing latest {rows.length} of up to 1000 entries. Refine search or status to narrow results.</p>
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search reference, party, method..." value={search} onChange={e => setSearch(e.target.value)} />
+          <Label htmlFor="recon-search" className="sr-only">Search reconciliation entries</Label>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <Input id="recon-search" className="pl-9" placeholder="Search reference, party, method..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="unmatched">Unmatched</SelectItem>
-            <SelectItem value="matched">Matched</SelectItem>
-            <SelectItem value="disputed">Disputed</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="space-y-1">
+          <Label htmlFor="recon-status">Status</Label>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger id="recon-status" className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="unmatched">Unmatched</SelectItem>
+              <SelectItem value="matched">Matched</SelectItem>
+              <SelectItem value="disputed">Disputed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
@@ -177,6 +198,7 @@ export default function ReconciliationPage() {
         <TabsContent value={tab} className="mt-4">
           <Card>
             <CardContent className="p-0">
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -194,7 +216,7 @@ export default function ReconciliationPage() {
                 <TableBody>
                   {filtered.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell className="text-xs">{format(new Date(r.occurred_at), 'MMM d, yyyy')}</TableCell>
+                      <TableCell className="text-xs tabular-nums"><time dateTime={r.occurred_at}>{format(new Date(r.occurred_at), 'MMM d, yyyy')}</time></TableCell>
                       <TableCell>
                         {r.entry_type === 'delivery_payment'
                           ? <Badge variant="outline" className="bg-accent/10 text-accent border-accent/20">In</Badge>
@@ -203,44 +225,56 @@ export default function ReconciliationPage() {
                       <TableCell className="font-mono text-xs">{r.payment_reference || '—'}</TableCell>
                       <TableCell className="text-sm">{r.party_label || '—'}</TableCell>
                       <TableCell className="text-xs">{r.payment_method || '—'}</TableCell>
-                      <TableCell className="text-right font-medium">D{Number(r.amount).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{formatMoney(r.amount)}</TableCell>
                       <TableCell>
                         {r.statement_url ? (
                           <Button variant="ghost" size="sm" onClick={() => viewStatement(r.statement_url!)}>
-                            <FileText className="h-3.5 w-3.5 mr-1" />View
+                            <FileText className="h-3.5 w-3.5 mr-1" aria-hidden="true" />View
                           </Button>
                         ) : (
-                          <label className="inline-flex items-center text-xs cursor-pointer text-muted-foreground hover:text-foreground">
-                            <Upload className="h-3.5 w-3.5 mr-1" />Upload
-                            <input type="file" className="hidden" onChange={e => e.target.files?.[0] && uploadStatement(r, e.target.files[0])} />
-                          </label>
+                          <Button variant="ghost" size="sm" className="relative gap-1" asChild={false}>
+                            <span className="inline-flex items-center gap-1">
+                              <Upload className="h-3.5 w-3.5" aria-hidden="true" />Upload
+                              <input
+                                type="file"
+                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                aria-label={`Upload statement for ${r.payment_reference || r.id.slice(0, 8)}`}
+                                onChange={e => e.target.files?.[0] && uploadStatement(r, e.target.files[0])}
+                              />
+                            </span>
+                          </Button>
                         )}
                       </TableCell>
                       <TableCell>{statusBadge(r.status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           {r.status !== 'matched' && (
-                            <Button size="sm" variant="ghost" onClick={() => setStatus(r, 'matched')} title="Mark matched">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-accent" />
+                            <Button size="icon" variant="ghost" onClick={() => setStatus(r, 'matched')} aria-label="Mark matched">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
                             </Button>
                           )}
                           {r.status !== 'disputed' && (
-                            <Button size="sm" variant="ghost" onClick={() => setStatus(r, 'disputed')} title="Mark disputed">
-                              <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                            <Button size="icon" variant="ghost" onClick={() => setStatus(r, 'disputed')} aria-label="Mark disputed">
+                              <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
                             </Button>
                           )}
-                          <Button size="sm" variant="ghost" onClick={() => { setNotesRow(r); setNotesDraft(r.notes || ''); }} title="Notes">
-                            <FileText className="h-3.5 w-3.5" />
+                          <Button size="icon" variant="ghost" onClick={() => { setNotesRow(r); setNotesDraft(r.notes || ''); }} aria-label="Edit notes">
+                            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                   {filtered.length === 0 && (
-                    <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">No reconciliation entries.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-10">
+                      <p className="font-medium">No entries match these filters</p>
+                      <p className="text-sm text-muted-foreground mt-1">Try a different reference, party, method, or status. New payments appear here after delivery or payout.</p>
+                      <Button variant="outline" size="sm" className="mt-3" onClick={() => { setSearch(''); setStatusFilter('all'); setTab('all'); }}>Clear filters</Button>
+                    </TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -249,7 +283,8 @@ export default function ReconciliationPage() {
       <Dialog open={!!notesRow} onOpenChange={(o) => !o && setNotesRow(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Reconciliation notes</DialogTitle></DialogHeader>
-          <Textarea value={notesDraft} onChange={e => setNotesDraft(e.target.value)} rows={5} placeholder="Bank ref, discrepancy reason, etc." />
+          <Label htmlFor="recon-notes">Notes</Label>
+          <Textarea id="recon-notes" value={notesDraft} onChange={e => setNotesDraft(e.target.value)} rows={5} placeholder="Bank ref, discrepancy reason, etc." />
           <DialogFooter>
             <Button variant="outline" onClick={() => setNotesRow(null)}>Cancel</Button>
             <Button onClick={saveNotes}>Save</Button>

@@ -13,6 +13,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { resolveDeliveryFee } from "@/lib/deliveryFee";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { validateCheckout, firstInvalidField, type CheckoutErrors } from "@/lib/checkoutValidation";
 
 export default function CheckoutPage() {
   const { items, subtotal, clear, groups } = useCart();
@@ -27,11 +29,16 @@ export default function CheckoutPage() {
   const [lng, setLng] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [fees, setFees] = useState<Record<string, number>>({});
+  const [errors, setErrors] = useState<CheckoutErrors>({});
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   // inline auth at checkout
   const [authTab, setAuthTab] = useState<"signup" | "signin">("signup");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  // Debounce free-text address so each keystroke doesn't fan out fee lookups.
+  const debouncedAddress = useDebouncedValue(address, 400);
 
   useEffect(() => {
     if (!user) return;
@@ -47,8 +54,9 @@ export default function CheckoutPage() {
     })();
   }, [user]);
 
-  // resolve per-merchant delivery fee whenever fulfillment/address/groups change
+  // resolve per-merchant delivery fee whenever fulfillment/debounced address/groups change
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const merchantIds = Object.keys(groups);
       if (fulfillment === "pickup") {
@@ -56,15 +64,25 @@ export default function CheckoutPage() {
         return;
       }
       const entries = await Promise.all(merchantIds.map(async id => {
-        const fee = await resolveDeliveryFee(id, address);
+        const fee = await resolveDeliveryFee(id, debouncedAddress);
         return [id, fee] as const;
       }));
-      setFees(Object.fromEntries(entries));
+      if (!cancelled) setFees(Object.fromEntries(entries));
     })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fulfillment, address, items.length]);
+  }, [fulfillment, debouncedAddress, items.length]);
 
-  if (loading) return <StorefrontLayout><p>Loading…</p></StorefrontLayout>;
+  if (loading) return (
+    <StorefrontLayout>
+      <div role="status" aria-live="polite" aria-label="Loading checkout" className="max-w-2xl mx-auto space-y-3">
+        <span className="sr-only">Loading checkout…</span>
+        <div className="shimmer h-8 rounded w-1/3" aria-hidden="true" />
+        <div className="shimmer h-28 rounded-lg" aria-hidden="true" />
+        <div className="shimmer h-40 rounded-lg" aria-hidden="true" />
+      </div>
+    </StorefrontLayout>
+  );
   if (items.length === 0) return <Navigate to="/cart" replace />;
 
   const totalDeliveryFees = Object.values(fees).reduce((a, b) => a + b, 0);
@@ -79,28 +97,54 @@ export default function CheckoutPage() {
   };
 
   const submitAuth = async () => {
-    if (!authEmail || !authPassword) return toast.error("Email and password required");
+    setAuthError(null);
+    if (!authEmail || !authPassword) {
+      const msg = "Enter your email and password.";
+      setAuthError(msg);
+      toast.error(msg);
+      return;
+    }
     setAuthBusy(true);
     try {
       if (authTab === "signup") {
-        if (!fullName) { setAuthBusy(false); return toast.error("Enter your full name above first"); }
+        if (!fullName.trim()) {
+          const msg = "Enter your full name above first.";
+          setAuthError(msg);
+          toast.error(msg);
+          setAuthBusy(false);
+          document.getElementById("checkout-fullname")?.focus();
+          return;
+        }
         await signUp(authEmail, authPassword, fullName);
         try { await supabase.rpc("self_assign_customer_role" as any); } catch {}
         toast.success("Account created — you can place your order now");
+        setAnnouncement("Account created. You can place your order now.");
       } else {
         await signIn(authEmail, authPassword);
         toast.success("Signed in");
+        setAnnouncement("Signed in. You can place your order now.");
       }
     } catch (err: any) {
-      toast.error(err.message);
+      const msg = err.message || "Could not sign in";
+      setAuthError(msg);
+      toast.error(msg);
     } finally {
       setAuthBusy(false);
     }
   };
 
   const submit = async () => {
-    if (!fullName || !phone) return toast.error("Name and phone required");
-    if (fulfillment === "delivery" && !address) return toast.error("Delivery address required");
+    const nextErrors = validateCheckout({ fullName, phone, fulfillment, address });
+    setErrors(nextErrors);
+    const firstId = firstInvalidField(nextErrors);
+    if (firstId) {
+      const firstMessage = nextErrors.fullName ?? nextErrors.phone ?? nextErrors.address ?? "Check the highlighted fields.";
+      toast.error(firstMessage);
+      setAnnouncement(firstMessage);
+      // Focus the first invalid field so keyboard + screen-reader users land on it.
+      requestAnimationFrame(() => document.getElementById(firstId)?.focus());
+      return;
+    }
     setSubmitting(true);
     try {
       // ensure customer row
@@ -172,14 +216,28 @@ export default function CheckoutPage() {
 
   return (
     <StorefrontLayout>
+      {/* Screen-reader announcements for validation + order progress */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
+      </div>
       <div className="max-w-2xl mx-auto space-y-4">
         <h1 className="font-display text-3xl">Checkout</h1>
 
         <Card>
           <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="space-y-1.5"><Label>Full name</Label><Input value={fullName} onChange={e => setFullName(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} /></div>
+            <div className="space-y-1.5">
+              <Label htmlFor="checkout-fullname">Full name</Label>
+              <Input id="checkout-fullname" value={fullName} onChange={e => { setFullName(e.target.value); setErrors(prev => ({ ...prev, fullName: undefined })); }}
+                autoComplete="name" aria-invalid={!!errors.fullName} aria-describedby={errors.fullName ? "checkout-fullname-error" : undefined} />
+              {errors.fullName && <p id="checkout-fullname-error" role="alert" className="text-sm text-destructive">{errors.fullName}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="checkout-phone">Phone</Label>
+              <Input id="checkout-phone" type="tel" value={phone} onChange={e => { setPhone(e.target.value); setErrors(prev => ({ ...prev, phone: undefined })); }}
+                autoComplete="tel" aria-invalid={!!errors.phone} aria-describedby={errors.phone ? "checkout-phone-error" : undefined} />
+              {errors.phone && <p id="checkout-phone-error" role="alert" className="text-sm text-destructive">{errors.phone}</p>}
+            </div>
           </CardContent>
         </Card>
 
@@ -187,22 +245,24 @@ export default function CheckoutPage() {
           <Card>
             <CardHeader>
               <CardTitle>Account</CardTitle>
-              <p className="text-sm text-muted-foreground">Create an account or sign in to place your order. Your account lets you track orders and reorder faster.</p>
+              <p id="checkout-auth-hint" className="text-sm text-muted-foreground">Create an account or sign in to place your order. Your account lets you track orders and reorder faster.</p>
             </CardHeader>
             <CardContent>
-              <Tabs value={authTab} onValueChange={v => setAuthTab(v as any)}>
+              <Tabs value={authTab} onValueChange={v => { setAuthTab(v as any); setAuthError(null); }}>
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="signup">Create account</TabsTrigger>
                   <TabsTrigger value="signin">Sign in</TabsTrigger>
                 </TabsList>
                 <TabsContent value="signup" className="space-y-3 mt-4">
-                  <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Password</Label><Input type="password" minLength={6} value={authPassword} onChange={e => setAuthPassword(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label htmlFor="checkout-auth-email-signup">Email</Label><Input id="checkout-auth-email-signup" type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} autoComplete="email" /></div>
+                  <div className="space-y-1.5"><Label htmlFor="checkout-auth-password-signup">Password</Label><Input id="checkout-auth-password-signup" type="password" minLength={6} value={authPassword} onChange={e => setAuthPassword(e.target.value)} autoComplete="new-password" /></div>
+                  {authError && <p role="alert" className="text-sm text-destructive">{authError}</p>}
                   <Button className="w-full" disabled={authBusy} onClick={submitAuth}>{authBusy ? "Creating…" : "Create account"}</Button>
                 </TabsContent>
                 <TabsContent value="signin" className="space-y-3 mt-4">
-                  <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} /></div>
-                  <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label htmlFor="checkout-auth-email-signin">Email</Label><Input id="checkout-auth-email-signin" type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} autoComplete="email" /></div>
+                  <div className="space-y-1.5"><Label htmlFor="checkout-auth-password-signin">Password</Label><Input id="checkout-auth-password-signin" type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} autoComplete="current-password" /></div>
+                  {authError && <p role="alert" className="text-sm text-destructive">{authError}</p>}
                   <Button className="w-full" disabled={authBusy} onClick={submitAuth}>{authBusy ? "Signing in…" : "Sign in"}</Button>
                 </TabsContent>
               </Tabs>
@@ -213,18 +273,23 @@ export default function CheckoutPage() {
         <Card>
           <CardHeader><CardTitle>Fulfillment</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <RadioGroup value={fulfillment} onValueChange={v => setFulfillment(v as any)}>
-              <div className="flex items-center gap-2"><RadioGroupItem value="delivery" id="d" /><Label htmlFor="d">Delivery to my address</Label></div>
-              <div className="flex items-center gap-2"><RadioGroupItem value="pickup" id="p" /><Label htmlFor="p">Pickup from merchant</Label></div>
+            <RadioGroup value={fulfillment} onValueChange={v => setFulfillment(v as any)} aria-label="Fulfillment method">
+              <div className="flex items-center gap-2 min-h-[44px]"><RadioGroupItem value="delivery" id="checkout-delivery" /><Label htmlFor="checkout-delivery">Delivery to my address</Label></div>
+              <div className="flex items-center gap-2 min-h-[44px]"><RadioGroupItem value="pickup" id="checkout-pickup" /><Label htmlFor="checkout-pickup">Pickup from merchant</Label></div>
             </RadioGroup>
             {fulfillment === "delivery" && (
               <>
-                <div className="space-y-1.5"><Label>Delivery address</Label><Input value={address} onChange={e => setAddress(e.target.value)} /></div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="checkout-address">Delivery address</Label>
+                  <Input id="checkout-address" value={address} onChange={e => { setAddress(e.target.value); setErrors(prev => ({ ...prev, address: undefined })); }}
+                    autoComplete="street-address" aria-invalid={!!errors.address} aria-describedby={errors.address ? "checkout-address-error" : undefined} />
+                  {errors.address && <p id="checkout-address-error" role="alert" className="text-sm text-destructive">{errors.address}</p>}
+                </div>
                 <Button type="button" variant="outline" size="sm" onClick={useGps}>Use current GPS location</Button>
-                {lat && lng && <p className="text-xs text-muted-foreground">{lat.toFixed(5)}, {lng.toFixed(5)}</p>}
+                {lat && lng && <p className="text-xs text-muted-foreground tabular-nums">{lat.toFixed(5)}, {lng.toFixed(5)}</p>}
               </>
             )}
-            <div className="space-y-1.5"><Label>Notes (optional)</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor="checkout-notes">Notes (optional)</Label><Textarea id="checkout-notes" value={notes} onChange={e => setNotes(e.target.value)} /></div>
           </CardContent>
         </Card>
 
@@ -234,12 +299,12 @@ export default function CheckoutPage() {
           const merchantName = gItems[0].merchant_name || "Restaurant";
           return (
             <Card key={mid}>
-              <CardHeader className="py-3"><CardTitle className="text-base">{merchantName}</CardTitle></CardHeader>
+              <CardHeader className="py-3"><CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap"><span className="min-w-0 truncate">{merchantName}</span></CardTitle></CardHeader>
               <CardContent className="p-4 pt-0 space-y-2 text-sm">
                 {gItems.map(i => (
-                  <div key={i.product_id} className="flex justify-between">
-                    <span>{i.quantity}× {i.name}</span>
-                    <span>D {(i.price * i.quantity).toFixed(2)}</span>
+                  <div key={i.product_id} className="flex justify-between gap-3">
+                    <span className="flex-1 min-w-0 truncate">{i.quantity}× {i.name}</span>
+                    <span className="shrink-0 tabular-nums">D {(i.price * i.quantity).toFixed(2)}</span>
                   </div>
                 ))}
                 <div className="border-t pt-2 space-y-1">
@@ -261,7 +326,8 @@ export default function CheckoutPage() {
           </CardContent>
         </Card>
 
-        <Button size="lg" className="w-full" disabled={submitting || !user} onClick={submit}>
+        <Button size="lg" className="w-full" disabled={submitting || !user} onClick={submit}
+          aria-describedby={!user ? "checkout-auth-hint" : undefined}>
           {!user ? "Create an account or sign in above to continue" : submitting ? "Placing orders…" : `Pay D ${total.toFixed(2)} with ModemPay`}
         </Button>
       </div>
@@ -271,8 +337,8 @@ export default function CheckoutPage() {
 
 function Row({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
-    <div className={`flex justify-between ${bold ? "font-semibold text-base" : ""}`}>
-      <span>{label}</span><span>D {value.toFixed(2)}</span>
+    <div className={`flex justify-between gap-3 ${bold ? "font-semibold text-base" : ""}`}>
+      <span className="min-w-0 truncate">{label}</span><span className="shrink-0 tabular-nums">D {value.toFixed(2)}</span>
     </div>
   );
 }

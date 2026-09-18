@@ -48,6 +48,7 @@ export default function MerchantStorefrontPage() {
       setProducts(list);
       setCategories((c.data || []) as Category[]);
       setLoading(false);
+      // Signed URLs resolve through the shared cache (1h TTL).
       const u: Record<string, string> = {};
       await Promise.all(list.map(async pr => {
         const url = await getProductImageUrl(pr.image_path);
@@ -75,51 +76,53 @@ export default function MerchantStorefrontPage() {
       <div className="space-y-6">
         <Link to="/shop" className="text-sm text-muted-foreground hover:underline">← Back to all products</Link>
         {loading ? (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className="text-muted-foreground" role="status">Loading store…</p>
         ) : !merchant ? (
-          <p className="text-muted-foreground">Restaurant not found.</p>
+          <p className="text-muted-foreground" role="status">Restaurant not found.</p>
         ) : (
           <>
             <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-display text-4xl tracking-tight">{merchant.name}</h1>
-                {merchant.business_types?.name && <Badge variant="outline">{merchant.business_types.name}</Badge>}
-                {isWholesaler && <Badge>Wholesale pricing</Badge>}
+                {merchant.business_types?.name && <Badge variant="outline" className="text-xs">{merchant.business_types.name}</Badge>}
+                {isWholesaler && <Badge className="text-xs">Wholesale pricing</Badge>}
               </div>
               {merchant.address && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" />{merchant.address}
+                  <MapPin className="h-3.5 w-3.5" aria-hidden="true" />{merchant.address}
                 </p>
               )}
             </div>
 
             {grouped.length === 0 ? (
-              <p className="text-muted-foreground">No products available yet.</p>
+              <p className="text-muted-foreground" role="status">No products available yet. Check back soon.</p>
             ) : grouped.map(g => (
-              <section key={g.name} className="space-y-3">
+              <section key={g.name} aria-label={g.name} className="space-y-3">
                 <h2 className="font-display text-2xl border-b pb-2">{g.name}</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {g.items.map(p => (
                     <Card key={p.id} className="overflow-hidden flex flex-col h-full">
-                      <Link to={`/shop/p/${p.id}`} className="block relative w-full bg-muted" style={{ aspectRatio: "4 / 3" }}>
+                      <Link to={`/shop/p/${p.id}`} aria-label={`View ${p.name}`} className="block relative w-full bg-muted" style={{ aspectRatio: "4 / 3" }}>
                         {urls[p.id]
-                          ? <img src={urls[p.id]} alt={p.name} className="absolute inset-0 w-full h-full object-cover object-center" loading="lazy" />
+                          ? <img src={urls[p.id]} alt={p.name} width={400} height={300} className="absolute inset-0 w-full h-full object-cover object-center" loading="lazy" />
                           : <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">No image</div>}
                       </Link>
                       <CardContent className="p-4 flex-1 flex flex-col gap-2">
-                        <Link to={`/shop/p/${p.id}`}><h3 className="font-semibold leading-tight hover:underline line-clamp-2 min-h-[2.5rem]">{p.name}</h3></Link>
-                        <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">{p.description || ""}</p>
-                        <div className="flex items-center justify-between pt-2 mt-auto">
-                          <span className="font-display text-lg flex items-baseline gap-2">
+                        {/* Duplicate of the image link for sighted users; removed
+                            from tab order so each card exposes a single link. */}
+                        <Link to={`/shop/p/${p.id}`} tabIndex={-1}><h3 className="font-semibold leading-tight hover:underline line-clamp-2 min-h-[2.5rem]">{p.name}</h3></Link>
+                        {p.description && <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">{p.description}</p>}
+                        <div className="flex items-center justify-between gap-2 pt-2 mt-auto">
+                          <span className="font-display text-lg flex items-baseline gap-2 tabular-nums">
                             D {quote(p).price.toFixed(2)}
                             {quote(p).isWholesale && (
-                              <span className="text-xs text-muted-foreground line-through">D {Number(p.price).toFixed(2)}</span>
+                              <span className="text-xs text-muted-foreground line-through tabular-nums">D {Number(p.price).toFixed(2)}</span>
                             )}
                           </span>
                           {!p.available_today
-                            ? <Badge variant="secondary">Closed</Badge>
+                            ? <Badge variant="secondary" className="text-xs">Closed</Badge>
                             : p.track_inventory && p.quantity <= 0
-                            ? <Badge variant="destructive">Out of stock</Badge>
+                            ? <Badge variant="destructive" className="text-xs">Out of stock</Badge>
                             : null}
                         </div>
                         <Button size="sm" className="w-full" disabled={!canBuy(p)}

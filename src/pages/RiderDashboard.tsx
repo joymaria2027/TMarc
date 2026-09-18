@@ -9,14 +9,24 @@ import PaymentMethodSelect from '@/components/PaymentMethodSelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Play, Square, Navigation, Clock, MapPin, Truck, CheckCircle2 } from 'lucide-react';
+import { Play, Square, Navigation, Clock, MapPin, Truck, CheckCircle2, DollarSign, Ruler, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import WalletWidget from '@/components/WalletWidget';
 import RiderDispatchOffers from '@/components/RiderDispatchOffers';
 import { removeDeliveryFromQueue } from './riderDashboard.helpers';
+import {
+  rpcCancelDeliveryAcceptance,
+  rpcClaimDelivery,
+  rpcGetUnassignedDeliveriesForRider,
+  rpcGetOfferedDeliveries,
+  rpcRejectDelivery,
+} from '@/lib/rpcTypes';
 import OdometerCaptureDialog from '@/components/OdometerCaptureDialog';
+import OfferCard from '@/components/rider/OfferCard';
+import QueueCard from '@/components/rider/QueueCard';
 
 interface Delivery {
   id: string;
@@ -74,7 +84,7 @@ export default function RiderDashboard() {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Delivery | null>(null);
   const [detailRejections, setDetailRejections] = useState<Array<{ rider_name: string; rider_phone: string | null; reason: string | null; created_at: string }>>([]);
-  const [pendingReject, setPendingReject] = useState<{ delivery: Delivery; kind: 'decline' | 'reject' } | null>(null);
+  const [pendingReject, setPendingReject] = useState<{ delivery: Delivery; kind: 'decline' | 'reject' | 'cancel' } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [submittingReject, setSubmittingReject] = useState(false);
   // Recently rejected ids (TTL ~5s) — prevents realtime refetch from re-adding them
@@ -129,8 +139,8 @@ export default function RiderDashboard() {
         .eq('rider_id', effectiveRid);
       rejectedIds = ((rejs as any[]) || []).map(r => r.delivery_id);
     }
-    const { data: rpcData } = await supabase.rpc('get_unassigned_deliveries_for_rider' as any);
-    let rows = ((rpcData as any[]) || []) as Delivery[];
+    const { data: rpcData } = await rpcGetUnassignedDeliveriesForRider();
+    let rows = [...(rpcData ?? [])] as Delivery[];
     if (rejectedIds.length > 0) {
       const rej = new Set(rejectedIds);
       rows = rows.filter(d => !rej.has(d.id));
@@ -168,8 +178,8 @@ export default function RiderDashboard() {
   };
 
   const loadOffered = async () => {
-    const { data } = await supabase.rpc('get_offered_deliveries');
-    const ids = ((data as any[]) || []).map(d => d.id).filter(id => !isRecentlyRejected(id));
+    const { data } = await rpcGetOfferedDeliveries();
+    const ids = (data ?? []).map(d => d.id).filter(id => !isRecentlyRejected(id));
     if (ids.length === 0) { setOffered([]); return; }
     // re-fetch with merchant join for display
     const { data: full } = await supabase
@@ -237,32 +247,43 @@ export default function RiderDashboard() {
     init();
   }, [user]);
 
-  // Realtime: listen for new deliveries assigned to this rider
+  // Realtime: listen for new deliveries assigned to this rider (debounced — one reload per burst)
   useEffect(() => {
     if (!riderId) return;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        loadDeliveries(riderId);
+        loadOffered();
+        loadUnassigned();
+      }, 600);
+    };
+    const scheduleDeliveriesReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => {
+        loadDeliveries(riderId);
+      }, 600);
+    };
     const channel = supabase
       .channel('rider-deliveries')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: `rider_id=eq.${riderId}` }, () => {
-        loadDeliveries(riderId);
+        scheduleDeliveriesReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => {
-        loadDeliveries(riderId);
+        scheduleDeliveriesReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, () => {
-        loadDeliveries(riderId);
+        scheduleDeliveriesReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: 'status=eq.unassigned' }, () => {
-        loadDeliveries(riderId);
-        loadUnassigned();
-        loadOffered();
+        scheduleReload();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_rejections' }, () => {
-        loadDeliveries(riderId);
-        loadOffered();
-        loadUnassigned();
+        scheduleReload();
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(channel); };
   }, [riderId]);
 
   const handleAcceptDelivery = async (delivery: Delivery) => {
@@ -337,7 +358,7 @@ export default function RiderDashboard() {
       return 'error';
     }
 
-    const { error } = await supabase.rpc('reject_delivery', { _delivery_id: delivery.id, _reason: reason ?? null });
+    const { error } = await rpcRejectDelivery(delivery.id, reason ?? null);
     if (error) {
       console.error(`${label} delivery failed`, { delivery_id: delivery.id, riderId, error });
       const msg = describeError(error);
@@ -351,21 +372,9 @@ export default function RiderDashboard() {
     return 'ok';
   };
 
-  const handleCancelAcceptance = async (delivery: Delivery) => {
-    const reason = window.prompt('Cancel this delivery? Optionally tell us why:') ?? undefined;
-    const { error } = await supabase.rpc('cancel_delivery_acceptance', {
-      _delivery_id: delivery.id,
-      _reason: reason?.trim() || null,
-    });
-    if (error) {
-      toast.error(describeError(error));
-      return;
-    }
-    toast.info('Acceptance cancelled — the order is back in the nearby pool');
-    removeDeliveryFromLocalState(delivery.id);
-    if (riderId) loadDeliveries(riderId);
-    loadOffered();
-    loadUnassigned(riderId);
+  const handleCancelAcceptance = (delivery: Delivery) => {
+    setRejectReason('');
+    setPendingReject({ delivery, kind: 'cancel' });
   };
 
 
@@ -392,24 +401,41 @@ export default function RiderDashboard() {
     setRejectReason('');
     setSubmittingReject(true);
 
-    const result = await performReject(delivery, kind, reason);
-    setSubmittingReject(false);
+    if (kind === 'cancel') {
+      const { error } = await rpcCancelDeliveryAcceptance(delivery.id, reason ?? null);
+      setSubmittingReject(false);
+      if (error) {
+        toast.error(describeError(error));
+        // Restore snapshot on error
+        setDeliveries(snapshot.deliveries);
+        setUnassigned(snapshot.unassigned);
+        setOffered(snapshot.offered);
+        setActiveDelivery(snapshot.activeDelivery);
+        setDetail(snapshot.detail);
+        recentlyRejectedRef.current.delete(delivery.id);
+        return;
+      }
+      toast.info('Acceptance cancelled — the order is back in the nearby pool');
+    } else {
+      const result = await performReject(delivery, kind, reason);
+      setSubmittingReject(false);
 
-    if (result === 'error') {
-      // Restore the snapshot — the reject didn't go through.
-      setDeliveries(snapshot.deliveries);
-      setUnassigned(snapshot.unassigned);
-      setOffered(snapshot.offered);
-      setActiveDelivery(snapshot.activeDelivery);
-      setDetail(snapshot.detail);
-      recentlyRejectedRef.current.delete(delivery.id);
-      return;
-    }
+      if (result === 'error') {
+        // Restore the snapshot — the reject didn't go through.
+        setDeliveries(snapshot.deliveries);
+        setUnassigned(snapshot.unassigned);
+        setOffered(snapshot.offered);
+        setActiveDelivery(snapshot.activeDelivery);
+        setDetail(snapshot.detail);
+        recentlyRejectedRef.current.delete(delivery.id);
+        return;
+      }
 
-    // 'ok' or 'already_rejected' — keep removed and resync from server.
-    if (result === 'ok') {
-      if (kind === 'decline') toast.info('Declined — offered to other riders');
-      else toast.info('Offer rejected');
+      // 'ok' or 'already_rejected' — keep removed and resync from server.
+      if (result === 'ok') {
+        if (kind === 'decline') toast.info('Declined — offered to other riders');
+        else toast.info('Offer rejected');
+      }
     }
     if (riderId) loadDeliveries(riderId);
     loadOffered();
@@ -421,7 +447,7 @@ export default function RiderDashboard() {
       toast.error('Your rider account could not be found. Please contact an admin.');
       return;
     }
-    const { data, error } = await supabase.rpc('claim_delivery', { _delivery_id: delivery.id });
+    const { data, error } = await rpcClaimDelivery(delivery.id);
     if (error) {
       toast.error(`Could not claim: ${describeError(error)}`);
       loadUnassigned();
@@ -513,7 +539,13 @@ export default function RiderDashboard() {
     return map[s] || '';
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div role="status" aria-label="Loading rider dashboard" className="space-y-3 py-6">
+      <Skeleton className="shimmer h-16 w-full rounded-lg" />
+      <Skeleton className="shimmer h-64 w-full rounded-lg" />
+      <span className="sr-only">Loading rider dashboard…</span>
+    </div>
+  );
 
   if (!riderId) return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -566,7 +598,7 @@ export default function RiderDashboard() {
               waypoints={positions.map(p => ({ latitude: p.latitude, longitude: p.longitude, recorded_at: new Date(p.timestamp).toISOString() }))}
               className="h-48 w-full rounded-lg"
             />
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div className="flex items-start gap-2">
                 <div className="mt-0.5 h-3 w-3 rounded-full bg-accent" />
                 <div><p className="font-medium">Pickup</p><p className="text-muted-foreground">{activeDelivery.pickup_address}</p></div>
@@ -596,57 +628,18 @@ export default function RiderDashboard() {
           <h2 className="text-lg font-semibold mb-2">Delivery Queue ({pendingQueue.length})</h2>
           <div className="space-y-3">
             {pendingQueue.map(d => (
-              <Card key={d.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-sm">{d.order_reference || d.id.slice(0, 8)}</span>
-                    <Badge className={statusColor(d.status)}>{d.status}</Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>📍 {d.pickup_address}</p>
-                    <p>🏁 {d.dropoff_address}</p>
-                    {d.estimated_tariff && <p>💰 D{Number(d.estimated_tariff).toLocaleString()}</p>}
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {d.status === 'dispatched' && (
-                      <>
-                        <Button onClick={() => handleAcceptDelivery(d)} className="flex-1" size="sm" variant="default">
-                          <CheckCircle2 className="h-4 w-4 mr-2" />Accept
-                        </Button>
-                        <Button onClick={() => handleDeclineDelivery(d)} className="flex-1" size="sm" variant="destructive">
-                          <Square className="h-4 w-4 mr-2" />Decline
-                        </Button>
-                      </>
-                    )}
-                    {d.status === 'accepted' && !activeDelivery && (
-                      <Button onClick={() => handleStartDelivery(d)} className="flex-1" size="sm">
-                        <Play className="h-4 w-4 mr-2" />Start Delivery
-                      </Button>
-                    )}
-                    {d.status === 'accepted' && !activeDelivery && (
-                      <Button onClick={() => handleMarkCompleted(d)} variant="outline" className="flex-1" size="sm">
-                        <CheckCircle2 className="h-4 w-4 mr-2" />Mark Completed
-                      </Button>
-                    )}
-                    {(d.status === 'dispatched' || d.status === 'accepted') && (
-                      <Button onClick={() => handleCancelAcceptance(d)} variant="outline" size="sm" className="flex-1">
-                        <Square className="h-4 w-4 mr-2" />Cancel acceptance
-                      </Button>
-                    )}
-                  </div>
-
-                  {d.status === 'accepted' && (
-                    <div className="mt-2">
-                      <PaymentMethodSelect
-                        deliveryId={d.id}
-                        currentMethod={d.payment_method}
-                        currentBankName={d.payment_bank_name}
-                        onSaved={(method, bank) => setDeliveries(prev => prev.map(x => x.id === d.id ? { ...x, payment_method: method, payment_bank_name: bank || null } : x))}
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <QueueCard
+                key={d.id}
+                delivery={d}
+                hasActiveDelivery={!!activeDelivery}
+                statusColor={statusColor}
+                onAccept={handleAcceptDelivery}
+                onDecline={handleDeclineDelivery}
+                onStart={handleStartDelivery}
+                onMarkCompleted={handleMarkCompleted}
+                onCancelAcceptance={handleCancelAcceptance}
+                onPaymentSaved={(deliveryId, method, bank) => setDeliveries(prev => prev.map(x => x.id === deliveryId ? { ...x, payment_method: method, payment_bank_name: bank || null } : x))}
+              />
             ))}
           </div>
         </div>
@@ -665,9 +658,9 @@ export default function RiderDashboard() {
                     <Badge className={statusColor(d.status)}>delivered</Badge>
                   </div>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <p>📍 {d.pickup_address} → 🏁 {d.dropoff_address}</p>
-                    {d.actual_distance_km && <p>📏 {d.actual_distance_km} km</p>}
-                    {d.estimated_tariff && <p>💰 D{Number(d.estimated_tariff).toLocaleString()}</p>}
+                    <p className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />{d.pickup_address} <span aria-hidden="true">→</span> <MapPin className="h-3.5 w-3.5" aria-hidden="true" />{d.dropoff_address}</p>
+                    {d.actual_distance_km && <p className="flex items-center gap-1"><Ruler className="h-3.5 w-3.5" aria-hidden="true" />{d.actual_distance_km} km</p>}
+                    {d.estimated_tariff && <p className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" aria-hidden="true" />D{Number(d.estimated_tariff).toLocaleString()}</p>}
                   </div>
                   {!d.receipt_attached && user && (
                     <div className="mt-3">
@@ -716,52 +709,17 @@ export default function RiderDashboard() {
               const tariff = Number(d.estimated_tariff || 0);
               const riderShare = rs ? Math.round(tariff * Number(rs.rider_percentage) / 100) : null;
               return (
-                <Card key={d.id} className="border-primary/40 cursor-pointer hover:shadow-md transition-shadow" onClick={() => openDetail(d)}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm">{d.order_reference || d.id.slice(0, 8)}</p>
-                        {d.merchants?.name && <p className="text-xs text-muted-foreground">{d.merchants.name}</p>}
-                      </div>
-                      <Badge className="bg-primary/10 text-primary">offer</Badge>
-                    </div>
-                    <div className="text-sm space-y-1.5">
-                      <div className="flex items-start gap-2">
-                        <div className="mt-1 h-2 w-2 rounded-full bg-accent shrink-0" />
-                        <div><p className="text-xs text-muted-foreground">Pickup</p><p>{d.pickup_address}</p></div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="mt-1 h-2 w-2 rounded-full bg-destructive shrink-0" />
-                        <div><p className="text-xs text-muted-foreground">Drop-off</p><p>{d.dropoff_address}</p></div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <span className="px-2 py-1 rounded-md bg-muted">📏 {distKm != null ? `${distKm} km` : '—'}</span>
-                      {tariff > 0 && <span className="px-2 py-1 rounded-md bg-muted">💰 D{tariff.toLocaleString()}</span>}
-                      {riderShare != null && (
-                        <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-medium">
-                          ≈ D{riderShare.toLocaleString()} ({Number(rs!.rider_percentage)}%)
-                        </span>
-                      )}
-                    </div>
-                    {rs && (
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground border-t pt-2">
-                        <span>Rider</span><span className="text-right">{Number(rs.rider_percentage)}%</span>
-                        <span>Merchant</span><span className="text-right">{Number(rs.merchant_percentage)}%</span>
-                        <span>UCS Rides</span><span className="text-right">{Number(rs.ucs_rides_percentage)}%</span>
-                        <span>Platform</span><span className="text-right">{Number(rs.platform_percentage)}%</span>
-                      </div>
-                    )}
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      <Button onClick={() => handleClaimDelivery(d)} className="flex-1" size="sm">
-                        <CheckCircle2 className="h-4 w-4 mr-2" />Accept
-                      </Button>
-                      <Button onClick={() => handleRejectOffer(d)} variant="destructive" className="flex-1" size="sm">
-                        <Square className="h-4 w-4 mr-2" />Reject
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                <OfferCard
+                  key={d.id}
+                  delivery={d}
+                  distanceKm={distKm}
+                  tariff={tariff}
+                  riderShare={riderShare}
+                  revShare={rs}
+                  onView={openDetail}
+                  onAccept={handleClaimDelivery}
+                  onReject={handleRejectOffer}
+                />
               );
             })}
           </div>
@@ -797,7 +755,7 @@ export default function RiderDashboard() {
                 dropoffLat={detail.dropoff_latitude} dropoffLng={detail.dropoff_longitude}
                 className="h-56 w-full rounded-lg"
               />
-              <div className="grid sm:grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">Pickup</p>
                   <p>{detail.pickup_address}</p>
@@ -824,7 +782,7 @@ export default function RiderDashboard() {
                 return (
                   <div className="border-t pt-3 text-sm">
                     <p className="font-medium mb-2">Your estimated payout: <span className="text-primary">D{riderShare.toLocaleString()}</span> ({Number(rs.rider_percentage)}%)</p>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>Rider</span><span className="text-right">{Number(rs.rider_percentage)}%</span>
                       <span>Merchant</span><span className="text-right">{Number(rs.merchant_percentage)}%</span>
                       <span>UCS Rides</span><span className="text-right">{Number(rs.ucs_rides_percentage)}%</span>
@@ -857,11 +815,11 @@ export default function RiderDashboard() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <Button onClick={() => handleClaimDelivery(detail)} className="flex-1">
-                  <CheckCircle2 className="h-4 w-4 mr-2" />Accept
+                <Button onClick={() => handleClaimDelivery(detail)} className="flex-1 min-h-[44px]">
+                  <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />Accept
                 </Button>
-                <Button onClick={() => handleRejectOffer(detail)} variant="destructive" className="flex-1">
-                  <Square className="h-4 w-4 mr-2" />Reject
+                <Button onClick={() => handleRejectOffer(detail)} variant="destructive" className="flex-1 min-h-[44px]">
+                  <Square className="h-4 w-4 mr-2" aria-hidden="true" />Reject
                 </Button>
               </div>
             </div>
@@ -869,25 +827,27 @@ export default function RiderDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Reject reason dialog */}
+      {/* Reject/cancel reason dialog */}
       <Dialog open={!!pendingReject} onOpenChange={(o) => { if (!o) { setPendingReject(null); setRejectReason(''); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{pendingReject?.kind === 'decline' ? 'Decline delivery' : 'Reject offer'}</DialogTitle>
+            <DialogTitle>{pendingReject?.kind === 'decline' ? 'Decline delivery' : pendingReject?.kind === 'cancel' ? 'Cancel acceptance' : 'Reject offer'}</DialogTitle>
             <DialogDescription>
-              Optionally tell other riders why you're rejecting this delivery. This will be visible on the Rejected Deliveries page.
+              {pendingReject?.kind === 'cancel'
+                ? 'Optionally tell us why you are cancelling. The order will return to the nearby pool.'
+                : 'Optionally tell other riders why you are rejecting this delivery. This will be visible on the Rejected Deliveries page.'}
             </DialogDescription>
           </DialogHeader>
           <Textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="e.g. too far, vehicle issue, address unclear…"
+            placeholder={pendingReject?.kind === 'cancel' ? 'e.g. schedule conflict, wrong vehicle, customer unreachable…' : 'e.g. too far, vehicle issue, address unclear…'}
             rows={3}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPendingReject(null); setRejectReason(''); }}>Cancel</Button>
             <Button variant="destructive" disabled={submittingReject} onClick={confirmReject}>
-              {submittingReject ? 'Rejecting…' : 'Confirm reject'}
+              {submittingReject ? 'Submitting…' : pendingReject?.kind === 'cancel' ? 'Confirm cancel' : 'Confirm reject'}
             </Button>
           </DialogFooter>
         </DialogContent>

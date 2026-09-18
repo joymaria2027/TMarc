@@ -195,7 +195,7 @@ export default function MyOrdersPage() {
           >
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
           </Button>
-          <h1 className="font-sans text-[34px] font-bold leading-tight tracking-tight flex-1">My orders</h1>
+          <h1 className="font-display text-4xl tracking-tight flex-1">My orders</h1>
           <Button
             variant="outline"
             size="sm"
@@ -254,7 +254,7 @@ function OrderCard({ o, unread, onChatOpened }: { o: any; unread: number; onChat
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <h2 className="font-sans text-[17px] font-semibold leading-relaxed">
+          <h2 className="font-display text-lg leading-relaxed">
             <span className="sr-only">Order </span>
             {o.order_reference}
           </h2>

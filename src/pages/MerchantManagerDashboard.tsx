@@ -272,8 +272,8 @@ export default function MerchantManagerDashboard() {
         <DialogContent>
           <DialogHeader><DialogTitle>Set Tariff – {tariffMerchant?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Location Name</Label><Input value={tariffForm.location_name} onChange={e => setTariffForm(p => ({ ...p, location_name: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Tariff Amount (D)</Label><Input type="number" step="any" value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="tariff-location">Location Name</Label><Input id="tariff-location" value={tariffForm.location_name} onChange={e => setTariffForm(p => ({ ...p, location_name: e.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="tariff-amount">Tariff Amount (D)</Label><Input id="tariff-amount" type="number" step="any" value={tariffForm.tariff_amount} onChange={e => setTariffForm(p => ({ ...p, tariff_amount: e.target.value }))} /></div>
             <Button onClick={addTariff} className="w-full">Add Tariff</Button>
           </div>
         </DialogContent>
@@ -284,17 +284,17 @@ export default function MerchantManagerDashboard() {
         <DialogContent>
           <DialogHeader><DialogTitle>Create Delivery – {deliveryMerchant?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Order Reference (optional)</Label><Input value={deliveryForm.order_reference} onChange={e => setDeliveryForm(p => ({ ...p, order_reference: e.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="delivery-ref">Order Reference (optional)</Label><Input id="delivery-ref" value={deliveryForm.order_reference} onChange={e => setDeliveryForm(p => ({ ...p, order_reference: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2"><Label>Customer Name *</Label><Input required value={deliveryForm.customer_name} onChange={e => setDeliveryForm(p => ({ ...p, customer_name: e.target.value }))} /></div>
-              <div className="space-y-2"><Label>Customer Phone *</Label><Input required type="tel" inputMode="tel" maxLength={20} placeholder="+220…" value={deliveryForm.customer_phone} onChange={e => setDeliveryForm(p => ({ ...p, customer_phone: e.target.value }))} /></div>
+              <div className="space-y-2"><Label htmlFor="delivery-customer">Customer Name *</Label><Input id="delivery-customer" required value={deliveryForm.customer_name} onChange={e => setDeliveryForm(p => ({ ...p, customer_name: e.target.value }))} /></div>
+              <div className="space-y-2"><Label htmlFor="delivery-phone">Customer Phone *</Label><Input id="delivery-phone" required type="tel" inputMode="tel" maxLength={20} placeholder="+220…" value={deliveryForm.customer_phone} onChange={e => setDeliveryForm(p => ({ ...p, customer_phone: e.target.value }))} /></div>
             </div>
-            <div className="space-y-2"><Label>Pickup Address</Label><Input placeholder={deliveryMerchant?.address || ''} value={deliveryForm.pickup_address} onChange={e => setDeliveryForm(p => ({ ...p, pickup_address: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Dropoff Address</Label><Input value={deliveryForm.dropoff_address} onChange={e => setDeliveryForm(p => ({ ...p, dropoff_address: e.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="delivery-pickup">Pickup Address</Label><Input id="delivery-pickup" placeholder={deliveryMerchant?.address || ''} value={deliveryForm.pickup_address} onChange={e => setDeliveryForm(p => ({ ...p, pickup_address: e.target.value }))} /></div>
+            <div className="space-y-2"><Label htmlFor="delivery-dropoff">Dropoff Address</Label><Input id="delivery-dropoff" value={deliveryForm.dropoff_address} onChange={e => setDeliveryForm(p => ({ ...p, dropoff_address: e.target.value }))} /></div>
             <div className="space-y-2">
-              <Label>Tariff (optional)</Label>
+              <Label htmlFor="delivery-tariff">Tariff (optional)</Label>
               <Select value={deliveryForm.tariff_id} onValueChange={v => setDeliveryForm(p => ({ ...p, tariff_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select tariff" /></SelectTrigger>
+                <SelectTrigger id="delivery-tariff"><SelectValue placeholder="Select tariff" /></SelectTrigger>
                 <SelectContent>
                   {tariffs.filter(t => t.merchant_id === deliveryMerchant?.id).map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.location_name} – D{t.tariff_amount}</SelectItem>
@@ -303,9 +303,9 @@ export default function MerchantManagerDashboard() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Assign Rider</Label>
+              <Label htmlFor="delivery-rider">Assign Rider</Label>
               <Select value={deliveryForm.rider_id} onValueChange={v => setDeliveryForm(p => ({ ...p, rider_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select rider" /></SelectTrigger>
+                <SelectTrigger id="delivery-rider"><SelectValue placeholder="Select rider" /></SelectTrigger>
                 <SelectContent>
                   {riders.map(r => {
                     const p = profiles.find(pr => pr.user_id === r.user_id);

@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { paginate } from '@/lib/pagination';
+import {
+  rpcClaimDelivery,
+  rpcReclaimDelivery,
+  rpcGetRiderRejectedDeliveries,
+  rpcGetUnassignedDeliveriesForRider,
+} from '@/lib/rpcTypes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { CheckCircle2, MapPin, PackageX, Phone, User } from 'lucide-react';
@@ -55,6 +64,8 @@ export default function RejectedDeliveriesPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<Delivery | null>(null);
+  const [visibleCount, setVisibleCount] = useState(20);
+  const REJECTED_PAGE_SIZE = 20;
   const [claiming, setClaiming] = useState<string | null>(null);
   const [holderHistory, setHolderHistory] = useState<HolderEvent[]>([]);
 
@@ -67,8 +78,8 @@ export default function RejectedDeliveriesPage() {
     //   3. for non-riders: any delivery with rejection history that isn't delivered/cancelled.
     let rejectedDeliveries: any[] = [];
     if (isRider) {
-      const { data } = await supabase.rpc('get_rider_rejected_deliveries');
-      const rows = (data as any[]) || [];
+      const { data } = await rpcGetRiderRejectedDeliveries();
+      const rows = data ?? [];
       const restIds = Array.from(new Set(rows.map(r => r.merchant_id).filter(Boolean)));
       let restMap: Record<string, { name: string }> = {};
       if (restIds.length > 0) {
@@ -97,8 +108,8 @@ export default function RejectedDeliveriesPage() {
     // managers/admins/accountants use direct table access governed by their RLS policies.
     let unassignedRes: { data: any[] | null } = { data: [] };
     if (isRider) {
-      const { data } = await supabase.rpc('get_unassigned_deliveries_for_rider' as any);
-      const rows = ((data as any[]) || []).filter((d: any) => d.status === 'unassigned' || d.status === 'pending');
+      const { data } = await rpcGetUnassignedDeliveriesForRider();
+      const rows = (data ?? []).filter((d) => d.status === 'unassigned' || d.status === 'pending');
       const mIds = Array.from(new Set(rows.map((r: any) => r.merchant_id).filter(Boolean)));
       let mMap: Record<string, { name: string }> = {};
       if (mIds.length > 0) {
@@ -206,12 +217,17 @@ export default function RejectedDeliveriesPage() {
     };
     init();
 
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => load(), 600);
+    };
     const channel = supabase
       .channel('rejected-deliveries-page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_rejections' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_rejections' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -228,14 +244,23 @@ export default function RejectedDeliveriesPage() {
     );
   }, [rows, search]);
 
+  // Paginated slice via the shared helper (1-based page). The merged
+  // rejected+unassigned list is still assembled client-side —
+  // TODO(data-layer): page it on the server via fetchDeliveriesPage once the
+  // rejected-ids prefetch moves into a query helper.
+  const visibleRows = useMemo(
+    () => paginate(filtered, 1, visibleCount),
+    [filtered, visibleCount],
+  );
+
   const handleClaim = async (d: Delivery) => {
     if (!isRider) return;
     setClaiming(d.id);
     await supabase.from('riders').update({ is_online: true, is_active: true }).eq('id', riderId!);
     const isUnassigned = d.status === 'unassigned' && !d.rider_id;
     const { error } = isUnassigned
-      ? await supabase.rpc('claim_delivery', { _delivery_id: d.id })
-      : await supabase.rpc('reclaim_delivery', { _delivery_id: d.id });
+      ? await rpcClaimDelivery(d.id)
+      : await rpcReclaimDelivery(d.id);
     setClaiming(null);
     if (error) {
       if ((error.message || '').includes('DELIVERY_LOCKED')) {
@@ -291,8 +316,8 @@ export default function RejectedDeliveriesPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-display tracking-tight flex items-center gap-2">
-            <PackageX className="h-7 w-7 text-warning" />
-            Rejected & Unattended Deliveries
+            <PackageX className="h-7 w-7 text-warning" aria-hidden="true" />
+            Rejected & Unassigned Deliveries
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isRider
@@ -300,16 +325,19 @@ export default function RejectedDeliveriesPage() {
               : 'Deliveries currently with no assigned rider, including ones rejected by riders.'}
           </p>
         </div>
-        <Input
-          placeholder="Search merchant, customer, address…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
+        <div className="relative">
+          <Label htmlFor="rejected-search" className="sr-only">Search rejected deliveries</Label>
+          <Input id="rejected-search" placeholder="Search merchant, customer, address…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 rounded-full border-b-2 border-primary" /></div>
+        <div role="status" aria-label="Loading rejected deliveries" className="space-y-3 py-6">
+          <Skeleton className="shimmer h-16 w-full rounded-lg" />
+          <Skeleton className="shimmer h-16 w-full rounded-lg" />
+          <Skeleton className="shimmer h-16 w-full rounded-lg" />
+          <span className="sr-only">Loading rejected deliveries…</span>
+        </div>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
@@ -318,8 +346,9 @@ export default function RejectedDeliveriesPage() {
           </CardContent>
         </Card>
       ) : (
+        <>
         <div className="grid gap-3">
-          {filtered.map(d => {
+          {visibleRows.map(d => {
             const dRej = rejections[d.id] || [];
             const rejCount = dRej.length;
             const myRej = dRej.find(r => r.mine);
@@ -333,13 +362,13 @@ export default function RejectedDeliveriesPage() {
                         {d.order_reference && <Badge variant="outline" className="text-xs">#{d.order_reference}</Badge>}
                       </CardTitle>
                       <CardDescription className="text-xs mt-1">
-                        {new Date(d.created_at).toLocaleString()}
+                        <time dateTime={d.created_at}>{new Date(d.created_at).toLocaleString()}</time>
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       {myRej && (
-                        <Badge variant="destructive" className="text-xs">
-                          You rejected · {new Date(myRej.created_at).toLocaleString()}
+                        <Badge variant="destructive" className="text-xs tabular-nums">
+                          You rejected · <time dateTime={myRej.created_at}>{new Date(myRej.created_at).toLocaleString()}</time>
                         </Badge>
                       )}
                       {rejCount > 0 && (
@@ -348,7 +377,7 @@ export default function RejectedDeliveriesPage() {
                         </Badge>
                       )}
                       {(d.status === 'unassigned' && !d.rider_id) ? (
-                        <Badge className="bg-warning/10 text-warning border-warning/20">Unattended</Badge>
+                        <Badge className="bg-warning/10 text-warning border-warning/20">Unassigned</Badge>
                       ) : d.status === 'dispatched' ? (
                         <Badge variant="secondary" className="text-xs">Claimed · not yet accepted</Badge>
                       ) : isLocked(d) ? (
@@ -381,28 +410,31 @@ export default function RejectedDeliveriesPage() {
                       <User className="h-4 w-4 text-muted-foreground" />
                       <span>{d.customer_name || '—'}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <a href={`tel:${d.customer_phone}`} className="hover:underline">{d.customer_phone || '—'}</a>
+<div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      {d.customer_phone && (() => {
+                        const phone = d.customer_phone;
+                        return <a href={`tel:${phone}`} className="hover:underline">{phone}</a>;
+                      })()}
                     </div>
                   </div>
 
                   {dRej.length > 0 && (
                     <div className="rounded-md bg-muted/40 p-2 text-xs space-y-1.5">
-                      <div className="font-medium text-muted-foreground uppercase tracking-wide text-[10px]">Recent rejections</div>
+                      <div className="font-medium text-muted-foreground uppercase tracking-wide text-xs">Recent rejections</div>
                       {dRej.slice(0, 2).map((r, i) => (
-                        <div key={i} className={`border-l-2 pl-2 ${r.mine ? 'border-destructive' : 'border-destructive/40'}`}>
+                        <div key={i} className={`rounded border px-2 py-1 ${r.mine ? 'border-destructive/60 bg-destructive/5' : 'border-border'}`}>
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-medium">{r.mine ? 'You' : r.rider_name}</span>
-                            <span className="text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span>
+                            <span className="text-muted-foreground"><time dateTime={r.created_at}>{new Date(r.created_at).toLocaleString()}</time></span>
                           </div>
                           <div className="italic text-muted-foreground">{r.reason || 'No reason given'}</div>
                         </div>
                       ))}
                       {dRej.length > 2 && (
-                        <button className="text-primary hover:underline" onClick={() => openDetail(d)}>
+                        <Button variant="link" size="sm" className="min-h-[44px] px-0" onClick={() => openDetail(d)}>
                           + {dRej.length - 2} more
-                        </button>
+                        </Button>
                       )}
                     </div>
                   )}
@@ -411,10 +443,10 @@ export default function RejectedDeliveriesPage() {
                     <div className="text-sm flex items-center gap-3 flex-wrap">
                       <div>
                         <span className="text-muted-foreground">Tariff: </span>
-                        <span className="font-semibold">D {Number(d.estimated_tariff || 0).toFixed(2)}</span>
+                        <span className="font-semibold tabular-nums">D {Number(d.estimated_tariff || 0).toFixed(2)}</span>
                       </div>
                       {isRider && d.merchant_id && riderShares[d.merchant_id] != null && (
-                        <Badge variant="outline" className="text-primary border-primary/40">
+                        <Badge variant="outline" className="text-primary border-primary/40 tabular-nums">
                           Your share: {riderShares[d.merchant_id]}% · D {(Number(d.estimated_tariff || 0) * riderShares[d.merchant_id] / 100).toFixed(2)}
                         </Badge>
                       )}
@@ -424,7 +456,7 @@ export default function RejectedDeliveriesPage() {
                       {canClaim(d) && (
                         <Button size="sm" disabled={claiming === d.id} onClick={() => handleClaim(d)}>
                           <CheckCircle2 className="h-4 w-4 mr-1" />
-                          {claiming === d.id ? 'Claiming…' : (d.status === 'unassigned' && !d.rider_id ? 'Claim' : 'Take over')}
+                          {claiming === d.id ? 'Claiming…' : (d.status === 'unassigned' && !d.rider_id ? 'Claim' : 'Reclaim')}
                         </Button>
                       )}
                     </div>
@@ -434,6 +466,12 @@ export default function RejectedDeliveriesPage() {
             );
           })}
         </div>
+        {visibleCount < filtered.length && (
+          <Button variant="outline" className="w-full" onClick={() => setVisibleCount(v => v + REJECTED_PAGE_SIZE)}>
+            Show more ({filtered.length - visibleCount} remaining)
+          </Button>
+        )}
+        </>
       )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
@@ -444,15 +482,15 @@ export default function RejectedDeliveriesPage() {
           </DialogHeader>
           {detail && (
             <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><div className="text-xs text-muted-foreground">Order</div><div>{detail.order_reference || '—'}</div></div>
-                <div><div className="text-xs text-muted-foreground">Tariff</div><div>D {Number(detail.estimated_tariff || 0).toFixed(2)}</div></div>
+                <div><div className="text-xs text-muted-foreground">Tariff</div><div className="tabular-nums">D {Number(detail.estimated_tariff || 0).toFixed(2)}</div></div>
                 <div><div className="text-xs text-muted-foreground">Customer</div><div>{detail.customer_name}</div></div>
-                <div><div className="text-xs text-muted-foreground">Phone</div><div>{detail.customer_phone}</div></div>
+                <div><div className="text-xs text-muted-foreground">Phone</div><div>{detail.customer_phone ? <a href={`tel:${detail.customer_phone}`} className="hover:underline">{detail.customer_phone}</a> : '—'}</div></div>
               </div>
               <div><div className="text-xs text-muted-foreground">Pickup</div><div>{detail.pickup_address}</div></div>
               <div><div className="text-xs text-muted-foreground">Dropoff</div><div>{detail.dropoff_address}</div></div>
-              <div className="text-xs text-muted-foreground">Created {new Date(detail.created_at).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Created <time dateTime={detail.created_at}>{new Date(detail.created_at).toLocaleString()}</time></div>
 
               <div className="border-t pt-3">
                 <div className="font-medium text-sm mb-2">Holder history ({holderHistory.length})</div>
@@ -471,7 +509,7 @@ export default function RejectedDeliveriesPage() {
                             <>Claimed by <span className="font-medium">{ev.rider_name}</span></>
                           )}
                         </span>
-                        <span className="text-muted-foreground">{new Date(ev.created_at).toLocaleString()}</span>
+                        <span className="text-muted-foreground"><time dateTime={ev.created_at}>{new Date(ev.created_at).toLocaleString()}</time></span>
                       </li>
                     ))}
                   </ul>
@@ -491,7 +529,7 @@ export default function RejectedDeliveriesPage() {
                           <li key={i} className="border-b pb-2 last:border-0">
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-medium">{r.rider_name}</span>
-                              <span className="text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span>
+                              <span className="text-muted-foreground"><time dateTime={r.created_at}>{new Date(r.created_at).toLocaleString()}</time></span>
                             </div>
                             {r.rider_phone && (
                               <a href={`tel:${r.rider_phone}`} className="text-muted-foreground hover:underline">{r.rider_phone}</a>
@@ -507,7 +545,7 @@ export default function RejectedDeliveriesPage() {
               {canClaim(detail) && (
                 <Button className="w-full" disabled={claiming === detail.id} onClick={() => handleClaim(detail)}>
                   <CheckCircle2 className="h-4 w-4 mr-1" />
-                  {claiming === detail.id ? 'Claiming…' : (detail.status === 'unassigned' && !detail.rider_id ? 'Claim delivery' : 'Take over delivery')}
+                  {claiming === detail.id ? 'Claiming…' : (detail.status === 'unassigned' && !detail.rider_id ? 'Claim delivery' : 'Reclaim delivery')}
                 </Button>
               )}
             </div>

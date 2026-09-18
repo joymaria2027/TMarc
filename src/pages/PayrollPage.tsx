@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Plus, Play, Wallet, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatMoney, paginate } from '@/lib/finance';
 
 interface Assignment {
   id: string;
@@ -48,7 +49,11 @@ export default function PayrollPage() {
     payee_user_id: '', payer_type: 'merchant', payer_merchant_id: '',
     basis: 'fixed', fixed_amount: '', percent: '', notes: '', is_active: true,
   });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
   const [runForm, setRunForm] = useState({ period_start: monthAgo, period_end: today });
+  const [runsPage, setRunsPage] = useState(1);
+  const RUNS_PAGE_SIZE = 10;
 
   const load = async () => {
     const [aRes, rRes, pRes, mRes] = await Promise.all([
@@ -70,10 +75,11 @@ export default function PayrollPage() {
   const merchantName = (id: string | null) => id ? merchants.find(m => m.id === id)?.name || id.slice(0, 8) : '—';
 
   const createAssignment = async () => {
-    if (!form.payee_user_id) { toast.error('Pick a payee'); return; }
-    if (form.payer_type === 'merchant' && !form.payer_merchant_id) { toast.error('Pick the paying merchant'); return; }
-    if (form.basis === 'fixed' && !form.fixed_amount) { toast.error('Enter fixed amount'); return; }
-    if (form.basis === 'percent_of_wallet_income' && !form.percent) { toast.error('Enter percent'); return; }
+    if (!form.payee_user_id) { setFormError('Pick a payee.'); return; }
+    if (form.payer_type === 'merchant' && !form.payer_merchant_id) { setFormError('Pick the paying merchant.'); return; }
+    if (form.basis === 'fixed' && (!form.fixed_amount || Number(form.fixed_amount) <= 0)) { setFormError('Enter a fixed amount greater than 0.'); return; }
+    if (form.basis === 'percent_of_wallet_income' && (!form.percent || Number(form.percent) <= 0 || Number(form.percent) > 100)) { setFormError('Enter a percent between 0 and 100.'); return; }
+    setFormError(null);
 
     const payload: any = {
       payee_user_id: form.payee_user_id,
@@ -96,6 +102,9 @@ export default function PayrollPage() {
 
   const runPayroll = async () => {
     if (!runDialog) return;
+    if (!runForm.period_start || !runForm.period_end) { setRunError('Pick a start and end date.'); return; }
+    if (runForm.period_start > runForm.period_end) { setRunError('Period start must be before period end.'); return; }
+    setRunError(null);
     const { error } = await supabase.rpc('run_payroll', {
       _assignment_id: runDialog.id,
       _period_start: runForm.period_start,
@@ -107,13 +116,31 @@ export default function PayrollPage() {
     load();
   };
 
+  const profileMap = useMemo(() => {
+    const m = new Map<string, string>();
+    profiles.forEach((p: any) => m.set(p.user_id, p.full_name || p.email || p.user_id.slice(0, 8)));
+    return m;
+  }, [profiles]);
+  const merchantMap = useMemo(() => {
+    const m = new Map<string, string>();
+    merchants.forEach((x: any) => m.set(x.id, x.name));
+    return m;
+  }, [merchants]);
+  const runsPaged = useMemo(() => paginate(runs, runsPage, RUNS_PAGE_SIZE), [runs, runsPage]);
+
   if (!isAdmin) {
     return <div className="text-center py-20 text-muted-foreground">Admin only.</div>;
   }
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  if (loading) return (
+    <div className="space-y-4" role="status" aria-label="Loading payroll">
+      <div className="shimmer h-16 rounded-md" aria-hidden="true" />
+      <div className="shimmer h-32 rounded-md" aria-hidden="true" />
+      <span className="sr-only">Loading payroll…</span>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto" aria-busy={false}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Payroll</h1>
@@ -125,9 +152,9 @@ export default function PayrollPage() {
             <DialogHeader><DialogTitle>New payroll assignment</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label>Payee (user) *</Label>
-                <Select value={form.payee_user_id} onValueChange={v => setForm(p => ({ ...p, payee_user_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
+                <Label htmlFor="pay-payee">Payee (user) *</Label>
+                <Select value={form.payee_user_id} onValueChange={v => { setForm(p => ({ ...p, payee_user_id: v })); setFormError(null); }}>
+                  <SelectTrigger id="pay-payee" aria-describedby={formError ? 'pay-form-error' : undefined}><SelectValue placeholder="Select user" /></SelectTrigger>
                   <SelectContent>
                     {profiles.map(p => (
                       <SelectItem key={p.user_id} value={p.user_id}>{p.full_name || p.email}</SelectItem>
@@ -135,11 +162,11 @@ export default function PayrollPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Paid by</Label>
+                  <Label htmlFor="pay-payer">Paid by</Label>
                   <Select value={form.payer_type} onValueChange={v => setForm(p => ({ ...p, payer_type: v as any }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="pay-payer"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="merchant">Merchant</SelectItem>
                       <SelectItem value="business_owner">Business owner</SelectItem>
@@ -149,9 +176,9 @@ export default function PayrollPage() {
                 </div>
                 {form.payer_type === 'merchant' && (
                   <div className="space-y-2">
-                    <Label>Merchant *</Label>
-                    <Select value={form.payer_merchant_id} onValueChange={v => setForm(p => ({ ...p, payer_merchant_id: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Merchant" /></SelectTrigger>
+                    <Label htmlFor="pay-merchant">Merchant *</Label>
+                    <Select value={form.payer_merchant_id} onValueChange={v => { setForm(p => ({ ...p, payer_merchant_id: v })); setFormError(null); }}>
+                      <SelectTrigger id="pay-merchant" aria-describedby={formError ? 'pay-form-error' : undefined}><SelectValue placeholder="Merchant" /></SelectTrigger>
                       <SelectContent>
                         {merchants.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                       </SelectContent>
@@ -160,9 +187,9 @@ export default function PayrollPage() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Basis</Label>
+                <Label htmlFor="pay-basis">Basis</Label>
                 <Select value={form.basis} onValueChange={v => setForm(p => ({ ...p, basis: v as any }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="pay-basis"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="fixed">Fixed amount</SelectItem>
                     <SelectItem value="percent_of_wallet_income">Percent of payer wallet income (period)</SelectItem>
@@ -171,19 +198,20 @@ export default function PayrollPage() {
               </div>
               {form.basis === 'fixed' ? (
                 <div className="space-y-2">
-                  <Label>Fixed amount (D)</Label>
-                  <Input type="number" step="0.01" value={form.fixed_amount} onChange={e => setForm(p => ({ ...p, fixed_amount: e.target.value }))} />
+                  <Label htmlFor="pay-fixed">Fixed amount (D)</Label>
+                  <Input id="pay-fixed" type="number" min="0" step="0.01" value={form.fixed_amount} onChange={e => { setForm(p => ({ ...p, fixed_amount: e.target.value })); setFormError(null); }} aria-invalid={!!formError} aria-describedby={formError ? 'pay-form-error' : undefined} className="tabular-nums" />
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Label>Percent (%)</Label>
-                  <Input type="number" step="0.01" value={form.percent} onChange={e => setForm(p => ({ ...p, percent: e.target.value }))} />
+                  <Label htmlFor="pay-percent">Percent (%)</Label>
+                  <Input id="pay-percent" type="number" min="0" max="100" step="0.01" value={form.percent} onChange={e => { setForm(p => ({ ...p, percent: e.target.value })); setFormError(null); }} aria-invalid={!!formError} aria-describedby={formError ? 'pay-form-error' : undefined} className="tabular-nums" />
                 </div>
               )}
               <div className="space-y-2">
-                <Label>Notes</Label>
-                <Input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                <Label htmlFor="pay-notes">Notes</Label>
+                <Input id="pay-notes" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
               </div>
+              {formError && <p id="pay-form-error" role="alert" className="text-sm text-destructive">{formError}</p>}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -240,7 +268,7 @@ export default function PayrollPage() {
                       {' • '}{format(new Date(r.created_at), 'MMM d, yyyy HH:mm')}
                     </p>
                   </div>
-                  <Badge className="bg-green-500/10 text-green-600">D{Number(r.computed_amount).toLocaleString()}</Badge>
+                  <Badge className="bg-success/10 text-success">D{Number(r.computed_amount).toLocaleString()}</Badge>
                 </CardContent>
               </Card>
             );
@@ -255,12 +283,12 @@ export default function PayrollPage() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Period start</Label>
-                <Input type="date" value={runForm.period_start} onChange={e => setRunForm(p => ({ ...p, period_start: e.target.value }))} />
+                <Label htmlFor="run-start">Period start</Label>
+                <Input id="run-start" type="date" value={runForm.period_start} onChange={e => setRunForm(p => ({ ...p, period_start: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Period end</Label>
-                <Input type="date" value={runForm.period_end} onChange={e => setRunForm(p => ({ ...p, period_end: e.target.value }))} />
+                <Label htmlFor="run-end">Period end</Label>
+                <Input id="run-end" type="date" value={runForm.period_end} onChange={e => setRunForm(p => ({ ...p, period_end: e.target.value }))} />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">

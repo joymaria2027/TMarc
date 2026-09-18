@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import OrderStatusTimeline from "@/components/OrderStatusTimeline";
 import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import OrderChat from "@/components/OrderChat";
 import { MessageCircle } from "lucide-react";
+import { paginateList, unreadLabel } from "./merchantGroup.helpers";
 
 const nextActions: Record<string, { label: string; to: string }[]> = {
   paid: [{ label: "Accept", to: "accepted" }],
@@ -18,11 +19,15 @@ const nextActions: Record<string, { label: string; to: string }[]> = {
 
 const ACTIVE_STATUSES = ["paid", "accepted", "preparing", "ready", "dispatched", "picked_up", "in_transit", "delivered"];
 
+export const ORDER_PAGE_SIZE = 10;
+
 export default function MerchantOrdersPage() {
   const { user, hasRole } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [merchantIds, setMerchantIds] = useState<string[] | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
 
   // Resolve which merchants this user manages (admins see all)
   useEffect(() => {
@@ -41,11 +46,12 @@ export default function MerchantOrdersPage() {
       .in("status", ACTIVE_STATUSES)
       .order("created_at", { ascending: false });
     if (merchantIds !== null) {
-      if (merchantIds.length === 0) { setOrders([]); return; }
+      if (merchantIds.length === 0) { setOrders([]); setLoading(false); return; }
       q = q.in("merchant_id", merchantIds);
     }
     const { data } = await q;
     setOrders(data || []);
+    setLoading(false);
 
     // Load unread counts for these orders
     const ids = (data || []).map((o: any) => o.id);
@@ -65,23 +71,43 @@ export default function MerchantOrdersPage() {
     }
   };
 
+  // Debounced reload: order + message bursts collapse into one fetch.
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLoad = useRef(() => {
+    if (loadTimer.current) clearTimeout(loadTimer.current);
+    loadTimer.current = setTimeout(() => { load(); }, 350);
+  });
+  // Keep the debounced loader pointed at the latest merchant scope.
+  useEffect(() => {
+    scheduleLoad.current = () => {
+      if (loadTimer.current) clearTimeout(loadTimer.current);
+      loadTimer.current = setTimeout(() => { load(); }, 350);
+    };
+  });
+
   useEffect(() => {
     if (merchantIds === undefined) return;
     load();
     const ch = supabase.channel("merch-orders")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload: any) => {
         const row = payload.new || payload.old;
+        // Scope realtime to this manager's merchants; admins see all.
         if (merchantIds && !merchantIds.includes(row?.merchant_id)) return;
         if (payload.eventType === "UPDATE" && payload.old?.status !== "paid" && payload.new?.status === "paid") {
           toast.success(`New paid order ${payload.new.order_reference || ""}`);
         }
-        load();
+        scheduleLoad.current();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "order_messages" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_messages" }, () => scheduleLoad.current())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (loadTimer.current) clearTimeout(loadTimer.current);
+      supabase.removeChannel(ch);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, merchantIds]);
+
+  useEffect(() => { setPage(0); }, [orders.length]);
 
   const transition = async (orderId: string, to: string) => {
     try {
@@ -97,24 +123,47 @@ export default function MerchantOrdersPage() {
     } catch (e: any) { toast.error(e.message); }
   };
 
+  const pages = Math.max(1, Math.ceil(orders.length / ORDER_PAGE_SIZE));
+  const safePage = Math.min(page, pages - 1);
+  const visible = paginateList(orders, safePage, ORDER_PAGE_SIZE);
+
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-3xl">Incoming orders</h1>
-      {orders.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">No active orders.</CardContent></Card>
-      ) : orders.map(o => (
-        <MerchantOrderCard key={o.id} o={o} unread={unread[o.id] || 0} onTransition={transition} onChatOpened={() => setUnread(u => ({ ...u, [o.id]: 0 }))} />
-      ))}
+      <div className="flex items-center gap-2 flex-wrap">
+        <h1 className="text-2xl font-bold">Incoming orders</h1>
+        <Badge variant="secondary" className="text-xs">{orders.length} active</Badge>
+      </div>
+      {loading ? (
+        <p className="text-muted-foreground" role="status">Loading orders…</p>
+      ) : orders.length === 0 ? (
+        <Card><CardContent className="p-8 text-center text-muted-foreground space-y-1">
+          <p>No active orders.</p>
+          <p className="text-sm">New paid orders appear here automatically.</p>
+        </CardContent></Card>
+      ) : (
+        <>
+          {visible.map(o => (
+            <MerchantOrderCard key={o.id} o={o} unread={unread[o.id] || 0} onTransition={transition} onChatOpened={() => setUnread(u => ({ ...u, [o.id]: 0 }))} />
+          ))}
+          {pages > 1 && (
+            <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+              <span className="text-xs text-muted-foreground" role="status">Page {safePage + 1} of {pages}</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={safePage === 0} aria-label="Previous orders page" onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="outline" disabled={safePage + 1 >= pages} aria-label="Next orders page" onClick={() => setPage(p => p + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
 function MerchantOrderCard({ o, unread, onTransition, onChatOpened }: { o: any; unread: number; onTransition: (id: string, to: string) => void; onChatOpened: () => void }) {
+  // Chat stays closed until the merchant opens it. Unread arrivals surface as
+  // a role=status badge so screen readers announce them without stealing focus.
   const [chatOpen, setChatOpen] = useState(false);
-  useEffect(() => {
-    if (unread > 0 && !chatOpen) setChatOpen(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unread]);
   const toggleChat = () => {
     setChatOpen(v => {
       const next = !v;
@@ -122,18 +171,19 @@ function MerchantOrderCard({ o, unread, onTransition, onChatOpened }: { o: any; 
       return next;
     });
   };
+  const chatId = `order-chat-${o.id}`;
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
         <div>
           <CardTitle className="text-base">{o.order_reference} · {o.merchants?.name}</CardTitle>
           <p className="text-xs text-muted-foreground">
             {o.customers?.full_name} · {o.customers?.phone} · {o.fulfillment_type}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <PaymentStatusBadge status={o.payment_status} />
-          <Badge>{o.status.replace(/_/g, " ")}</Badge>
+          <Badge className="text-xs">{o.status.replace(/_/g, " ")}</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -144,19 +194,19 @@ function MerchantOrderCard({ o, unread, onTransition, onChatOpened }: { o: any; 
         )}
         <OrderStatusTimeline status={o.status} fulfillmentType={o.fulfillment_type} className="py-2" />
         {o.order_items?.map((it: any) => (
-          <div key={it.id} className="flex justify-between text-sm">
+          <div key={it.id} className="flex justify-between gap-2 text-sm">
             <span>{it.quantity}× {it.name_snapshot}</span>
-            <span>D {Number(it.line_total).toFixed(2)}</span>
+            <span className="tabular-nums">D {Number(it.line_total).toFixed(2)}</span>
           </div>
         ))}
         {o.dropoff_address && <p className="text-xs text-muted-foreground">Deliver to: {o.dropoff_address}</p>}
         <div className="border-t pt-2 flex items-center justify-between flex-wrap gap-2">
-          <span className="font-semibold">Total D {Number(o.total).toFixed(2)}</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={toggleChat} className="relative">
-              <MessageCircle className="h-4 w-4 mr-1" /> {chatOpen ? "Hide chat" : "Message customer"}
+          <span className="font-semibold tabular-nums">Total D {Number(o.total).toFixed(2)}</span>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={toggleChat} aria-expanded={chatOpen} aria-controls={chatId} className="relative">
+              <MessageCircle className="h-4 w-4 mr-1" aria-hidden="true" /> {chatOpen ? "Hide chat" : "Message customer"}
               {unread > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5">{unread}</span>
+                <span role="status" aria-label={unreadLabel(unread)} className="ml-2 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 min-h-[20px] min-w-[20px]">{unread}</span>
               )}
             </Button>
             {(nextActions[o.status] || []).map(a => (
@@ -164,7 +214,7 @@ function MerchantOrderCard({ o, unread, onTransition, onChatOpened }: { o: any; 
             ))}
           </div>
         </div>
-        {chatOpen && <OrderChat orderId={o.id} senderRole="merchant" />}
+        {chatOpen && <div id={chatId}><OrderChat orderId={o.id} senderRole="merchant" /></div>}
       </CardContent>
     </Card>
   );

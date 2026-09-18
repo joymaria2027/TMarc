@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollText } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ScrollText, ChevronDown } from 'lucide-react';
+import { filterAuditRows, paginateList } from './merchantGroup.helpers';
 
 const EVENT_LABELS: Record<string, string> = {
   submerchant_created: 'Sub-merchant created',
@@ -28,6 +30,7 @@ export default function MerchantAuditLogPage() {
   const [merchantFilter, setMerchantFilter] = useState('all');
   const [eventFilter, setEventFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -45,44 +48,57 @@ export default function MerchantAuditLogPage() {
     setLoading(false);
   };
 
+  // Debounced reload: audit bursts collapse into one fetch (scoped client-side
+  // by the merchant/event/search filters below).
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     load();
     const channel = supabase
       .channel('merchant-audit-log')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_audit_log' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_audit_log' }, () => {
+        if (loadTimer.current) clearTimeout(loadTimer.current);
+        loadTimer.current = setTimeout(() => { load(); }, 350);
+      })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (loadTimer.current) clearTimeout(loadTimer.current);
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  // Debounce the search box so each keystroke does not re-filter 1000 rows.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const merchantName = (id: string) => merchants.find(m => m.id === id)?.name || 'Unknown store';
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows.filter(r => {
-      if (merchantFilter !== 'all' && r.merchant_id !== merchantFilter) return false;
-      if (eventFilter !== 'all' && r.event_type !== eventFilter) return false;
-      if (!q) return true;
-      const actor = profiles[r.actor_user_id]?.full_name || profiles[r.actor_user_id]?.email || '';
-      return `${merchantName(r.merchant_id)} ${actor} ${r.event_type}`.toLowerCase().includes(q);
-    });
-  }, [rows, merchantFilter, eventFilter, search, profiles, merchants]);
+  const filtered = useMemo(() => filterAuditRows(rows, {
+    merchantFilter,
+    eventFilter,
+    search: debouncedSearch,
+    merchantName: (id: string) => merchants.find(m => m.id === id)?.name || 'Unknown store',
+    actorText: (uid: string) => profiles[uid]?.full_name || profiles[uid]?.email || '',
+  }), [rows, merchantFilter, eventFilter, debouncedSearch, profiles, merchants]);
 
-  const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const pageRows = paginateList(filtered, page, PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const filtersActive = merchantFilter !== 'all' || eventFilter !== 'all' || debouncedSearch.trim() !== '';
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <ScrollText className="h-5 w-5 text-muted-foreground" />
-        <h1 className="text-2xl font-semibold">Merchant Audit Log</h1>
-        <Badge variant="secondary">{filtered.length}</Badge>
+      <div className="flex items-center gap-2 flex-wrap">
+        <ScrollText className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <h1 className="text-2xl font-bold">Merchant Audit Log</h1>
+        <Badge variant="secondary" className="text-xs">{filtered.length}</Badge>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1">
-          <Label className="text-xs">Store</Label>
+          <Label htmlFor="audit-store" className="text-xs">Store</Label>
           <Select value={merchantFilter} onValueChange={v => { setMerchantFilter(v); setPage(0); }}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="audit-store" className="min-h-[44px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All stores</SelectItem>
               {merchants.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
@@ -90,9 +106,9 @@ export default function MerchantAuditLogPage() {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Event</Label>
+          <Label htmlFor="audit-event" className="text-xs">Event</Label>
           <Select value={eventFilter} onValueChange={v => { setEventFilter(v); setPage(0); }}>
-            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="audit-event" className="min-h-[44px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All events</SelectItem>
               {Object.entries(EVENT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -100,46 +116,75 @@ export default function MerchantAuditLogPage() {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Search</Label>
-          <Input className="h-9" placeholder="Store or person" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+          <Label htmlFor="audit-search" className="text-xs">Search</Label>
+          <Input id="audit-search" className="min-h-[44px]" placeholder="Store or person" autoComplete="off" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
         </div>
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground">Loading…</p>
+        <p className="text-muted-foreground" role="status">Loading audit log…</p>
       ) : pageRows.length === 0 ? (
-        <p className="text-muted-foreground">No audit entries yet.</p>
+        <p className="text-muted-foreground" role="status">
+          {filtersActive ? 'No entries match these filters. Clear the search or choose a different store.' : 'No audit entries yet. Store approvals and QR activity will appear here.'}
+        </p>
       ) : (
         <div className="space-y-2">
-          {pageRows.map(r => {
-            const actor = profiles[r.actor_user_id];
-            return (
-              <Card key={r.id}>
-                <CardContent className="p-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  <Badge variant={r.event_type.startsWith('qr_') ? 'outline' : 'default'}>
-                    {EVENT_LABELS[r.event_type] || r.event_type}
-                  </Badge>
-                  <span className="font-medium">{merchantName(r.merchant_id)}</span>
-                  <span className="text-muted-foreground">
-                    by {actor?.full_name || actor?.email || 'Unknown user'}
-                  </span>
-                  <span className="text-muted-foreground ml-auto text-xs">
-                    {new Date(r.created_at).toLocaleString()}
-                  </span>
-                  {r.detail && Object.keys(r.detail).length > 0 && (
-                    <pre className="w-full text-xs text-muted-foreground bg-muted rounded p-2 overflow-auto">
-                      {JSON.stringify(r.detail, null, 2)}
-                    </pre>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-xs text-muted-foreground">Page {page + 1} of {pages}</span>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col">Event</TableHead>
+                <TableHead scope="col">Store</TableHead>
+                <TableHead scope="col">Actor</TableHead>
+                <TableHead scope="col" className="text-right">Time</TableHead>
+                <TableHead scope="col"><span className="sr-only">Details</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pageRows.map(r => {
+                const actor = profiles[r.actor_user_id];
+                const hasDetail = r.detail && Object.keys(r.detail).length > 0;
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell>
+                      <Badge className="text-xs" variant={r.event_type.startsWith('qr_') ? 'outline' : 'default'}>
+                        {EVENT_LABELS[r.event_type] || r.event_type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{merchantName(r.merchant_id)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {actor?.full_name || actor?.email || 'Unknown user'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs text-right tabular-nums">
+                      <time dateTime={r.created_at}>{new Date(r.created_at).toLocaleString()}</time>
+                    </TableCell>
+                    <TableCell>
+                      {hasDetail ? (
+                        <Collapsible>
+                          <CollapsibleTrigger asChild>
+                            <Button size="sm" variant="ghost" aria-label={`Show details for ${EVENT_LABELS[r.event_type] || r.event_type} at ${merchantName(r.merchant_id)}`}>
+                              Details <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <pre className="mt-1 max-w-md text-xs text-muted-foreground bg-muted rounded p-2 overflow-auto">
+                              {JSON.stringify(r.detail, null, 2)}
+                            </pre>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+            <span className="text-xs text-muted-foreground" role="status">Page {page + 1} of {pages}</span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</Button>
-              <Button size="sm" variant="outline" disabled={page + 1 >= pages} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="sm" variant="outline" disabled={page === 0} aria-label="Previous audit page" onClick={() => setPage(p => p - 1)}>Previous</Button>
+              <Button size="sm" variant="outline" disabled={page + 1 >= pages} aria-label="Next audit page" onClick={() => setPage(p => p + 1)}>Next</Button>
             </div>
           </div>
         </div>

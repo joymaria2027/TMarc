@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { PieChart, Plus, Percent, Trash2 } from 'lucide-react';
+import { PieChart, Plus, Percent, Trash2, Pencil } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { validateSharing } from '@/lib/finance';
 
 export default function RevenueSharingPage() {
   const { hasRole } = useAuth();
@@ -28,6 +29,12 @@ export default function RevenueSharingPage() {
     platform_percentage: '15',
     ucs_rides_percentage: '15',
   });
+  const [formError, setFormError] = useState<string | null>(null);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => load(), 500);
+  };
 
   const load = async () => {
     const [sharesRes, restRes] = await Promise.all([
@@ -43,24 +50,25 @@ export default function RevenueSharingPage() {
     load();
     const channel = supabase
       .channel('revenue-sharing-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'revenue_sharing' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'revenue_sharing' }, () => scheduleReload())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const createShare = async () => {
-    if (!form.merchant_id) {
-      toast.error('Please select a merchant');
-      return;
-    }
     const rp = parseFloat(form.rider_percentage);
     const restp = parseFloat(form.merchant_percentage);
     const pp = parseFloat(form.platform_percentage);
     const ucs = parseFloat(form.ucs_rides_percentage);
-    if (Math.abs(rp + restp + pp + ucs - 100) > 0.01) {
-      toast.error('Percentages must add up to 100%');
+    const err = validateSharing({ merchant_id: form.merchant_id, r: rp, m: restp, p: pp, u: ucs });
+    if (err) {
+      setFormError(err);
       return;
     }
+    setFormError(null);
 
     // Check if merchant already has a ratio
     const existing = shares.find(s => s.merchant_id === form.merchant_id);
@@ -121,6 +129,7 @@ export default function RevenueSharingPage() {
       platform_percentage: String(s.platform_percentage),
       ucs_rides_percentage: String(s.ucs_rides_percentage),
     });
+    setFormError(null);
     setOpen(true);
   };
 
@@ -133,10 +142,32 @@ export default function RevenueSharingPage() {
     load();
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+  const visibleShares = useMemo(() => {
+    if (isRider && !canManage) {
+      const byRest = new Map<string, any>();
+      shares.forEach((s: any) => {
+        if (!s.merchant_id) return;
+        const existing = byRest.get(s.merchant_id);
+        if (!existing || (s.rider_id != null && existing.rider_id == null)) {
+          byRest.set(s.merchant_id, s);
+        }
+      });
+      return Array.from(byRest.values());
+    }
+    return shares;
+  }, [shares, isRider, canManage]);
+
+  if (loading) return (
+    <div className="space-y-4" role="status" aria-label="Loading revenue sharing">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="shimmer h-20 rounded-md" aria-hidden="true" />
+      ))}
+      <span className="sr-only">Loading revenue sharing…</span>
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-busy={false}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Revenue Sharing</h1>
@@ -155,9 +186,9 @@ export default function RevenueSharingPage() {
               <DialogHeader><DialogTitle>Set Revenue Sharing</DialogTitle></DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Merchant</Label>
-                  <Select value={form.merchant_id} onValueChange={v => setForm(p => ({ ...p, merchant_id: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select merchant" /></SelectTrigger>
+                  <Label htmlFor="rs-merchant">Merchant</Label>
+                  <Select value={form.merchant_id} onValueChange={v => { setForm(p => ({ ...p, merchant_id: v })); setFormError(null); }}>
+                    <SelectTrigger id="rs-merchant" aria-describedby={formError ? 'rs-form-error' : undefined}><SelectValue placeholder="Select merchant" /></SelectTrigger>
                     <SelectContent>
                       {merchants.map(r => (
                         <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
@@ -165,24 +196,25 @@ export default function RevenueSharingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label>Rider %</Label>
-                    <Input type="number" value={form.rider_percentage} onChange={e => setForm(p => ({ ...p, rider_percentage: e.target.value }))} />
+                    <Label htmlFor="rs-rider">Rider %</Label>
+                    <Input id="rs-rider" type="number" min="0" max="100" step="0.01" value={form.rider_percentage} onChange={e => setForm(p => ({ ...p, rider_percentage: e.target.value }))} aria-invalid={!!formError} aria-describedby={formError ? 'rs-form-error' : undefined} className="tabular-nums" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Merchant %</Label>
-                    <Input type="number" value={form.merchant_percentage} onChange={e => setForm(p => ({ ...p, merchant_percentage: e.target.value }))} />
+                    <Label htmlFor="rs-merchant-pct">Merchant %</Label>
+                    <Input id="rs-merchant-pct" type="number" min="0" max="100" step="0.01" value={form.merchant_percentage} onChange={e => setForm(p => ({ ...p, merchant_percentage: e.target.value }))} aria-invalid={!!formError} aria-describedby={formError ? 'rs-form-error' : undefined} className="tabular-nums" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Platform %</Label>
-                    <Input type="number" value={form.platform_percentage} onChange={e => setForm(p => ({ ...p, platform_percentage: e.target.value }))} />
+                    <Label htmlFor="rs-platform">Platform %</Label>
+                    <Input id="rs-platform" type="number" min="0" max="100" step="0.01" value={form.platform_percentage} onChange={e => setForm(p => ({ ...p, platform_percentage: e.target.value }))} aria-invalid={!!formError} aria-describedby={formError ? 'rs-form-error' : undefined} className="tabular-nums" />
                   </div>
                   <div className="space-y-2">
-                    <Label>UCS Rides %</Label>
-                    <Input type="number" value={form.ucs_rides_percentage} onChange={e => setForm(p => ({ ...p, ucs_rides_percentage: e.target.value }))} />
+                    <Label htmlFor="rs-ucs">UCS Rides %</Label>
+                    <Input id="rs-ucs" type="number" min="0" max="100" step="0.01" value={form.ucs_rides_percentage} onChange={e => setForm(p => ({ ...p, ucs_rides_percentage: e.target.value }))} aria-invalid={!!formError} aria-describedby={formError ? 'rs-form-error' : undefined} className="tabular-nums" />
                   </div>
                 </div>
+                {formError && <p id="rs-form-error" role="alert" className="text-sm text-destructive">{formError}</p>}
                 <Button onClick={createShare} className="w-full">Save Sharing Ratio</Button>
               </div>
             </DialogContent>
@@ -191,70 +223,60 @@ export default function RevenueSharingPage() {
       </div>
 
       <div className="space-y-3">
-        {(() => {
-          // For riders without manage rights: collapse per merchant — prefer a personal rate, otherwise show the merchant default.
-          let visible = shares;
-          if (isRider && !canManage) {
-            const myRiderId = (shares.find((s: any) => s.rider_id) as any)?.rider_id; // RLS only returns own + null rows
-            const byRest = new Map<string, any>();
-            const personalRiderId = shares.find((s: any) => s.rider_id != null)?.rider_id;
-            shares.forEach((s: any) => {
-              if (!s.merchant_id) return;
-              const existing = byRest.get(s.merchant_id);
-              // Prefer rider-specific over default
-              if (!existing || (s.rider_id != null && existing.rider_id == null)) {
-                byRest.set(s.merchant_id, s);
-              }
-            });
-            visible = Array.from(byRest.values());
-          }
-          return visible.map((s: any) => (
+        {visibleShares.map((s: any) => (
           <Card key={s.id} className={canManage ? 'hover:border-primary/50 transition-colors' : ''}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className={canManage ? 'cursor-pointer flex-1' : 'flex-1'} onClick={() => canManage && editShare(s)}>
+                <div className="flex-1">
                   <p className="font-medium">{getMerchantName(s.merchant_id)}</p>
-                  {canManage && <p className="text-xs text-muted-foreground">Click to edit</p>}
                   {isRider && !canManage && (
                     <p className="text-xs text-muted-foreground">
                       {s.rider_id ? 'Personal rate assigned to you' : 'Default rate for this merchant'}
                     </p>
                   )}
+                  {canManage && (
+                    <Button variant="ghost" size="sm" className="mt-1 gap-1 px-2" onClick={() => editShare(s)} aria-label={`Edit sharing for ${getMerchantName(s.merchant_id)}`}>
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit ratio
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge
                     variant={isRider && !canManage ? 'default' : 'outline'}
-                    className={`gap-1 ${isRider && !canManage ? 'bg-primary text-primary-foreground' : ''}`}
+                    className={`gap-1 tabular-nums ${isRider && !canManage ? 'bg-primary text-primary-foreground' : ''}`}
                   >
-                    <Percent className="h-3 w-3" />
-                    {isRider && !canManage ? 'Your share' : 'Rider'}: {s.rider_percentage}%
+                    <Percent className="h-3 w-3" aria-hidden="true" />
+                    {isRider && !canManage ? 'Your share' : 'Rider'}: <span className="tabular-nums">{s.rider_percentage}%</span>
                   </Badge>
                   {(!isRider || canManage) && (
                     <>
-                      <Badge variant="outline" className="gap-1"><Percent className="h-3 w-3" />Merchant: {s.merchant_percentage}%</Badge>
-                      <Badge variant="outline" className="gap-1"><Percent className="h-3 w-3" />Platform: {s.platform_percentage}%</Badge>
-                      <Badge variant="outline" className="gap-1 bg-primary/5"><Percent className="h-3 w-3" />UCS Rides: {s.ucs_rides_percentage}%</Badge>
+                      <Badge variant="outline" className="gap-1 tabular-nums"><Percent className="h-3 w-3" aria-hidden="true" />Merchant: {s.merchant_percentage}%</Badge>
+                      <Badge variant="outline" className="gap-1 tabular-nums"><Percent className="h-3 w-3" aria-hidden="true" />Platform: {s.platform_percentage}%</Badge>
+                      <Badge variant="outline" className="gap-1 bg-primary/5 tabular-nums"><Percent className="h-3 w-3" aria-hidden="true" />UCS Rides: {s.ucs_rides_percentage}%</Badge>
                     </>
                   )}
                   {canManage && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteId(s.id); }}>
-                      <Trash2 className="h-4 w-4" />
+                    <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(s.id)} aria-label={`Delete sharing for ${getMerchantName(s.merchant_id)}`}>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
               </div>
             </CardContent>
           </Card>
-          ));
-        })()}
+        ))}
         {shares.length === 0 && (
-          <div className="text-center py-10 text-muted-foreground">
-            <PieChart className="h-10 w-10 mx-auto mb-2 opacity-50" />
-            <p>
+          <div className="text-center py-10">
+            <PieChart className="h-10 w-10 mx-auto mb-2 opacity-50" aria-hidden="true" />
+            <p className="font-medium">No revenue sharing ratios yet</p>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
               {isRider && !canManage
-                ? 'No revenue rate set for the merchants you can deliver for yet. Ask an admin to set sharing.'
-                : 'No revenue sharing ratios set yet'}
+                ? 'No rate is set for the merchants you deliver for. Your rider share will appear here once an admin sets it.'
+                : 'Set a per-merchant split so settlements can auto-calculate rider, merchant, platform and UCS shares.'}
             </p>
+            {canManage && (
+              <Button className="mt-4" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" aria-hidden="true" />Set your first sharing ratio</Button>
+            )}
           </div>
         )}
       </div>

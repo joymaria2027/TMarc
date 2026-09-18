@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import DeliveryMap from "./DeliveryMap";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const DeliveryMap = lazy(() => import("./DeliveryMap"));
 
 interface Props {
   orderId: string;
@@ -20,10 +22,22 @@ interface LiveLoc {
 
 export default function LiveDeliveryMap({ orderId, deliveryId, className }: Props) {
   const [loc, setLoc] = useState<LiveLoc | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const lastAnnouncedRef = useRef<number>(0);
+
+  // Throttle live announcements: at most one per 30s so screen readers aren't spammed.
+  const announce = (text: string) => {
+    const now = Date.now();
+    if (now - lastAnnouncedRef.current < 30_000) return;
+    lastAnnouncedRef.current = now;
+    setAnnouncement(text);
+  };
 
   const fetchLoc = async () => {
     const { data } = await supabase.rpc("get_order_live_location", { _order_id: orderId });
-    if (data && data.length > 0) setLoc(data[0] as any);
+    if (data && data.length > 0) setLoc(data[0] as LiveLoc);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -37,9 +51,10 @@ export default function LiveDeliveryMap({ orderId, deliveryId, className }: Prop
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "delivery_waypoints", filter: `delivery_id=eq.${deliveryId}` },
-          (payload: any) => {
+          (payload: { new: { latitude: number; longitude: number; recorded_at: string } }) => {
             const w = payload.new;
             setLoc(prev => prev ? { ...prev, latitude: w.latitude, longitude: w.longitude, recorded_at: w.recorded_at } : prev);
+            announce(`Rider location updated ${new Date(w.recorded_at).toLocaleTimeString()}`);
           }
         )
         .subscribe();
@@ -48,24 +63,45 @@ export default function LiveDeliveryMap({ orderId, deliveryId, className }: Prop
       clearInterval(poll);
       if (channel) supabase.removeChannel(channel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, deliveryId]);
 
-  if (!loc) return null;
+  if (loading) {
+    return (
+      <div className={className} role="status" aria-label="Loading live delivery map">
+        <Skeleton className="shimmer h-56 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (!loc) {
+    return (
+      <div className={className} role="status" aria-label="Live delivery map unavailable">
+        <div className="h-56 w-full rounded-lg border border-dashed flex flex-col items-center justify-center text-center text-muted-foreground p-4">
+          <p className="text-sm font-medium">No live location yet</p>
+          <p className="text-xs mt-1">Waiting for the rider to start this delivery and share GPS. The merchant shares the rider&apos;s location once the run begins.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
-      <DeliveryMap
-        pickupLat={loc.pickup_lat ? Number(loc.pickup_lat) : null}
-        pickupLng={loc.pickup_lng ? Number(loc.pickup_lng) : null}
-        dropoffLat={loc.dropoff_lat ? Number(loc.dropoff_lat) : null}
-        dropoffLng={loc.dropoff_lng ? Number(loc.dropoff_lng) : null}
-        currentLat={loc.latitude ? Number(loc.latitude) : null}
-        currentLng={loc.longitude ? Number(loc.longitude) : null}
-        className="h-56 w-full rounded-lg"
-      />
+      <Suspense fallback={<Skeleton className="shimmer h-56 w-full rounded-lg" />}>
+        <DeliveryMap
+          pickupLat={loc.pickup_lat ? Number(loc.pickup_lat) : null}
+          pickupLng={loc.pickup_lng ? Number(loc.pickup_lng) : null}
+          dropoffLat={loc.dropoff_lat ? Number(loc.dropoff_lat) : null}
+          dropoffLng={loc.dropoff_lng ? Number(loc.dropoff_lng) : null}
+          currentLat={loc.latitude ? Number(loc.latitude) : null}
+          currentLng={loc.longitude ? Number(loc.longitude) : null}
+          className="h-56 w-full rounded-lg"
+        />
+      </Suspense>
+      <div aria-live="polite" role="status" className="sr-only">{announcement}</div>
       {loc.recorded_at && (
-        <p role="status" aria-live="polite" className="text-sm text-muted-foreground mt-1">
-          Rider location updated {new Date(loc.recorded_at).toLocaleTimeString()}
+        <p className="text-sm text-muted-foreground mt-1">
+          Rider location updated <time dateTime={loc.recorded_at}>{new Date(loc.recorded_at).toLocaleTimeString()}</time>
         </p>
       )}
       <p className="text-sm text-muted-foreground">Map shows the rider&apos;s location shared by the merchant, not your device location.</p>

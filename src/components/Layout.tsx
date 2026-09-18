@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -56,6 +56,40 @@ export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes the mobile sidebar and returns focus to the menu button.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSidebarOpen(false);
+        menuButtonRef.current?.focus();
+        return;
+      }
+      // Minimal focus trap: keep Tab cycling inside the open sidebar on mobile.
+      if (e.key === 'Tab' && sidebarRef.current) {
+        const focusables = sidebarRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    // Move focus into the sidebar when it opens.
+    sidebarRef.current?.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus();
+    return () => document.removeEventListener('keydown', onKey);
+  }, [sidebarOpen]);
 
   // Fetch unread alert count
   useEffect(() => {
@@ -81,6 +115,9 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">
+        Skip to content
+      </a>
       {/* Mobile header */}
       <div className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b bg-card px-4 md:hidden">
         <div className="flex items-center gap-2">
@@ -91,19 +128,19 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
         <div className="flex items-center gap-2">
           {unreadAlerts > 0 && (
-            <Link to="/alerts" className="relative">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
+            <Link to="/alerts" className="relative" aria-label={`Alerts, ${unreadAlerts} unread`}>
+              <Bell className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-xs font-bold text-destructive-foreground flex items-center justify-center tabular-nums">{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
             </Link>
           )}
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <Button ref={menuButtonRef} variant="ghost" size="icon" aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={sidebarOpen} aria-controls="app-sidebar" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            {sidebarOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
           </Button>
         </div>
       </div>
 
       {/* Sidebar */}
-      <aside className={cn(
+      <aside ref={sidebarRef} id="app-sidebar" aria-label="Primary navigation" className={cn(
         "fixed inset-y-0 left-0 z-30 w-64 transform border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 md:relative md:translate-x-0",
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
@@ -115,17 +152,18 @@ export default function Layout({ children }: { children: ReactNode }) {
             <span className="font-display text-xl tracking-tight">DeliveryAce</span>
           </div>
           {unreadAlerts > 0 && (
-            <Link to="/alerts" onClick={() => setSidebarOpen(false)} className="relative hidden md:block">
-              <Bell className="h-5 w-5 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors" />
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
+            <Link to="/alerts" onClick={() => setSidebarOpen(false)} className="relative hidden md:block" aria-label={`Alerts, ${unreadAlerts} unread`}>
+              <Bell className="h-5 w-5 text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors" aria-hidden="true" />
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-xs font-bold text-destructive-foreground flex items-center justify-center tabular-nums">{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
             </Link>
           )}
         </div>
-        <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 14rem)' }}>
+        <nav aria-label="Primary" className="flex-1 space-y-0.5 p-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 14rem)' }}>
           {visibleNav.map(item => (
             <Link
               key={item.href}
               to={item.href}
+              aria-current={location.pathname === item.href ? 'page' : undefined}
               onClick={() => setSidebarOpen(false)}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
@@ -137,7 +175,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               {item.icon}
               {item.label}
               {item.href === '/alerts' && unreadAlerts > 0 && (
-                <Badge variant="destructive" className="ml-auto text-[10px] h-5 px-1.5">{unreadAlerts}</Badge>
+                <Badge variant="destructive" className="ml-auto text-xs h-5 px-1.5 tabular-nums">{unreadAlerts}</Badge>
               )}
             </Link>
           ))}
@@ -169,7 +207,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       {sidebarOpen && <div className="fixed inset-0 z-20 bg-foreground/40 backdrop-blur-sm md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Main */}
-      <main className="flex-1 pt-14 md:pt-0">
+      <main id="main-content" tabIndex={-1} className="flex-1 pt-14 md:pt-0">
         <div className="p-4 md:p-6">{children}</div>
       </main>
     </div>
