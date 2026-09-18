@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Wallet, ArrowDownToLine, History, KeyRound, ShieldCheck, Loader2, Bike, Store, ShieldCheck as ShieldIcon } from 'lucide-react';
+import { Wallet, ArrowDownToLine, History, KeyRound, ShieldCheck, Loader2, Bike, Store, ShieldCheck as ShieldIcon, Download, X } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -21,7 +21,9 @@ import {
   rpcVerifyWithdrawalPin,
 } from '@/lib/rpcTypes';
 import type { HasWithdrawalPinResult } from '@/lib/rpcTypes';
-import { validateWithdrawal } from '@/lib/finance';
+import { validateWithdrawal, formatMoney } from '@/lib/finance';
+import { summarizeBulkResult, bulkResultMessage } from '@/lib/moneyGuards';
+import { buildWithdrawalFilterKey } from '@/components/wallet/withdrawalFilters';
 
 interface WalletRow {
   id: string;
@@ -85,10 +87,32 @@ export default function WalletPage() {
   const [withdrawSearch, setWithdrawSearch] = useState('');
   const [withdrawStatusFilter, setWithdrawStatusFilter] = useState('all');
   const [withdrawPage, setWithdrawPage] = useState(1);
+  const [withdrawDateFrom, setWithdrawDateFrom] = useState('');
+  const [withdrawDateTo, setWithdrawDateTo] = useState('');
+  const [withdrawAmountMin, setWithdrawAmountMin] = useState('');
+  const [withdrawAmountMax, setWithdrawAmountMax] = useState('');
   const [txSearch, setTxSearch] = useState('');
   const [txPage, setTxPage] = useState(1);
   const WITHDRAW_PAGE_SIZE = 10;
   const TX_PAGE_SIZE = 20;
+
+  // Bulk selection for withdrawals
+  const [withdrawSelectedIds, setWithdrawSelectedIds] = useState<Set<string>>(new Set());
+  const [withdrawBulkActionPending, setWithdrawBulkActionPending] = useState<'approve' | 'reject' | null>(null);
+
+  // F10: an invisible selection is a money-safety trap — clear it whenever the
+  // filter shape changes (the visible set the user selected from is gone).
+  const withdrawFilterKey = buildWithdrawalFilterKey({
+    search: withdrawSearch,
+    statusFilter: withdrawStatusFilter,
+    dateFrom: withdrawDateFrom,
+    dateTo: withdrawDateTo,
+    amountMin: withdrawAmountMin,
+    amountMax: withdrawAmountMax,
+  });
+  useEffect(() => {
+    setWithdrawSelectedIds(new Set());
+  }, [withdrawFilterKey]);
 
   // Withdraw dialog
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -263,7 +287,7 @@ export default function WalletPage() {
       requested_by: user!.id,
       amount: Number(withdrawAmount),
       notes: withdrawNotes || null,
-    } as any);
+    });
     setVerifying(false);
     if (error) { toast.error(error.message); return; }
     toast.success('Withdrawal request submitted');
@@ -289,7 +313,7 @@ export default function WalletPage() {
     setProcessing(true);
     const finalMethod = payoutMethod === 'Bank Transfer' ? `Bank Transfer (${bankName})` : payoutMethod;
 
-    const updatePayload: any = {
+    const updatePayload: Record<string, unknown> = {
       processed_by: user!.id,
       processed_at: new Date().toISOString(),
     };
@@ -320,6 +344,67 @@ export default function WalletPage() {
     setPayoutRef('');
     setBankName('');
     load();
+  };
+
+  // Bulk selection handlers for withdrawals
+  const toggleWithdrawSelectAll = (filteredIds: string[]) => {
+    if (withdrawSelectedIds.size === filteredIds.length) {
+      setWithdrawSelectedIds(new Set());
+    } else {
+      setWithdrawSelectedIds(new Set(filteredIds));
+    }
+  };
+
+  const toggleWithdrawRow = (id: string) => {
+    setWithdrawSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleWithdrawBulkAction = async (action: 'approve' | 'reject') => {
+    if (withdrawSelectedIds.size === 0) return;
+    setWithdrawBulkActionPending(action);
+    const ids = Array.from(withdrawSelectedIds);
+    const results = [] as { id: string; error: { message?: string } | null }[];
+    for (const id of ids) {
+      const base = {
+        processed_by: user!.id,
+        processed_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from('withdrawal_requests')
+        .update(action === 'approve'
+          ? { ...base, status: 'manager_approved' }
+          : { ...base, status: 'rejected', notes: 'Bulk rejected by manager' })
+        .eq('id', id);
+      results.push({ id, error });
+    }
+    // F1: honest about partial failure — names which rows did not land.
+    const summary = summarizeBulkResult(results);
+    const verb = action === 'approve' ? 'approved' : 'rejected';
+    if (summary.succeeded > 0 && summary.failed === 0) toast.success(`${summary.succeeded} ${summary.succeeded === 1 ? 'request' : 'requests'} ${verb}`);
+    else if (summary.failed > 0) toast.error(bulkResultMessage(summary, verb));
+    setWithdrawSelectedIds(prev => {
+      const next = new Set(prev);
+      for (const r of results) if (!r.error) next.delete(r.id);
+      return next;
+    });
+    setWithdrawBulkActionPending(null);
+    load();
+  };
+
+
+
+  const clearWithdrawFilters = () => {
+    setWithdrawSearch('');
+    setWithdrawStatusFilter('all');
+    setWithdrawDateFrom('');
+    setWithdrawDateTo('');
+    setWithdrawAmountMin('');
+    setWithdrawAmountMax('');
   };
 
   // Withdrawal status rendering lives in WithdrawalRequestsTable (token-only badges + icons).
@@ -438,10 +523,24 @@ export default function WalletPage() {
             onSearchChange={(v) => { setWithdrawSearch(v); setWithdrawPage(1); }}
             statusFilter={withdrawStatusFilter}
             onStatusFilterChange={(v) => { setWithdrawStatusFilter(v); setWithdrawPage(1); }}
+            dateFrom={withdrawDateFrom}
+            onDateFromChange={setWithdrawDateFrom}
+            dateTo={withdrawDateTo}
+            onDateToChange={setWithdrawDateTo}
+            amountMin={withdrawAmountMin}
+            onAmountMinChange={setWithdrawAmountMin}
+            amountMax={withdrawAmountMax}
+            onAmountMaxChange={setWithdrawAmountMax}
             page={withdrawPage}
             onPageChange={setWithdrawPage}
             onApprove={(wr) => { setSelectedRequest(wr); setProcessMode('approve'); setProcessOpen(true); }}
             onFinalize={(wr) => { setSelectedRequest(wr); setProcessMode('finalize'); setProcessOpen(true); }}
+            selectedIds={withdrawSelectedIds}
+            onToggleRow={toggleWithdrawRow}
+            onToggleSelectAll={toggleWithdrawSelectAll}
+            bulkActionPending={withdrawBulkActionPending}
+            onBulkApprove={() => handleWithdrawBulkAction('approve')}
+            onBulkReject={() => handleWithdrawBulkAction('reject')}
             pageSize={WITHDRAW_PAGE_SIZE}
           />
         </TabsContent>

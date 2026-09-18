@@ -6,10 +6,11 @@ import type { DeliveryRow } from '@/lib/queries/deliveries';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import {
-  describeDeliveryResultCount,
+  describeDeliveryAndRiderResultCount,
   normalizeDeliverySearchQuery,
-  rowMatchesDeliverySearch,
+  rowMatchesDeliveryAndRiderSearch,
 } from '@/lib/deliverySearch';
+import { normalizeRiderSearchQuery } from '@/lib/deliveryRiderSearch';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import DeliveryMap from '@/components/DeliveryMap';
@@ -34,12 +35,12 @@ import { format } from 'date-fns';
 export const DELIVERIES_PAGE_SIZE = 20;
 // Server search: debounced free text becomes a PostgREST `ilike` filter over
 // order_reference/pickup_address/dropoff_address (+ merchant name via a
-// merchants.id lookup) inside fetchDeliveriesPage. Filter/search changes
-// refetch page 1 from the server; realtime row events patch within the loaded
-// results when they match the status + delivery-column search (payloads carry
-// no merchant join, so merchant-name matches arrive via the debounced
-// refetch). The unassigned pool keeps today's behavior (search scopes the main
-// queue only). Rider-name search is a follow-up (needs a profiles join).
+// merchants.id lookup) inside fetchDeliveriesPage. Rider search (name/email/
+// license_plate via profiles+riders join) is applied additively. Filter/search
+// changes refetch page 1 from the server; realtime row events patch within the
+// loaded results when they match the status + both search terms (payloads carry
+// no merchant join, so merchant-name matches arrive via the debounced refetch).
+// The unassigned pool keeps today's behavior (search scopes the main queue only).
 
 export default function DeliveriesPage() {
   const { user, hasRole } = useAuth();
@@ -51,10 +52,13 @@ export default function DeliveriesPage() {
   useEffect(() => { riderIdRef.current = riderId; }, [riderId]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [riderSearch, setRiderSearch] = useState('');
   // Debounced server search (existing useDebouncedValue pattern): the load
   // effect refetches page 1 when this settles; realtime patches gate on it.
   const debouncedSearch = useDebouncedValue(search, 400);
+  const debouncedRiderSearch = useDebouncedValue(riderSearch, 400);
   const activeSearch = normalizeDeliverySearchQuery(debouncedSearch);
+  const activeRiderSearch = normalizeRiderSearchQuery(debouncedRiderSearch);
   const [searchMerchantIds, setSearchMerchantIds] = useState<string[]>([]);
   // Shared realtime data layer: one channel per list, debounced patch-in-place
   // (INSERT→prepend, UPDATE→map, DELETE→filter). No full reload on row events.
@@ -65,7 +69,8 @@ export default function DeliveriesPage() {
     table: 'deliveries',
     debounceMs: 150,
     shouldKeep: (row) =>
-      (filter === 'all' || row.status === filter) && rowMatchesDeliverySearch(row, activeSearch),
+      (filter === 'all' || row.status === filter) &&
+      rowMatchesDeliveryAndRiderSearch(row, activeSearch, activeRiderSearch),
   });
   const { rows: unattended, setRows: setUnattended } = useRealtimeTable<DeliveryRow>({
     channelName: 'deliveries-unassigned-realtime',
@@ -102,7 +107,14 @@ export default function DeliveriesPage() {
 
   const showMore = async () => {
     const next = page + 1;
-    const rows = await fetchDeliveriesPage({ status: filter, page: next, pageSize: DELIVERIES_PAGE_SIZE, search: activeSearch, merchantIds: searchMerchantIds });
+    const rows = await fetchDeliveriesPage({
+      status: filter,
+      page: next,
+      pageSize: DELIVERIES_PAGE_SIZE,
+      search: activeSearch,
+      merchantIds: searchMerchantIds,
+      riderSearch: activeRiderSearch,
+    });
     setDeliveries(prev => [...prev, ...rows.filter(r => !prev.some(p => p.id === r.id))]);
     setPage(next);
     setHasMore(rows.length === DELIVERIES_PAGE_SIZE);
@@ -162,10 +174,18 @@ export default function DeliveriesPage() {
     let cancelled = false;
     const load = async () => {
       const q = normalizeDeliverySearchQuery(debouncedSearch);
+      const rq = normalizeRiderSearchQuery(debouncedRiderSearch);
       const merchantIds = q ? await fetchMerchantIdsByName({ name: q }) : [];
       if (cancelled) return;
       setSearchMerchantIds(merchantIds);
-      const rows = await fetchDeliveriesPage({ status: filter, page: 1, pageSize: DELIVERIES_PAGE_SIZE, search: q, merchantIds });
+      const rows = await fetchDeliveriesPage({
+        status: filter,
+        page: 1,
+        pageSize: DELIVERIES_PAGE_SIZE,
+        search: q,
+        merchantIds,
+        riderSearch: rq,
+      });
       if (cancelled) return;
       setDeliveries(rows);
       setHasMore(rows.length === DELIVERIES_PAGE_SIZE);
@@ -177,7 +197,7 @@ export default function DeliveriesPage() {
     loadUnattended();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, debouncedSearch]);
+  }, [filter, debouncedSearch, debouncedRiderSearch]);
 
   // Rejection metadata (counts + rider exclusions) still needs a reload fan-out;
   // delivery rows themselves patch in place via useRealtimeTable above.
@@ -283,11 +303,23 @@ export default function DeliveriesPage() {
           <h1 className="text-2xl font-bold">Deliveries</h1>
           <p className="text-muted-foreground">Monitor all deliveries with route playback</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+<div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Label htmlFor="deliveries-search" className="sr-only">Search deliveries</Label>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input id="deliveries-search" type="search" placeholder="Search deliveries..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 w-56 h-11" />
+          </div>
+          <div className="relative">
+            <Label htmlFor="deliveries-rider-search" className="sr-only">Search by rider</Label>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="deliveries-rider-search"
+              type="search"
+              placeholder="Search rider (name, email, plate)..."
+              value={riderSearch}
+              onChange={e => setRiderSearch(e.target.value)}
+              className="pl-9 w-56 h-11"
+            />
           </div>
           <div>
             <Label htmlFor="deliveries-status" className="sr-only">Filter by status</Label>
@@ -301,9 +333,9 @@ export default function DeliveriesPage() {
               <SelectItem value="in_transit">In Transit</SelectItem>
               <SelectItem value="delivered">Delivered</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -312,9 +344,11 @@ export default function DeliveriesPage() {
           <Flag className="h-4 w-4 text-amber-800 dark:text-amber-200" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Unassigned / Rejected ({unattendedList.length})</h2>
         </div>
-        <div className="text-sm text-muted-foreground tabular-nums" role="status">{describeDeliveryResultCount(otherList.length, activeSearch)}</div>
-        {activeSearch && otherList.length === 0 && (
-          <p role="status" className="text-sm text-muted-foreground">No deliveries match “{activeSearch}”.</p>
+        <div className="text-sm text-muted-foreground tabular-nums" role="status">{describeDeliveryAndRiderResultCount(otherList.length, activeSearch, activeRiderSearch)}</div>
+        {(activeSearch || activeRiderSearch) && otherList.length === 0 && (
+          <p role="status" className="text-sm text-muted-foreground">
+            No deliveries match “{activeSearch || activeRiderSearch}”.
+          </p>
         )}
         {/* Scrollable region owns the queue's accessible name; rows render in DeliveriesTable. */}
         <div className="overflow-x-auto" role="region" aria-label="View delivery queue" tabIndex={0}>

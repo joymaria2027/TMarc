@@ -13,6 +13,11 @@ import {
   fetchMerchantIdsByName,
   fetchUnassignedPage,
 } from "@/lib/queries/deliveries";
+import {
+  buildRiderSearchOr,
+  normalizeRiderSearchQuery,
+  rowMatchesRiderSearch,
+} from "../deliveryRiderSearch";
 
 // Recording supabase stub (mirrors src/lib/queries/__tests__/queries.test.ts):
 // every chainable returns the proxy, `range` resolves the canned result, and
@@ -180,10 +185,10 @@ describe("describeDeliveryResultCount (N matching vs N deliveries)", () => {
 });
 
 describe("fetchDeliveriesPage (server search)", () => {
-  it("always selects the merchants(name) join", async () => {
+  it("always selects the merchants(name) + riders join", async () => {
     const { client, calls } = recordingClient({ data: [], error: null });
     await fetchDeliveriesPage({ status: "all", page: 1, pageSize: 20, client: asClient(client) });
-    expect(calls).toContain('select("*, merchants(name)")');
+    expect(calls).toContain('select("*, merchants(name), riders(license_plate, profiles(full_name, email))")');
   });
 
   it("skips the or() filter for an empty query (today's behavior exactly)", async () => {
@@ -221,6 +226,86 @@ describe("fetchDeliveriesPage (server search)", () => {
     const rows = await fetchDeliveriesPage({ client: asClient(client) });
     expect(rows[0].merchant_name).toBe("ShopRite");
     expect(rows[1].merchant_name).toBeNull();
+  });
+
+  it("applies the rider ilike or() filter when riderSearch is provided", async () => {
+    const { client, calls } = recordingClient({ data: [], error: null });
+    await fetchDeliveriesPage({
+      status: "all",
+      page: 1,
+      pageSize: 20,
+      riderSearch: "john",
+      client: asClient(client),
+    });
+    expect(calls).toContain(
+      'or("profiles.full_name.ilike.*john*,profiles.email.ilike.*john*,riders.license_plate.ilike.*john*")',
+    );
+    expect(calls).toContain("range(0,19)");
+  });
+
+  it("applies both delivery and rider filters additively (AND) when both provided", async () => {
+    const { client, calls } = recordingClient({ data: [], error: null });
+    await fetchDeliveriesPage({
+      status: "dispatched",
+      page: 1,
+      pageSize: 20,
+      search: "ord",
+      merchantIds: ["m1"],
+      riderSearch: "john",
+      client: asClient(client),
+    });
+    expect(calls).toContain('eq("status","dispatched")');
+    // First or() for delivery search
+    expect(calls).toContain(
+      'or("order_reference.ilike.*ord*,pickup_address.ilike.*ord*,dropoff_address.ilike.*ord*,merchant_id.in.(m1)")',
+    );
+    // Second or() for rider search (chained = AND)
+    expect(calls).toContain(
+      'or("profiles.full_name.ilike.*john*,profiles.email.ilike.*john*,riders.license_plate.ilike.*john*")',
+    );
+    expect(calls).toContain("range(0,19)");
+  });
+
+  it("skips rider or() filter for empty riderSearch", async () => {
+    const { client, calls } = recordingClient({ data: [], error: null });
+    await fetchDeliveriesPage({
+      status: "all",
+      page: 1,
+      pageSize: 20,
+      search: "ord",
+      riderSearch: "  ",
+      client: asClient(client),
+    });
+    // Only delivery filter applied
+    expect(calls).toContain(
+      'or("order_reference.ilike.*ord*,pickup_address.ilike.*ord*,dropoff_address.ilike.*ord*")',
+    );
+    // No rider filter
+    const riderOrCalls = calls.filter((c) =>
+      c.startsWith('or("profiles.full_name'),
+    );
+    expect(riderOrCalls.length).toBe(0);
+  });
+
+  it("maps the rider join to flat rider projections", async () => {
+    const { client } = recordingClient({
+      data: [
+        {
+          id: "1",
+          merchants: null,
+          riders: { license_plate: "ABC-123", profiles: { full_name: "John Doe", email: "john@example.com" } },
+        },
+        { id: "2", merchants: null, riders: null },
+      ],
+      error: null,
+    });
+    const rows = await fetchDeliveriesPage({ client: asClient(client) });
+    expect(rows[0].rider_license_plate).toBe("ABC-123");
+    expect(rows[0].rider_full_name).toBe("John Doe");
+    expect(rows[0].rider_email).toBe("john@example.com");
+    expect(rows[1].rider_license_plate).toBeNull();
+    expect(rows[1].rider_full_name).toBeNull();
+    expect(rows[1].rider_email).toBeNull();
   });
 });
 
@@ -263,11 +348,11 @@ describe("fetchMerchantIdsByName", () => {
 describe("fetchUnassignedPage (join, no search — search ignores the pool today)", () => {
   it("selects the join and maps merchant_name", async () => {
     const { client, calls } = recordingClient({
-      data: [{ id: "1", merchants: { name: "ShopRite" } }],
+      data: [{ id: "1", merchants: { name: "ShopRite" }, riders: null }],
       error: null,
     });
     const rows = await fetchUnassignedPage({ client: asClient(client) });
-    expect(calls).toContain('select("*, merchants(name)")');
+    expect(calls).toContain('select("*, merchants(name), riders(license_plate, profiles(full_name, email))")');
     expect(rows[0].merchant_name).toBe("ShopRite");
   });
 });
@@ -287,5 +372,37 @@ describe("fetchDeliveriesCount (search-scoped count)", () => {
     const { client, calls } = recordingClient({ data: null, error: null, count: 7 });
     await expect(fetchDeliveriesCount({ client: asClient(client) })).resolves.toBe(7);
     expect(calls.some((c) => c.startsWith("or("))).toBe(false);
+  });
+
+  it("applies the rider or() filter when riderSearch is provided", async () => {
+    const { client, calls } = recordingClient({ data: null, error: null, count: 2 });
+    await expect(
+      fetchDeliveriesCount({ riderSearch: "john", client: asClient(client) }),
+    ).resolves.toBe(2);
+    expect(calls).toContain(
+      'or("profiles.full_name.ilike.*john*,profiles.email.ilike.*john*,riders.license_plate.ilike.*john*")',
+    );
+  });
+
+  it("applies both delivery and rider filters additively when both provided", async () => {
+    const { client, calls } = recordingClient({ data: null, error: null, count: 1 });
+    await expect(
+      fetchDeliveriesCount({ search: "ord", merchantIds: ["m1"], riderSearch: "john", client: asClient(client) }),
+    ).resolves.toBe(1);
+    expect(calls).toContain(
+      'or("order_reference.ilike.*ord*,pickup_address.ilike.*ord*,dropoff_address.ilike.*ord*,merchant_id.in.(m1)")',
+    );
+    expect(calls).toContain(
+      'or("profiles.full_name.ilike.*john*,profiles.email.ilike.*john*,riders.license_plate.ilike.*john*")',
+    );
+  });
+
+  it("skips rider or() filter for empty riderSearch", async () => {
+    const { client, calls } = recordingClient({ data: null, error: null, count: 3 });
+    await expect(
+      fetchDeliveriesCount({ search: "ord", riderSearch: "  ", client: asClient(client) }),
+    ).resolves.toBe(3);
+    const riderOrCalls = calls.filter((c) => c.startsWith('or("profiles.full_name'));
+    expect(riderOrCalls.length).toBe(0);
   });
 });

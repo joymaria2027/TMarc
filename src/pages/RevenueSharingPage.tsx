@@ -1,23 +1,42 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { PieChart, Plus, Percent, Trash2, Pencil, CheckCircle2, AlertCircle } from 'lucide-react';
+import { PieChart, Plus, Percent, Trash2, Pencil, CheckCircle2, AlertCircle, Download, X, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { validateSharing } from '@/lib/finance';
+import { formatMoney } from '@/lib/finance';
+import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
+
+interface ShareRow {
+  id: string;
+  merchant_id: string | null;
+  rider_id: string | null;
+  rider_percentage: number;
+  merchant_percentage: number;
+  platform_percentage: number;
+  ucs_rides_percentage: number;
+  created_at: string;
+}
+
+interface MerchantRow {
+  id: string;
+  name: string;
+}
 
 export default function RevenueSharingPage() {
   const { hasRole } = useAuth();
   const canManage = hasRole('admin') || hasRole('business_owner');
   const isRider = hasRole('rider');
-  const [shares, setShares] = useState<any[]>([]);
-  const [merchants, setMerchants] = useState<any[]>([]);
+  const [shares, setShares] = useState<ShareRow[]>([]);
+  const [merchants, setMerchants] = useState<MerchantRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -30,12 +49,19 @@ export default function RevenueSharingPage() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReload = () => {
+  const scheduleReload = useCallback(() => {
     if (reloadTimer.current) clearTimeout(reloadTimer.current);
     reloadTimer.current = setTimeout(() => load(), 500);
-  };
+  }, [load]);
 
-  const load = async () => {
+  // Filters
+  const [shareSearch, setShareSearch] = useState('');
+  const [shareStatusFilter, setShareStatusFilter] = useState<string[]>([]); // balanced/unbalanced
+
+  // Bulk selection
+  const [shareSelectedIds, setShareSelectedIds] = useState<Set<string>>(new Set());
+
+  const load = useCallback(async () => {
     const [sharesRes, restRes] = await Promise.all([
       supabase.from('revenue_sharing').select('*').order('created_at', { ascending: false }),
       supabase.from('merchants').select('id, name'),
@@ -43,7 +69,7 @@ export default function RevenueSharingPage() {
     setShares(sharesRes.data || []);
     setMerchants(restRes.data || []);
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     load();
@@ -55,7 +81,87 @@ export default function RevenueSharingPage() {
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [load, scheduleReload]);
+
+  const visibleShares = useMemo(() => {
+    let filtered = shares;
+    if (shareSearch) {
+      const q = shareSearch.toLowerCase();
+      filtered = filtered.filter(s => {
+        const merchantName = merchants.find(m => m.id === s.merchant_id)?.name?.toLowerCase() || '';
+        return merchantName.includes(q);
+      });
+    }
+    if (shareStatusFilter.length > 0) {
+      filtered = filtered.filter(s => {
+        const total = Number(s.rider_percentage) + Number(s.merchant_percentage) + Number(s.platform_percentage) + Number(s.ucs_rides_percentage);
+        const balanced = Math.abs(total - 100) < 0.01;
+        return (balanced && shareStatusFilter.includes('balanced')) || (!balanced && shareStatusFilter.includes('unbalanced'));
+      });
+    }
+    if (isRider && !canManage) {
+      const byRest = new Map<string, ShareRow>();
+      filtered.forEach((s) => {
+        if (!s.merchant_id) return;
+        const existing = byRest.get(s.merchant_id);
+        if (!existing || (s.rider_id != null && existing.rider_id == null)) {
+          byRest.set(s.merchant_id, s);
+        }
+      });
+      return Array.from(byRest.values());
+    }
+    return filtered;
+  }, [shares, merchants, shareSearch, shareStatusFilter, isRider, canManage]);
+
+  // Bulk selection handlers
+  const toggleShareSelectAll = () => {
+    if (shareSelectedIds.size === visibleShares.length) {
+      setShareSelectedIds(new Set());
+    } else {
+      setShareSelectedIds(new Set(visibleShares.map(s => s.id)));
+    }
+  };
+
+  const toggleShareRow = (id: string) => {
+    setShareSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isShareSelected = (id: string) => shareSelectedIds.has(id);
+  const isShareIndeterminate = shareSelectedIds.size > 0 && shareSelectedIds.size < visibleShares.length;
+
+  // CSV Export
+  const handleShareExportCsv = () => {
+    const columns = [
+      { key: 'merchant_id', header: 'Merchant', format: (v: string | null) => merchants.find(m => m.id === v)?.name || '—' },
+      { key: 'rider_percentage', header: 'Rider %', format: (v: number) => `${v}%` },
+      { key: 'merchant_percentage', header: 'Merchant %', format: (v: number) => `${v}%` },
+      { key: 'platform_percentage', header: 'Platform %', format: (v: number) => `${v}%` },
+      { key: 'ucs_rides_percentage', header: 'UCS %', format: (v: number) => `${v}%` },
+      { key: 'id', header: 'Total %', format: (v: string) => {
+        const s = visibleShares.find(x => x.id === v);
+        if (!s) return '';
+        return `${Number(s.rider_percentage) + Number(s.merchant_percentage) + Number(s.platform_percentage) + Number(s.ucs_rides_percentage)}%`;
+      }},
+      { key: 'id', header: 'Status', format: (v: string) => {
+        const s = visibleShares.find(x => x.id === v);
+        if (!s) return '';
+        const total = Number(s.rider_percentage) + Number(s.merchant_percentage) + Number(s.platform_percentage) + Number(s.ucs_rides_percentage);
+        return Math.abs(total - 100) < 0.01 ? 'Balanced' : 'Unbalanced';
+      }},
+    ];
+    const csvRows = buildCsvRows(visibleShares, columns);
+    downloadCsv(csvRows, generateFilename('revenue-sharing'));
+  };
+
+  const clearShareFilters = () => {
+    setShareSearch('');
+    setShareStatusFilter([]);
+  };
 
   const createShare = async () => {
     const rp = parseFloat(form.rider_percentage);
@@ -125,7 +231,7 @@ export default function RevenueSharingPage() {
     return merchants.find(r => r.id === id)?.name || id.slice(0, 8);
   };
 
-  const editShare = (s: any) => {
+  const editShare = (s: ShareRow) => {
     setForm({
       merchant_id: s.merchant_id || '',
       rider_percentage: String(s.rider_percentage),
@@ -145,21 +251,6 @@ export default function RevenueSharingPage() {
     setDeleteId(null);
     load();
   };
-
-  const visibleShares = useMemo(() => {
-    if (isRider && !canManage) {
-      const byRest = new Map<string, any>();
-      shares.forEach((s: any) => {
-        if (!s.merchant_id) return;
-        const existing = byRest.get(s.merchant_id);
-        if (!existing || (s.rider_id != null && existing.rider_id == null)) {
-          byRest.set(s.merchant_id, s);
-        }
-      });
-      return Array.from(byRest.values());
-    }
-    return shares;
-  }, [shares, isRider, canManage]);
 
   if (loading) return (
     <div className="space-y-4" role="status" aria-label="Loading revenue sharing">
@@ -226,12 +317,54 @@ export default function RevenueSharingPage() {
         )}
       </div>
 
+      {/* Filter Bar */}
+      <Card className="border-muted/50">
+        <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+          <div className="relative flex-1 max-w-sm">
+            <Label htmlFor="share-search" className="sr-only">Search merchant</Label>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input id="share-search" className="pl-9" placeholder="Search merchant..." value={shareSearch} onChange={e => setShareSearch(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="share-status">Status</Label>
+            <Select value={shareStatusFilter.join(',')} onValueChange={v => setShareStatusFilter(v ? v.split(',') : [])} multiple>
+              <SelectTrigger id="share-status" className="w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="balanced">Balanced</SelectItem>
+                <SelectItem value="unbalanced">Unbalanced</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end gap-2">
+            <Button variant="outline" size="sm" onClick={handleShareExportCsv} className="gap-1 min-h-[44px]">
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />Export CSV
+            </Button>
+            {(shareSearch || shareStatusFilter.length > 0) && (
+              <Button variant="ghost" size="sm" onClick={clearShareFilters} className="gap-1 min-h-[44px]">
+                <X className="h-3.5 w-3.5" aria-hidden="true" />Clear all
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="space-y-3">
       <div className="overflow-x-auto rounded-md border">
         <Table aria-label="Revenue sharing ratios">
           <caption className="sr-only">Per-merchant revenue split ratios with live total check and edit actions</caption>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">
+                {canManage && (
+                  <Checkbox
+                    checked={visibleShares.length > 0 && shareSelectedIds.size === visibleShares.length}
+                    indeterminate={isShareIndeterminate}
+                    onCheckedChange={toggleShareSelectAll}
+                    aria-label="Select all visible rows"
+                    disabled={visibleShares.length === 0}
+                  />
+                )}
+              </TableHead>
               <TableHead>Merchant</TableHead>
               <TableHead className="text-right">Rider %</TableHead>
               <TableHead className="text-right">Merchant %</TableHead>
@@ -242,11 +375,20 @@ export default function RevenueSharingPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visibleShares.map((s: any) => {
+            {visibleShares.map((s: ShareRow) => {
               const total = Number(s.rider_percentage) + Number(s.merchant_percentage) + Number(s.platform_percentage) + Number(s.ucs_rides_percentage);
               const balanced = Math.abs(total - 100) < 0.01;
               return (
                 <TableRow key={s.id}>
+                  {canManage && (
+                    <TableCell className="w-12">
+                      <Checkbox
+                        checked={isShareSelected(s.id)}
+                        onCheckedChange={() => toggleShareRow(s.id)}
+                        aria-label={`Select sharing for ${getMerchantName(s.merchant_id)}`}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <span className="font-medium">{getMerchantName(s.merchant_id)}</span>
                     {isRider && !canManage && (
@@ -299,6 +441,37 @@ export default function RevenueSharingPage() {
               );
             })}
           </TableBody>
+          {canManage && shareSelectedIds.size > 0 && (
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={2} />
+                <TableCell colSpan={5} className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="min-h-[44px] gap-1"
+                      onClick={() => {
+                        const ids = Array.from(shareSelectedIds);
+                        if (ids.length === 0) return;
+                        if (confirm(`Delete ${ids.length} sharing ratio${ids.length > 1 ? 's' : ''}?`)) {
+                          ids.forEach(id => {
+                            supabase.from('revenue_sharing').delete().eq('id', id);
+                          });
+                          setShareSelectedIds(new Set());
+                          toast.success(`${ids.length} sharing ratio${ids.length > 1 ? 's' : ''} deleted`);
+                          load();
+                        }
+                      }}
+                    >
+                      Delete selected
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          )}
         </Table>
       </div>
       {visibleShares.length > 0 && (

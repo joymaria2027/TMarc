@@ -7,6 +7,10 @@ interface SortRow {
   status: string;
   updated_at: string | null;
   estimated_tariff: number | null;
+  merchant_id: string | null;
+  merchant_name: string | null;
+  merchants: { name: string } | null;
+  rider_id: string | null;
 }
 
 function row(overrides: Partial<SortRow> & { id: string }): SortRow {
@@ -14,6 +18,10 @@ function row(overrides: Partial<SortRow> & { id: string }): SortRow {
     status: "dispatched",
     updated_at: "2026-09-18T11:00:00Z",
     estimated_tariff: 50,
+    merchant_id: "m-1",
+    merchant_name: null,
+    merchants: { name: "Acme Store" },
+    rider_id: "r-1",
     ...overrides,
   };
 }
@@ -142,5 +150,74 @@ describe("sortDeliveries (pure column sort)", () => {
     const snapshot = [...rows];
     sortDeliveries(rows, { key: "tariff", dir: "asc" });
     expect(rows).toEqual(snapshot);
+  });
+
+  it("sorts merchants alphabetically, empty names last in asc and first in desc", () => {
+    const rows = [
+      row({ id: "empty", merchant_name: "", merchants: { name: "" } }),
+      row({ id: "alpha", merchant_name: "Alpha", merchants: { name: "Alpha" } }),
+      row({ id: "beta", merchant_name: "Beta", merchants: { name: "Beta" } }),
+      row({ id: "gamma", merchant_name: "Gamma", merchants: { name: "Gamma" } }),
+    ];
+    expect(ids(sortDeliveries(rows, { key: "merchant", dir: "asc" }))).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+      "empty",
+    ]);
+    expect(ids(sortDeliveries(rows, { key: "merchant", dir: "desc" }))).toEqual([
+      "empty",
+      "gamma",
+      "beta",
+      "alpha",
+    ]);
+  });
+
+  it("falls back to merchants.name when merchant_name is null", () => {
+    const rows = [
+      row({ id: "a", merchant_name: null, merchants: { name: "Merchant A" } }),
+      row({ id: "b", merchant_name: "Merchant B", merchants: { name: "Should Not Use" } }),
+    ];
+    expect(ids(sortDeliveries(rows, { key: "merchant", dir: "asc" }))).toEqual([
+      "a",
+      "b",
+    ]);
+  });
+
+  it("sorts riders by rider_id, empty last in asc and first in desc", () => {
+    const rows = [
+      row({ id: "empty-rider", rider_id: "" }),
+      row({ id: "a-rider", rider_id: "rider-a" }),
+      row({ id: "b-rider", rider_id: "rider-b" }),
+      row({ id: "c-rider", rider_id: "rider-c" }),
+    ];
+    expect(ids(sortDeliveries(rows, { key: "rider", dir: "asc" }))).toEqual([
+      "a-rider",
+      "b-rider",
+      "c-rider",
+      "empty-rider",
+    ]);
+    expect(ids(sortDeliveries(rows, { key: "rider", dir: "desc" }))).toEqual([
+      "empty-rider",
+      "c-rider",
+      "b-rider",
+      "a-rider",
+    ]);
+  });
+
+  it("is stable for merchant and rider sorts", () => {
+    const rows = [
+      row({ id: "first", merchant_name: "Same", merchants: { name: "Same" }, rider_id: "rider-x" }),
+      row({ id: "second", merchant_name: "Same", merchants: { name: "Same" }, rider_id: "rider-x" }),
+      row({ id: "third", merchant_name: "Same", merchants: { name: "Same" }, rider_id: "rider-x" }),
+    ];
+    for (const sort of [
+      { key: "merchant", dir: "asc" },
+      { key: "merchant", dir: "desc" },
+      { key: "rider", dir: "asc" },
+      { key: "rider", dir: "desc" },
+    ] as DeliverySortState[]) {
+      expect(ids(sortDeliveries(rows, sort))).toEqual(["first", "second", "third"]);
+    }
   });
 });

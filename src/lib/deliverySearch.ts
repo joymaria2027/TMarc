@@ -7,6 +7,11 @@
  * OUT (it needs a profiles join — follow-up).
  */
 
+import {
+  normalizeRiderSearchQuery,
+  rowMatchesRiderSearch,
+} from '@/lib/deliveryRiderSearch';
+
 /** Delivery columns covered by the server-side ilike filter. */
 export const DELIVERY_SEARCH_COLUMNS = ["order_reference", "pickup_address", "dropoff_address"] as const;
 
@@ -62,6 +67,14 @@ export interface DeliverySearchCandidate {
   merchants?: { name: string } | null;
   /** Flat join projection (server rows); absent on realtime payloads. */
   merchant_name?: string | null;
+  /** Rider fields for combined search gate (server rows); may be absent on realtime payloads. */
+  riders?: {
+    license_plate: string | null;
+    profiles?: { full_name: string; email: string } | null;
+  } | null;
+  rider_license_plate?: string | null;
+  rider_full_name?: string | null;
+  rider_email?: string | null;
 }
 
 /**
@@ -82,10 +95,37 @@ export function rowMatchesDeliverySearch(
   );
 }
 
+/**
+ * Combined gate for realtime rows when both delivery search and rider search
+ * are active. Returns true only if BOTH match (additive/AND logic).
+ * Empty query for either side matches everything on that side.
+ */
+export function rowMatchesDeliveryAndRiderSearch(
+  row: DeliverySearchCandidate,
+  deliveryQuery: string | null | undefined,
+  riderQuery: string | null | undefined,
+): boolean {
+  return (
+    rowMatchesDeliverySearch(row, deliveryQuery) &&
+    rowMatchesRiderSearch(row, riderQuery)
+  );
+}
+
 /** Result-count label: "N matching" while searching, "N deliveries" otherwise. */
 export function describeDeliveryResultCount(
   count: number,
   query: string | null | undefined,
 ): string {
   return isDeliverySearchActive(query) ? `${count} matching` : `${count} deliveries`;
+}
+
+/** Result-count label for combined delivery + rider search. */
+export function describeDeliveryAndRiderResultCount(
+  count: number,
+  deliveryQuery: string | null | undefined,
+  riderQuery: string | null | undefined,
+): string {
+  const deliveryActive = isDeliverySearchActive(deliveryQuery);
+  const riderActive = normalizeRiderSearchQuery(riderQuery).length > 0;
+  return deliveryActive || riderActive ? `${count} matching` : `${count} deliveries`;
 }

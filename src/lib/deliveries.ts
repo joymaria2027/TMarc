@@ -171,8 +171,8 @@ export function parseHighlightId(value: string | null | undefined): string | nul
   return v ? v : null;
 }
 
-/** Sortable DeliveriesTable columns: Time → updated_at, Tariff → estimated_tariff. */
-export type DeliverySortKey = "time" | "tariff" | "status";
+/** Sortable DeliveriesTable columns: Time → updated_at, Tariff → estimated_tariff, Status → status, Merchant → merchant_name/merchants.name, Rider → rider_id. */
+export type DeliverySortKey = "time" | "tariff" | "status" | "merchant" | "rider";
 export type DeliverySortDir = "asc" | "desc";
 
 /** Active column sort. `null` (no state) means rows render as received. */
@@ -186,6 +186,10 @@ export interface DeliverySortRow {
   status: string;
   updated_at: string | null | undefined;
   estimated_tariff: number | string | null | undefined;
+  merchant_id: string | null | undefined;
+  merchant_name: string | null | undefined;
+  merchants: { name: string } | null | undefined;
+  rider_id: string | null | undefined;
 }
 
 /** Lifecycle order for the Status column (mirrors the queue's mental model). */
@@ -216,6 +220,14 @@ function tariffValue(value: number | string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function merchantNameValue(row: DeliverySortRow): string {
+  return row.merchant_name ?? row.merchants?.name ?? "";
+}
+
+function riderIdValue(row: DeliverySortRow): string {
+  return row.rider_id ?? "";
+}
+
 /** Pure column sort for the deliveries queue table. Null sort returns the rows
  *  as received; otherwise a stable ascending/descending ordering where missing
  *  values (null times/tariffs) sort last ascending, first descending —
@@ -244,8 +256,22 @@ export function sortDeliveries<T extends DeliverySortRow>(
         else if (ta === null) cmp = 1;
         else if (tb === null) cmp = -1;
         else cmp = ta - tb;
-      } else {
+      } else if (sort.key === "status") {
         cmp = statusRank(a.row.status) - statusRank(b.row.status);
+      } else if (sort.key === "merchant") {
+        const ma = merchantNameValue(a.row).toLowerCase();
+        const mb = merchantNameValue(b.row).toLowerCase();
+        if (ma === mb) cmp = 0;
+        else if (ma === "") cmp = 1;
+        else if (mb === "") cmp = -1;
+        else cmp = ma.localeCompare(mb);
+      } else {
+        const ra = riderIdValue(a.row);
+        const rb = riderIdValue(b.row);
+        if (ra === rb) cmp = 0;
+        else if (ra === "") cmp = 1;
+        else if (rb === "") cmp = -1;
+        else cmp = ra.localeCompare(rb);
       }
       if (cmp !== 0) return cmp * dir;
       return a.index - b.index;

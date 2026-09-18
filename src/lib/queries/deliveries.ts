@@ -6,6 +6,10 @@ import {
   escapePostgrestLikePattern,
   normalizeDeliverySearchQuery,
 } from '@/lib/deliverySearch';
+import {
+  buildRiderSearchOr,
+  normalizeRiderSearchQuery,
+} from '@/lib/deliveryRiderSearch';
 
 export type DeliveryRow = Database['public']['Tables']['deliveries']['Row'] & {
   merchants?: { name: string } | null;
@@ -16,20 +20,54 @@ export type DeliveryRow = Database['public']['Tables']['deliveries']['Row'] & {
    * rows omit it — treat absent as unknown, never as "no merchant".
    */
   merchant_name: string | null;
+  /**
+   * Nested rider join for rider-name search (server rows only).
+   * Shape: { license_plate: string | null; profiles?: { full_name: string; email: string } | null }
+   */
+  riders?: {
+    license_plate: string | null;
+    profiles?: { full_name: string; email: string } | null;
+  } | null;
+  /** Flat rider projections for convenience (server rows only). */
+  rider_license_plate?: string | null;
+  rider_full_name?: string | null;
+  rider_email?: string | null;
 };
 
-/** Deliveries plus the merchant-name join (also fixes the table's "–" column). */
-const DELIVERIES_WITH_MERCHANT_SELECT = '*, merchants(name)';
+/** Deliveries plus the merchant-name join + rider join for rider search. */
+const DELIVERIES_WITH_MERCHANT_AND_RIDER_SELECT =
+  '*, merchants(name), riders(license_plate, profiles(full_name, email))';
 
 /** Raw join shape: PostgREST may return the many-to-one embed as an array. */
-type JoinedDeliveryRow = Omit<DeliveryRow, 'merchants' | 'merchant_name'> & {
+type JoinedDeliveryRow = Omit<DeliveryRow, 'merchants' | 'merchant_name' | 'riders'> & {
   merchants?: { name: string } | Array<{ name: string }> | null;
+  riders?:
+    | {
+        license_plate: string | null;
+        profiles?: { full_name: string; email: string } | null;
+      }
+    | Array<{
+        license_plate: string | null;
+        profiles?: { full_name: string; email: string } | null;
+      }>
+    | null;
 };
 
-/** Normalize the join embed to `merchants` + flat `merchant_name`. */
-function withMerchantName(row: JoinedDeliveryRow): DeliveryRow {
-  const joined = Array.isArray(row.merchants) ? (row.merchants[0] ?? null) : (row.merchants ?? null);
-  return { ...row, merchants: joined, merchant_name: joined?.name ?? null };
+/** Normalize the join embeds to flat fields. */
+function withMerchantAndRiderName(row: JoinedDeliveryRow): DeliveryRow {
+  const joinedMerchant = Array.isArray(row.merchants)
+    ? row.merchants[0] ?? null
+    : row.merchants ?? null;
+  const joinedRider = Array.isArray(row.riders) ? row.riders[0] ?? null : row.riders ?? null;
+  return {
+    ...row,
+    merchants: joinedMerchant,
+    merchant_name: joinedMerchant?.name ?? null,
+    riders: joinedRider,
+    rider_license_plate: joinedRider?.license_plate ?? null,
+    rider_full_name: joinedRider?.profiles?.full_name ?? null,
+    rider_email: joinedRider?.profiles?.email ?? null,
+  };
 }
 
 type QueryClient = typeof supabase;
@@ -48,6 +86,12 @@ export interface DeliveriesPageParams {
   search?: string;
   /** Merchant ids matching the search (merchant-name OR branch). */
   merchantIds?: string[];
+  /**
+   * Rider search (ilike over profiles.full_name, profiles.email, riders.license_plate).
+   * Empty/blank skips the rider branch entirely so the unfiltered query is
+   * byte-identical to before. Applied additively with `search`.
+   */
+  riderSearch?: string;
   client?: QueryClient;
 }
 
@@ -58,16 +102,29 @@ export async function fetchDeliveriesPage({
   pageSize = 20,
   search = '',
   merchantIds = [],
+  riderSearch = '',
   client = supabase,
 }: DeliveriesPageParams = {}): Promise<DeliveryRow[]> {
   const { from, to } = pageRange(page, pageSize);
-  let query = client.from('deliveries').select(DELIVERIES_WITH_MERCHANT_SELECT).order('created_at', { ascending: false });
+  let query = client
+    .from('deliveries')
+    .select(DELIVERIES_WITH_MERCHANT_AND_RIDER_SELECT)
+    .order('created_at', { ascending: false });
   if (status !== 'all') query = query.eq('status', status);
-  const searchFilter = buildDeliverySearchOr(search, merchantIds);
-  if (searchFilter) query = query.or(searchFilter);
+
+  const deliveryFilter = buildDeliverySearchOr(search, merchantIds);
+  const riderFilter = buildRiderSearchOr(riderSearch);
+
+  // Combine filters additively: both must match if both are present.
+  // PostgREST `or()` combines with OR, so we need AND logic.
+  // We apply delivery filter first, then rider filter as a second .or().
+  // This works because .or() is additive (AND) when chained.
+  if (deliveryFilter) query = query.or(deliveryFilter);
+  if (riderFilter) query = query.or(riderFilter);
+
   const { data, error } = await query.range(from, to);
   if (error) throw error;
-  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantName);
+  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
 }
 
 export interface UnassignedPageParams {
@@ -88,14 +145,14 @@ export async function fetchUnassignedPage({
   const { from, to } = pageRange(page, pageSize);
   let query = client
     .from('deliveries')
-    .select(DELIVERIES_WITH_MERCHANT_SELECT)
+    .select(DELIVERIES_WITH_MERCHANT_AND_RIDER_SELECT)
     .in('status', ['unassigned', 'pending'])
     .is('rider_id', null)
     .order('created_at', { ascending: false });
   if (excludeIds.length > 0) query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   const { data, error } = await query.range(from, to);
   if (error) throw error;
-  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantName);
+  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
 }
 
 /**
@@ -125,17 +182,21 @@ export async function fetchDeliveriesCount({
   status = 'all',
   search = '',
   merchantIds = [],
+  riderSearch = '',
   client = supabase,
 }: {
   status?: string;
   search?: string;
   merchantIds?: string[];
+  riderSearch?: string;
   client?: QueryClient;
 } = {}): Promise<number> {
   let query = client.from('deliveries').select('*', { count: 'exact', head: true });
   if (status !== 'all') query = query.eq('status', status);
-  const searchFilter = buildDeliverySearchOr(search, merchantIds);
-  if (searchFilter) query = query.or(searchFilter);
+  const deliveryFilter = buildDeliverySearchOr(search, merchantIds);
+  const riderFilter = buildRiderSearchOr(riderSearch);
+  if (deliveryFilter) query = query.or(deliveryFilter);
+  if (riderFilter) query = query.or(riderFilter);
   const { count, error } = await query;
   if (error) throw error;
   return count ?? 0;

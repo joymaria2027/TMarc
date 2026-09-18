@@ -95,9 +95,15 @@ beforeEach(() => {
 });
 
 describe("DeliveriesTable sortable columns", () => {
-  it("exposes Time/Tariff/Status headers as sort buttons with aria-sort=none by default", () => {
+  it("exposes Time/Tariff/Status/Merchant/Rider headers as sort buttons with aria-sort=none by default", () => {
     const { container } = renderTable(tableOf([makeRow()]));
-    for (const [header, key] of [["Status", "Status"], ["Tariff", "Tariff"], ["Updated", "Updated"]] as const) {
+    for (const [header, key] of [
+      ["Status", "Status"],
+      ["Tariff", "Tariff"],
+      ["Updated", "Updated"],
+      ["Merchant", "Merchant"],
+      ["Rider", "Rider"],
+    ] as const) {
       const th = screen.getByRole("columnheader", { name: header });
       expect(th.getAttribute("aria-sort")).toBe("none");
       expect(within(th).getByRole("button", { name: `Sort by ${key}` })).toBeDefined();
@@ -105,6 +111,9 @@ describe("DeliveriesTable sortable columns", () => {
     // Non-sortable headers carry no aria-sort.
     expect(
       screen.getByRole("columnheader", { name: "Reference" }).getAttribute("aria-sort"),
+    ).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: "Flag" }).getAttribute("aria-sort"),
     ).toBeNull();
     expect(container.querySelector('tbody[aria-label="Assigned deliveries"]')?.textContent).toContain(
       "ORD-1",
@@ -163,6 +172,84 @@ describe("DeliveriesTable sortable columns", () => {
     expect(statusTh.getAttribute("aria-sort")).toBe("ascending");
     expect(timeTh.getAttribute("aria-sort")).toBe("none");
     expect(mainOrder(container)).toEqual(["s2", "s1"]);
+  });
+
+  it("cycles Merchant asc -> desc -> default with correct aria-sort and row order", () => {
+    const { container } = renderTable(
+      tableOf([
+        makeRow({ id: "c", order_reference: "ORD-C", merchants: { name: "Zebra Store" } }),
+        makeRow({ id: "a", order_reference: "ORD-A", merchants: { name: "Alpha Store" } }),
+        makeRow({ id: "b", order_reference: "ORD-B", merchants: { name: "Beta Store" } }),
+      ]),
+    );
+    const th = screen.getByRole("columnheader", { name: "Merchant" });
+    const btn = within(th).getByRole("button", { name: /Sort by Merchant/ });
+
+    fireEvent.click(btn);
+    expect(th.getAttribute("aria-sort")).toBe("ascending");
+    expect(mainOrder(container)).toEqual(["a", "b", "c"]);
+
+    fireEvent.click(btn);
+    expect(th.getAttribute("aria-sort")).toBe("descending");
+    expect(mainOrder(container)).toEqual(["c", "b", "a"]);
+
+    fireEvent.click(btn);
+    expect(th.getAttribute("aria-sort")).toBe("none");
+    expect(mainOrder(container)).toEqual(["c", "a", "b"]);
+  });
+
+  it("cycles Rider asc -> desc -> default with correct aria-sort and row order", () => {
+    const { container } = renderTable(
+      tableOf([
+        makeRow({ id: "c", order_reference: "ORD-C", rider_id: "rider-z" }),
+        makeRow({ id: "a", order_reference: "ORD-A", rider_id: "rider-a" }),
+        makeRow({ id: "b", order_reference: "ORD-B", rider_id: "rider-b" }),
+      ]),
+    );
+    const th = screen.getByRole("columnheader", { name: "Rider" });
+    const btn = within(th).getByRole("button", { name: /Sort by Rider/ });
+
+    fireEvent.click(btn);
+    expect(th.getAttribute("aria-sort")).toBe("ascending");
+    expect(mainOrder(container)).toEqual(["a", "b", "c"]);
+
+    fireEvent.click(btn);
+    expect(th.getAttribute("aria-sort")).toBe("descending");
+    expect(mainOrder(container)).toEqual(["c", "b", "a"]);
+
+    fireEvent.click(btn);
+    expect(th.getAttribute("aria-sort")).toBe("none");
+    expect(mainOrder(container)).toEqual(["c", "a", "b"]);
+  });
+
+  it("sorts Merchant and Rider, placing empty values last in asc and first in desc", () => {
+    const { container } = renderTable(
+      tableOf([
+        makeRow({ id: "empty-m", merchants: { name: "" }, rider_id: "" }),
+        makeRow({ id: "a-m", merchants: { name: "Alpha" }, rider_id: "rider-a" }),
+        makeRow({ id: "b-m", merchants: { name: "Beta" }, rider_id: "rider-b" }),
+      ]),
+    );
+
+    // Merchant asc: empty last
+    fireEvent.click(within(screen.getByRole("columnheader", { name: "Merchant" })).getByRole("button", { name: /Sort by Merchant/ }));
+    expect(mainOrder(container)).toEqual(["a-m", "b-m", "empty-m"]);
+
+    // Merchant desc: empty first
+    fireEvent.click(within(screen.getByRole("columnheader", { name: "Merchant" })).getByRole("button", { name: /Sort by Merchant/ }));
+    expect(mainOrder(container)).toEqual(["empty-m", "b-m", "a-m"]);
+
+    // Reset
+    fireEvent.click(within(screen.getByRole("columnheader", { name: "Merchant" })).getByRole("button", { name: /Sort by Merchant/ }));
+    expect(mainOrder(container)).toEqual(["empty-m", "a-m", "b-m"]);
+
+    // Rider asc: empty last
+    fireEvent.click(within(screen.getByRole("columnheader", { name: "Rider" })).getByRole("button", { name: /Sort by Rider/ }));
+    expect(mainOrder(container)).toEqual(["a-m", "b-m", "empty-m"]);
+
+    // Rider desc: empty first
+    fireEvent.click(within(screen.getByRole("columnheader", { name: "Rider" })).getByRole("button", { name: /Sort by Rider/ }));
+    expect(mainOrder(container)).toEqual(["empty-m", "b-m", "a-m"]);
   });
 
   it("sorts the unassigned section with the same sort state", () => {

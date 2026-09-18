@@ -333,8 +333,8 @@ export default function DeliveriesTable(props: DeliveriesTableProps) {
       <TableHeader>
         <TableRow>
           <TableHead>Reference</TableHead>
-          <TableHead>Merchant</TableHead>
-          <TableHead>Rider</TableHead>
+          <SortableHead label="Merchant" sortKey="merchant" sort={sort} onToggle={toggleSort} />
+          <SortableHead label="Rider" sortKey="rider" sort={sort} onToggle={toggleSort} />
           <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggleSort} />
           <SortableHead label="Tariff" sortKey="tariff" sort={sort} onToggle={toggleSort} align="right" />
           <TableHead>Flag</TableHead>

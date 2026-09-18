@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,16 +8,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Upload, Plus, DollarSign, FileText, CheckCircle2, XCircle, Bell, Clock, History, Fuel, ChevronDown, ChevronUp, Eye, MapPin } from 'lucide-react';
+import { Upload, Plus, DollarSign, FileText, CheckCircle2, XCircle, Bell, Clock, History, Fuel, ChevronDown, ChevronUp, Eye, MapPin, Download, X, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import DeliveryMap from '@/components/DeliveryMap';
 import ExpenseFormDialog from '@/components/expenses/ExpenseFormDialog';
 import ExpenseRow from '@/components/expenses/ExpenseRow';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
+import { formatMoney } from '@/lib/finance';
+import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
 
 export default function RiderExpensesPage() {
   const { user, hasRole } = useAuth();
@@ -134,17 +137,38 @@ export default function RiderExpensesPage() {
   const [form, setForm] = useState({ rider_id: '', merchant_id: '', expense_type_id: '', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0] });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
+  // Filters
+  const [expenseDateFrom, setExpenseDateFrom] = useState('');
+  const [expenseDateTo, setExpenseDateTo] = useState('');
+  const [expenseAmountMin, setExpenseAmountMin] = useState('');
+  const [expenseAmountMax, setExpenseAmountMax] = useState('');
+  const [expenseStatusFilter, setExpenseStatusFilter] = useState<string[]>([]);
+  const [expenseSearch, setExpenseSearch] = useState('');
+
+  // Bulk selection
+  const [expenseSelectedIds, setExpenseSelectedIds] = useState<Set<string>>(new Set());
+  const [expenseBulkActionPending, setExpenseBulkActionPending] = useState<'verify' | 'reject' | null>(null);
+
   const isRiderOnly = hasRole('rider') && !hasRole('admin') && !hasRole('accountant') && !hasRole('app_developer');
   const isManager = hasRole('company_manager') && !hasRole('admin');
   const canUpload = hasRole('admin') || hasRole('accountant') || hasRole('app_developer');
   const canVerify = hasRole('company_manager') || hasRole('admin');
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    let query = supabase.from('rider_expenses').select('*').order('created_at', { ascending: false });
+
+    if (expenseDateFrom) query = query.gte('expense_date', expenseDateFrom);
+    if (expenseDateTo) query = query.lte('expense_date', expenseDateTo);
+    if (expenseAmountMin) query = query.gte('amount', Number(expenseAmountMin));
+    if (expenseAmountMax) query = query.lte('amount', Number(expenseAmountMax));
+    if (expenseStatusFilter.length > 0) query = query.in('status', expenseStatusFilter);
+
     const [ridersRes, restRes, profilesRes, expRes, alertsRes, typesRes, consRes, mrRes] = await Promise.all([
       supabase.from('riders').select('id, user_id, license_plate'),
       supabase.from('merchants').select('id, name, manager_user_id, accountant_user_id'),
       supabase.rpc('get_public_profiles'),
-      supabase.from('rider_expenses').select('*').order('created_at', { ascending: false }),
+      query,
       supabase.from('expense_alerts').select('*').eq('is_read', false).order('created_at', { ascending: false }),
       supabase.from('expense_types').select('*').eq('is_active', true).order('name'),
       supabase.from('rider_expense_consumptions').select('*').order('created_at', { ascending: false }).limit(500),
@@ -157,8 +181,6 @@ export default function RiderExpensesPage() {
     const ridersWithProfile = (ridersRes.data || []).map(r => ({ ...r, profile: profileMap[r.user_id] }));
     setRiders(ridersWithProfile);
     setMerchants(restRes.data || []);
-    // merchant_id:rider_id pairs — used to scope the expense form's rider picker
-    // (was a `return true` stub: any rider could be attributed to any merchant).
     setMerchantRiderPairs(new Set(
       ((mrRes.data || []) as { merchant_id: string; rider_id: string }[]).map(p => `${p.merchant_id}:${p.rider_id}`),
     ));
@@ -197,7 +219,7 @@ export default function RiderExpensesPage() {
       setDeliveriesMap(Object.fromEntries(((delvs || []) as Delivery[]).map(d => [d.id, d])));
     }
     setLoading(false);
-  };
+  }, [expenseDateFrom, expenseDateTo, expenseAmountMin, expenseAmountMax, expenseStatusFilter]);
 
   useEffect(() => {
     load();
@@ -218,14 +240,14 @@ export default function RiderExpensesPage() {
     return () => { if (reloadTimer) clearTimeout(reloadTimer); supabase.removeChannel(channel); };
   }, [load]);
 
-  const getRiderName = (riderId: string) => {
+  const getRiderName = useCallback((riderId: string) => {
     const r = riders.find(r => r.id === riderId);
     return r?.profile?.full_name || r?.license_plate || riderId?.slice(0, 8);
-  };
+  }, [riders]);
 
-  const getMerchantName = (restId: string) => {
+  const getMerchantName = useCallback((restId: string) => {
     return merchants.find(r => r.id === restId)?.name || restId?.slice(0, 8);
-  };
+  }, [merchants]);
 
   const expenseById = (id: string) => expenses.find(e => e.id === id);
   const deliveryLabel = (id: string) => {
@@ -351,6 +373,101 @@ export default function RiderExpensesPage() {
     load();
   };
 
+  // Filtered expenses with client-side search (merchant/rider name search)
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(e => {
+      if (expenseSearch) {
+        const q = expenseSearch.toLowerCase();
+        const riderName = getRiderName(e.rider_id).toLowerCase();
+        const merchantName = e.merchant_id ? getMerchantName(e.merchant_id).toLowerCase() : '';
+        return riderName.includes(q) || merchantName.includes(q);
+      }
+      return true;
+    });
+  }, [expenses, expenseSearch, getRiderName, getMerchantName]);
+
+  // Bulk selection handlers
+  const toggleExpenseSelectAll = () => {
+    if (expenseSelectedIds.size === filteredExpenses.length) {
+      setExpenseSelectedIds(new Set());
+    } else {
+      setExpenseSelectedIds(new Set(filteredExpenses.map(e => e.id)));
+    }
+  };
+
+  const toggleExpenseRow = (id: string) => {
+    setExpenseSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isExpenseSelected = (id: string) => expenseSelectedIds.has(id);
+  const isExpenseIndeterminate = expenseSelectedIds.size > 0 && expenseSelectedIds.size < filteredExpenses.length;
+
+  const handleExpenseBulkAction = async (action: 'verified' | 'rejected') => {
+    if (expenseSelectedIds.size === 0) return;
+    setExpenseBulkActionPending(action);
+    const ids = Array.from(expenseSelectedIds);
+    let successCount = 0;
+    let failCount = 0;
+    for (const id of ids) {
+      const { error } = await supabase.from('rider_expenses').update({
+        status: action,
+        verified_by: user!.id,
+        verified_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) {
+        failCount++;
+        toast.error(`Failed to ${action} ${id.slice(0, 8)}: ${error.message}`);
+      } else {
+        successCount++;
+      }
+    }
+    if (successCount > 0) toast.success(`${successCount} ${successCount === 1 ? 'expense' : 'expenses'} ${action === 'verified' ? 'verified' : 'rejected'}`);
+    setExpenseSelectedIds(prev => {
+      const next = new Set(prev);
+      if (failCount === 0) next.clear();
+      return next;
+    });
+    setExpenseBulkActionPending(null);
+    load();
+  };
+
+  // CSV Export
+  const handleExpenseExportCsv = () => {
+    const columns = [
+      { key: 'expense_date', header: 'Date' },
+      { key: 'description', header: 'Description' },
+      { key: 'rider_name', header: 'Rider', format: (v: string) => v },
+      { key: 'merchant_name', header: 'Merchant', format: (v: string) => v },
+      { key: 'amount', header: 'Amount', format: (v: number) => formatMoney(v) },
+      { key: 'consumed_amount', header: 'Consumed', format: (v: number | null) => formatMoney(v || 0) },
+      { key: 'remaining', header: 'Remaining', format: (v: number) => formatMoney(v) },
+      { key: 'status', header: 'Status' },
+      { key: 'receipt_url', header: 'Receipt', format: (v: string | null) => v ? 'Attached' : 'No receipt' },
+    ];
+    const rowsWithNames = filteredExpenses.map(e => ({
+      ...e,
+      rider_name: getRiderName(e.rider_id),
+      merchant_name: e.merchant_id ? getMerchantName(e.merchant_id) : '—',
+      remaining: Math.max(Number(e.amount) - Number(e.consumed_amount || 0), 0),
+    }));
+    const csvRows = buildCsvRows(rowsWithNames, columns);
+    downloadCsv(csvRows, generateFilename('rider-expenses'));
+  };
+
+  const clearExpenseFilters = () => {
+    setExpenseSearch('');
+    setExpenseStatusFilter([]);
+    setExpenseDateFrom('');
+    setExpenseDateTo('');
+    setExpenseAmountMin('');
+    setExpenseAmountMax('');
+  };
+
   const handleOpenReceipt = async (expense: { receipt_url?: string | null }) => {
     const key = expense.receipt_url as string;
     if (!key) return;
@@ -421,13 +538,68 @@ export default function RiderExpensesPage() {
         </TabsList>
 
         <TabsContent value="expenses" className="space-y-3 mt-4">
-          {expensesVisible > 0 && expenses.length > 0 ? (
+          {/* Filter Bar */}
+          <Card className="border-muted/50">
+            <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Label htmlFor="expense-date-from" className="sr-only">Date from</Label>
+                <Input id="expense-date-from" type="date" className="w-36" value={expenseDateFrom} onChange={e => setExpenseDateFrom(e.target.value)} placeholder="From" />
+                <Label htmlFor="expense-date-to" className="sr-only">Date to</Label>
+                <Input id="expense-date-to" type="date" className="w-36" value={expenseDateTo} onChange={e => setExpenseDateTo(e.target.value)} placeholder="To" />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Label htmlFor="expense-amount-min" className="sr-only">Min amount</Label>
+                <Input id="expense-amount-min" type="number" step="0.01" className="w-28" value={expenseAmountMin} onChange={e => setExpenseAmountMin(e.target.value)} placeholder="Min" />
+                <Label htmlFor="expense-amount-max" className="sr-only">Max amount</Label>
+                <Input id="expense-amount-max" type="number" step="0.01" className="w-28" value={expenseAmountMax} onChange={e => setExpenseAmountMax(e.target.value)} placeholder="Max" />
+              </div>
+              <div className="relative flex-1 max-w-sm">
+                <Label htmlFor="expense-search" className="sr-only">Search rider or merchant</Label>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <Input id="expense-search" className="pl-9" placeholder="Search rider or merchant..." value={expenseSearch} onChange={e => setExpenseSearch(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="expense-status">Status</Label>
+                <Select value={expenseStatusFilter.join(',')} onValueChange={v => setExpenseStatusFilter(v ? v.split(',') : [])} multiple>
+                  <SelectTrigger id="expense-status" className="w-40"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="verified">Verified</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end gap-2">
+                <Button variant="outline" size="sm" onClick={handleExpenseExportCsv} className="gap-1 min-h-[44px]">
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />Export CSV
+                </Button>
+                {(expenseDateFrom || expenseDateTo || expenseAmountMin || expenseAmountMax || expenseStatusFilter.length > 0 || expenseSearch) && (
+                  <Button variant="ghost" size="sm" onClick={clearExpenseFilters} className="gap-1 min-h-[44px]">
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />Clear all
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {expensesVisible > 0 && filteredExpenses.length > 0 ? (
             <>
               <div className="overflow-x-auto rounded-md border">
                 <Table aria-label="Rider expenses">
                   <TableCaption className="sr-only">Rider expense records with verification actions and receipt access</TableCaption>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        {canVerify && (
+                          <Checkbox
+                            checked={filteredExpenses.length > 0 && expenseSelectedIds.size === filteredExpenses.length}
+                            indeterminate={isExpenseIndeterminate}
+                            onCheckedChange={toggleExpenseSelectAll}
+                            aria-label="Select all visible rows"
+                            disabled={filteredExpenses.length === 0}
+                          />
+                        )}
+                      </TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Rider</TableHead>
@@ -441,7 +613,7 @@ export default function RiderExpensesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {expenses.slice(0, expensesVisible).map(e => {
+                    {filteredExpenses.slice(0, expensesVisible).map(e => {
                       const rowCons = consumptions.filter(c => c.rider_expense_id === e.id);
                       const isHi = !!highlighted[e.id];
                       const remaining = Math.max(Number(e.amount) - Number(e.consumed_amount || 0), 0);
@@ -449,6 +621,15 @@ export default function RiderExpensesPage() {
                       return (
                         <>
                           <TableRow key={e.id} className={isHi ? 'ring-2 ring-primary motion-safe:animate-pulse' : ''}>
+                            {canVerify && (
+                              <TableCell className="w-12">
+                                <Checkbox
+                                  checked={isExpenseSelected(e.id)}
+                                  onCheckedChange={() => toggleExpenseRow(e.id)}
+                                  aria-label={`Select expense ${e.description}`}
+                                />
+                              </TableCell>
+                            )}
                             <TableCell className="whitespace-nowrap tabular-nums"><time dateTime={e.expense_date}>{e.expense_date}</time></TableCell>
                             <TableCell className="font-medium">{e.description}</TableCell>
                             <TableCell>{getRiderName(e.rider_id)}</TableCell>
@@ -512,11 +693,42 @@ export default function RiderExpensesPage() {
                       );
                     })}
                   </TableBody>
+                  {canVerify && expenseSelectedIds.size > 0 && (
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell colSpan={2} />
+                        <TableCell colSpan={canVerify ? 8 : 7} className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="min-h-[44px] gap-1 text-success"
+                              onClick={() => handleExpenseBulkAction('verified')}
+                              disabled={expenseBulkActionPending !== null}
+                            >
+                              {expenseBulkActionPending === 'verify' ? 'Verifying…' : 'Verify selected'}
+                              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="min-h-[44px] gap-1 text-destructive"
+                              onClick={() => handleExpenseBulkAction('rejected')}
+                              disabled={expenseBulkActionPending !== null}
+                            >
+                              {expenseBulkActionPending === 'reject' ? 'Rejecting…' : 'Reject selected'}
+                              <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  )}
                 </Table>
               </div>
-              {expensesVisible < expenses.length && (
+              {expensesVisible < filteredExpenses.length && (
                 <Button variant="outline" className="w-full" onClick={() => setExpensesVisible(v => v + EXPENSES_PAGE_SIZE)}>
-                  Show more ({expenses.length - expensesVisible} remaining)
+                  Show more ({filteredExpenses.length - expensesVisible} remaining)
                 </Button>
               )}
             </>
