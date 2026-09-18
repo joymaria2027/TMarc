@@ -59,7 +59,7 @@ export default function WalletWidget() {
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
       reloadTimer.current = setTimeout(() => load(), 600);
     };
-    const ch = supabase.channel('wallet-widget-realtime')
+    const ch = supabase.channel(`wallet-widget-realtime-${Math.random().toString(36).slice(2, 8)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets' }, () => schedule())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wallet_transactions' }, () => schedule())
       .subscribe();

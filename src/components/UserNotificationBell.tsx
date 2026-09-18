@@ -1,124 +1,24 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { Bell, Check, Info, CheckCircle2, XCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserNotifications, type UserNotification } from "@/hooks/useUserNotifications";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export interface UserNotification {
-  id: string;
-  user_id: string;
-  title: string;
-  message: string;
-  type: string;
-  is_read: boolean;
-  metadata?: Record<string, any> | null;
-  created_at: string;
-}
+export type { UserNotification };
 
 export default function UserNotificationBell({ className }: { className?: string }) {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [open, setOpen] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
-
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  const fetchNotifications = useCallback(async () => {
-    if (!user) {
-      setNotifications([]);
-      return;
-    }
-    const { data, error } = await (supabase
-      .from("user_notifications" as any)
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(30) as any);
-
-    if (!error && data) {
-      setNotifications(data as UserNotification[]);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
-
-  // Realtime subscription for notifications
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`user-notifs-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "user_notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newNotif = payload.new as UserNotification;
-          setNotifications(prev => [newNotif, ...prev.filter(n => n.id !== newNotif.id)]);
-          setAnnouncement(`New notification: ${newNotif.title}`);
-
-          if (newNotif.type === "wholesale_approved") {
-            toast.success(newNotif.title, { description: newNotif.message });
-          } else if (newNotif.type === "wholesale_rejected") {
-            toast.error(newNotif.title, { description: newNotif.message });
-          } else {
-            toast.info(newNotif.title, { description: newNotif.message });
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "user_notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const updated = payload.new as UserNotification;
-          setNotifications(prev => prev.map(n => n.id === updated.id ? updated : n));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
-
-  const markAsRead = async (id: string) => {
-    const target = notifications.find(n => n.id === id);
-    if (!target || target.is_read) return;
-
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    await (supabase
-      .from("user_notifications" as any)
-      .update({ is_read: true })
-      .eq("id", id) as any);
-    setAnnouncement("Notification marked as read");
-  };
-
-  const markAllAsRead = async () => {
-    if (unreadCount === 0 || !user) return;
-
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    await (supabase
-      .from("user_notifications" as any)
-      .update({ is_read: true })
-      .eq("user_id", user.id)
-      .eq("is_read", false) as any);
-    setAnnouncement("All notifications marked as read");
-  };
+  const {
+    notifications,
+    unreadCount,
+    announcement,
+    markAsRead,
+    markAllAsRead,
+  } = useUserNotifications();
 
   if (!user) return null;
 
