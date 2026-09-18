@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { getProductImageUrl } from "@/lib/productImage";
+import { getProductImageUrl, getProductPublicUrl } from "@/lib/productImage";
 import { toast } from "sonner";
+import { Eye } from "lucide-react";
+import ProductImagePreviewDialog from "@/components/ProductImagePreviewDialog";
 
 export default function ProductApprovalsPage() {
   const { user, hasRole } = useAuth();
@@ -17,6 +19,7 @@ export default function ProductApprovalsPage() {
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [reasonErrors, setReasonErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [inspectingProduct, setInspectingProduct] = useState<any | null>(null);
 
   const load = async () => {
     const { data } = await supabase
@@ -25,14 +28,20 @@ export default function ProductApprovalsPage() {
       .eq("approval_status", "pending")
       .order("created_at", { ascending: true });
     setProducts(data || []);
-    // Signed URLs resolve through the shared cache (1h TTL), so re-renders
-    // and repeat visits do not mint a URL per row.
+
     const urls: Record<string, string> = {};
+    for (const p of data || []) {
+      const pub = getProductPublicUrl(p.image_path);
+      if (pub) urls[p.id] = pub;
+    }
+    setImageUrls(urls);
+
     await Promise.all((data || []).map(async (p: any) => {
+      if (urls[p.id]) return;
       const u = await getProductImageUrl(p.image_path);
       if (u) urls[p.id] = u;
     }));
-    setImageUrls(urls);
+    setImageUrls({ ...urls });
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -81,16 +90,30 @@ export default function ProductApprovalsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex gap-4 flex-wrap">
+            <div className="flex gap-4 flex-wrap items-start">
               {imageUrls[p.id] && (
-                <img
-                  src={imageUrls[p.id]}
-                  alt={p.name}
-                  width={128}
-                  height={128}
-                  loading="lazy"
-                  className="h-32 w-32 object-cover rounded"
-                />
+                <div className="flex flex-col items-center gap-1.5 shrink-0">
+                  <img
+                    src={imageUrls[p.id]}
+                    alt={p.name}
+                    width={128}
+                    height={128}
+                    loading="lazy"
+                    className="h-32 w-32 object-cover rounded border cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => setInspectingProduct(p)}
+                    title="Click to inspect aspect ratio & framing"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 w-full"
+                    onClick={() => setInspectingProduct(p)}
+                  >
+                    <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                    Inspect framing
+                  </Button>
+                </div>
               )}
               <div className="space-y-1 flex-1 min-w-52">
                 {p.description && <p className="text-sm">{p.description}</p>}
@@ -120,6 +143,17 @@ export default function ProductApprovalsPage() {
           </CardContent>
         </Card>
       ))}
+
+      {inspectingProduct && (
+        <ProductImagePreviewDialog
+          open={!!inspectingProduct}
+          onOpenChange={open => !open && setInspectingProduct(null)}
+          productName={inspectingProduct.name}
+          merchantName={inspectingProduct.merchants?.name}
+          imageUrl={imageUrls[inspectingProduct.id] || null}
+          price={inspectingProduct.price}
+        />
+      )}
     </div>
   );
 }

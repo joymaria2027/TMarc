@@ -110,10 +110,15 @@ export default function MerchantStorefrontPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {g.items.map(p => (
                     <Card key={p.id} className="overflow-hidden flex flex-col h-full">
-                      <Link to={`/shop/p/${p.id}`} aria-label={`View ${p.name}`} className="block relative w-full bg-muted" style={{ aspectRatio: "4 / 3" }}>
-                        {urls[p.id]
-                          ? <img src={urls[p.id]} alt={p.name} width={400} height={300} className="absolute inset-0 w-full h-full object-cover object-center" loading="lazy" />
-                          : <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">No image</div>}
+                      <Link to={`/shop/p/${p.id}`} aria-label={`View ${p.name}`} className="block relative w-full bg-muted/60 overflow-hidden flex items-center justify-center group" style={{ aspectRatio: "4 / 3" }}>
+                        {urls[p.id] ? (
+                          <>
+                            <img src={urls[p.id]} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-125 pointer-events-none" />
+                            <img src={urls[p.id]} alt={p.name} width={400} height={300} className="relative max-w-full max-h-full object-contain p-2 transition-transform duration-200 group-hover:scale-105" loading="lazy" />
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">No image</div>
+                        )}
                       </Link>
                       <CardContent className="p-4 flex-1 flex flex-col gap-2">
                         {/* Duplicate of the image link for sighted users; removed

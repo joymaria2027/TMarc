@@ -86,15 +86,18 @@ export default function ProductDetailPage() {
           <span aria-hidden="true">←</span> Back to {product.merchants?.name}
         </Link>
         <div className="grid md:grid-cols-2 gap-8">
-          <div className="aspect-square bg-muted rounded-lg overflow-hidden">
-            {imgUrl
-              ? <img src={imgUrl} alt={product.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-              : (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
-                  <Package className="h-8 w-8" aria-hidden="true" />
-                  <span className="text-xs">No image available</span>
-                </div>
-              )}
+          <div className="aspect-square bg-muted/40 rounded-lg overflow-hidden relative flex items-center justify-center">
+            {imgUrl ? (
+              <>
+                <img src={imgUrl} alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover blur-lg opacity-25 scale-125 pointer-events-none" />
+                <img src={imgUrl} alt={product.name} loading="lazy" decoding="async" className="relative max-w-full max-h-full object-contain p-4" />
+              </>
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
+                <Package className="h-8 w-8" aria-hidden="true" />
+                <span className="text-xs">No image available</span>
+              </div>
+            )}
           </div>
           <div className="space-y-4 min-w-0">
             <Link to={`/shop/m/${product.merchant_id}`} className="text-sm text-muted-foreground hover:underline truncate block">{product.merchants?.name}</Link>

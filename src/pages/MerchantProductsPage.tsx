@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Percent } from "lucide-react";
 import { toast } from "sonner";
 import { validateProductForm, type Errors } from "./merchantGroup.helpers";
+import { getProductPublicUrl } from "@/lib/productImage";
 
 interface Merchant { id: string; name: string; business_type_id: string | null; business_type_name?: string; }
 interface Product {
@@ -263,6 +264,8 @@ function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
   const [price, setPrice] = useState(editing?.price?.toString() || "");
   const [quantity, setQuantity] = useState(editing?.quantity?.toString() || "0");
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewStats, setPreviewStats] = useState<{ width: number; height: number; label: string } | null>(null);
   const [wsPrice, setWsPrice] = useState(wholesale?.wholesale_price?.toString() || "");
   const [wsMin, setWsMin] = useState(wholesale?.min_quantity?.toString() || "1");
   const [errors, setErrors] = useState<Errors>({});
@@ -275,6 +278,35 @@ function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
     setWsMin(wholesale?.min_quantity?.toString() || "1");
     setErrors({});
   }, [editing, wholesale]);
+
+  useEffect(() => {
+    if (!file) {
+      if (editing?.image_path) {
+        const u = getProductPublicUrl(editing.image_path);
+        setPreviewUrl(u);
+      } else {
+        setPreviewUrl(null);
+        setPreviewStats(null);
+      }
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const ratio = w / h;
+      let label = "Custom";
+      if (ratio >= 0.95 && ratio <= 1.05) label = "1:1 Square (Optimal)";
+      else if (ratio >= 1.25 && ratio <= 1.45) label = "4:3 Standard (Optimal)";
+      else if (ratio < 0.85) label = "Portrait (Full photo preserved)";
+      else label = "Landscape (Full photo preserved)";
+      setPreviewStats({ width: w, height: h, label });
+    };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file, editing]);
 
   const submit = () => {
     const errs = validateProductForm({ name, price });
@@ -327,9 +359,46 @@ function ProductDialog({ editing, isRestaurant, wholesale, onSave }: {
             <Input id="product-ws-min" type="number" min={1} value={wsMin} onChange={e => setWsMin(e.target.value)} />
           </div>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="product-image">Image</Label>
+        <div className="space-y-2">
+          <Label htmlFor="product-image">Product photo</Label>
           <Input id="product-image" type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)} />
+          <p className="text-[11px] text-muted-foreground">
+            Any aspect ratio is accepted. Square (1:1) or 4:3 with the item centered is recommended.
+          </p>
+
+          {previewUrl && (
+            <div className="p-3 bg-muted/40 border rounded-lg space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                <span className="font-medium">Storefront preview:</span>
+                {previewStats && (
+                  <Badge variant="outline" className="text-[11px]">
+                    {previewStats.width} × {previewStats.height}px · {previewStats.label}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex justify-center">
+                <div
+                  className="relative w-48 bg-muted/60 rounded-md border overflow-hidden flex items-center justify-center shadow-xs"
+                  style={{ aspectRatio: "4 / 3" }}
+                >
+                  <img
+                    src={previewUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-125 pointer-events-none"
+                  />
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="relative max-w-full max-h-full object-contain p-1.5"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center">
+                ✓ Full photo is preserved without cropping using ambient edge framing.
+              </p>
+            </div>
+          )}
         </div>
         <Button className="w-full" onClick={submit}>{editing ? "Save changes" : "Submit for approval"}</Button>
       </div>

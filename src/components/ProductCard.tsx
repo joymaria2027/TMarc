@@ -54,17 +54,27 @@ export default function ProductCard({
     <Card className="overflow-hidden flex flex-col h-full">
       <Link
         to={`/shop/p/${p.id}`}
-        className="block relative w-full bg-muted"
+        className="block relative w-full bg-muted/60 overflow-hidden flex items-center justify-center group"
         style={{ aspectRatio: "4 / 3" }}
         aria-label={`View ${p.name}`}
       >
         {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={p.name}
-            className="absolute inset-0 w-full h-full object-cover object-center"
-            loading="lazy"
-          />
+          <>
+            {/* Ambient blurred backdrop to softly fill letterbox areas without cutting the product */}
+            <img
+              src={imageUrl}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover blur-md opacity-25 scale-125 pointer-events-none"
+            />
+            {/* Crisp uncropped product image */}
+            <img
+              src={imageUrl}
+              alt={p.name}
+              className="relative max-w-full max-h-full object-contain p-2 transition-transform duration-200 group-hover:scale-105"
+              loading="lazy"
+            />
+          </>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
             <Package className="h-6 w-6" aria-hidden="true" />
