@@ -166,10 +166,10 @@ export default function WalletPage() {
     const names: Record<string, string> = {};
     const merchantNames: Record<string, string> = {};
     const riderIds = wData.filter(w => w.party_type === 'rider' && w.party_id).map(w => w.party_id!);
-    const restIds = wData.filter(w => w.party_type === 'merchant' && w.party_id).map(w => w.party_id!);
+    const merchantIds = wData.filter(w => w.party_type === 'merchant' && w.party_id).map(w => w.party_id!);
     // Also collect merchant_ids referenced from rider wallets
-    const riderWalletRestIds = wData.filter(w => w.party_type === 'rider' && w.merchant_id).map(w => w.merchant_id!);
-    const allRestIds = Array.from(new Set([...restIds, ...riderWalletRestIds]));
+    const riderWalletMerchantIds = wData.filter(w => w.party_type === 'rider' && w.merchant_id).map(w => w.merchant_id!);
+    const allMerchantIds = Array.from(new Set([...merchantIds, ...riderWalletMerchantIds]));
 
     if (riderIds.length) {
       const { data: riders } = await supabase.from('riders').select('id, user_id').in('id', riderIds);
@@ -182,9 +182,9 @@ export default function WalletPage() {
         });
       }
     }
-    if (allRestIds.length) {
-      const { data: rests } = await supabase.from('merchants').select('id, name').in('id', allRestIds);
-      rests?.forEach(r => { names[r.id] = r.name; merchantNames[r.id] = r.name; });
+    if (allMerchantIds.length) {
+      const { data: merchants } = await supabase.from('merchants').select('id, name').in('id', allMerchantIds);
+      merchants?.forEach(m => { names[m.id] = m.name; merchantNames[m.id] = m.name; });
     }
     setPartyNames(names);
     setLoading(false);

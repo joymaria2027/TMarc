@@ -136,8 +136,8 @@ export default function NewDeliveryPage() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
         <Truck className="h-12 w-12 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-xl font-semibold">Store not found</h1>
-        <p className="text-muted-foreground">Open this page from a store on the Merchants page.</p>
+        <h1 className="text-xl font-semibold">Merchant not found</h1>
+        <p className="text-muted-foreground">Open this page from a merchant on the Merchants page.</p>
         <Button variant="outline" onClick={() => navigate('/merchants')}>Go to Merchants</Button>
       </div>
     );

@@ -92,10 +92,10 @@ export default function RiderDispatchOffers() {
   }, []);
 
 
-  const claim = async (orderId: string) => {
+  const acceptOrder = async (orderId: string) => {
     const { data, error } = await supabase.rpc("claim_dispatched_order", { _order_id: orderId });
     if (error) toast.error(error.message);
-    else if (data) { toast.success("You claimed this delivery"); load(); }
+    else if (data) { toast.success("You accepted this delivery"); load(); }
     else toast.error("Another rider got there first");
   };
 
@@ -140,7 +140,7 @@ export default function RiderDispatchOffers() {
                 )}
               </div>
               {o.dropoff_address && <p className="text-xs text-muted-foreground">→ {o.dropoff_address}</p>}
-              <Button size="sm" onClick={() => claim(o.order_id)}>Accept delivery</Button>
+              <Button size="sm" onClick={() => acceptOrder(o.order_id)}>Accept delivery</Button>
             </div>
           );
         })}
