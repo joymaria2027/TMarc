@@ -28,6 +28,7 @@ export default function OrderStatusTimeline({
     ? STEPS.filter(s => s.key === "preparing" || s.key === "ready" || s.key === "delivered")
     : STEPS;
   const currentIdx = ORDER[status] ?? -1;
+  const findingRider = fulfillmentType === "delivery" && status === "ready";
 
   return (
     <ol aria-label={fulfillmentType === "pickup" ? "Order progress" : "Delivery progress"} className={cn("w-full flex items-start justify-between gap-1", className)}>
@@ -37,7 +38,7 @@ export default function OrderStatusTimeline({
           const isCurrent = (step.statuses as readonly string[]).includes(status);
           const Icon = step.icon;
           return (
-            <li key={step.key} className="flex flex-1 items-start" aria-current={isCurrent ? "step" : undefined} aria-label={`${step.label}, step ${i + 1} of ${steps.length}${isCurrent ? ", current" : reached ? ", completed" : ""}`}>
+            <li key={step.key} className="flex flex-1 items-start" aria-current={isCurrent ? "step" : undefined} aria-label={`${step.label}, step ${i + 1} of ${steps.length}${isCurrent ? ", current" : reached ? ", completed" : ""}${step.key === "ready" && findingRider ? ", finding rider" : ""}`}>
               <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
                 <div
                   aria-hidden="true"
@@ -59,6 +60,11 @@ export default function OrderStatusTimeline({
                 <span className={cn("text-xs text-center leading-relaxed break-words w-full", reached ? "text-foreground font-medium" : "text-muted-foreground")}>
                   {step.label}
                 </span>
+                {step.key === "ready" && findingRider && (
+                  <span role="status" className="text-[11px] text-center leading-tight text-muted-foreground">
+                    Finding rider…
+                  </span>
+                )}
               </div>
               {i < steps.length - 1 && (
                 <div aria-hidden="true" className={cn("h-0.5 flex-1 mt-4 mx-1", currentIdx > stepIdx ? "bg-primary" : "bg-border")} />

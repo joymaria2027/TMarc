@@ -230,3 +230,22 @@ describe('P2 polish (core ops)', () => {
     expect(del).not.toMatch(/Take over/);
   });
 });
+
+describe('dispatch audit date filter + finding-rider indicator', () => {
+  it('DispatchAuditPage filters by date range (from/to on created_at)', () => {
+    const s = read('src/pages/DispatchAuditPage.tsx');
+    expect(s).toMatch(/htmlFor="audit-from"/);
+    expect(s).toMatch(/htmlFor="audit-to"/);
+    expect(s).toMatch(/id="audit-from"/);
+    expect(s).toMatch(/id="audit-to"/);
+    expect(s).toMatch(/fromTs/);
+    expect(s).toMatch(/toTs/);
+    expect(s).toMatch(/r\.created_at/);
+  });
+  it('OrderStatusTimeline shows Finding rider on Ready for delivery orders only', () => {
+    const s = read('src/components/OrderStatusTimeline.tsx');
+    expect(s).toMatch(/findingRider/);
+    expect(s).toMatch(/Finding rider/);
+    expect(s).toMatch(/fulfillmentType === "delivery" && status === "ready"/);
+  });
+});

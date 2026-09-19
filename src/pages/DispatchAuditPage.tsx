@@ -48,6 +48,8 @@ export default function DispatchAuditPage() {
   const [riders, setRiders] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(0);
@@ -103,8 +105,13 @@ export default function DispatchAuditPage() {
 
   const grouped = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const fromTs = from ? new Date(`${from}T00:00:00`).getTime() : null;
+    const toTs = to ? new Date(`${to}T00:00:00`).getTime() + 86400000 : null;
     const filtered = rows.filter(r => {
       if (type !== "all" && r.event_type !== type) return false;
+      const ts = new Date(r.created_at).getTime();
+      if (fromTs !== null && !(ts >= fromTs)) return false;
+      if (toTs !== null && !(ts < toTs)) return false;
       if (!q) return true;
       const ref = r.order_id ? (orders[r.order_id] || "") : "";
       return ref.toLowerCase().includes(q) || (r.order_id || "").includes(q);
@@ -118,7 +125,7 @@ export default function DispatchAuditPage() {
     return [...map.entries()].sort(
       (a, b) => new Date(b[1][0].created_at).getTime() - new Date(a[1][0].created_at).getTime()
     );
-  }, [rows, search, type, orders]);
+  }, [rows, search, type, orders, from, to]);
 
   return (
     <div className="space-y-4">
@@ -139,6 +146,41 @@ export default function DispatchAuditPage() {
             onChange={e => { setSearch(e.target.value); setPage(0); }}
             className="max-w-xs"
           />
+        </div>
+        <div className="flex flex-wrap gap-2 items-end">
+          <div>
+            <Label htmlFor="audit-from" className="sr-only">Filter from date</Label>
+            <Input
+              id="audit-from"
+              type="date"
+              aria-label="Filter from date"
+              value={from}
+              onChange={e => { setFrom(e.target.value); setPage(0); }}
+              className="max-w-[10rem]"
+            />
+          </div>
+          <div>
+            <Label htmlFor="audit-to" className="sr-only">Filter to date</Label>
+            <Input
+              id="audit-to"
+              type="date"
+              aria-label="Filter to date"
+              value={to}
+              min={from || undefined}
+              onChange={e => { setTo(e.target.value); setPage(0); }}
+              className="max-w-[10rem]"
+            />
+          </div>
+          {(from || to) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setFrom(""); setTo(""); setPage(0); }}
+              aria-label="Clear date filters"
+            >
+              Clear dates
+            </Button>
+          )}
         </div>
         <div className="flex flex-wrap gap-1">
           {EVENT_TYPES.map(t => (
