@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import RiderDashboard from "../RiderDashboard";
 
 const { db, rpc, authUser } = vi.hoisted(() => ({
@@ -201,7 +202,7 @@ describe("RiderDashboard celebration (gift-ceremony/02)", () => {
   it("claim success fires haptics.success (Stage 2 ceremony)", async () => {
     rpc.offered.mockResolvedValue({ data: [{ id: "offer-1" }], error: null });
     db.offeredFull = [offer];
-    render(<RiderDashboard />);
+    render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
 
     const accept = await screen.findByRole("button", { name: "Accept" });
     fireEvent.click(accept);
@@ -214,7 +215,7 @@ describe("RiderDashboard celebration (gift-ceremony/02)", () => {
 
   it("completing a delivery shows a run-summary banner with tabular payout (Stage 3)", async () => {
     db.deliveries = [{ ...activeDelivery }];
-    render(<RiderDashboard />);
+    render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /end delivery/i }));
     fireEvent.click(await screen.findByRole("button", { name: /end odometer reading/i }));
@@ -228,7 +229,7 @@ describe("RiderDashboard celebration (gift-ceremony/02)", () => {
 
   it("run-summary banner dismisses via close button", async () => {
     db.deliveries = [{ ...activeDelivery }];
-    render(<RiderDashboard />);
+    render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /end delivery/i }));
     fireEvent.click(await screen.findByRole("button", { name: /end odometer reading/i }));
@@ -241,7 +242,7 @@ describe("RiderDashboard celebration (gift-ceremony/02)", () => {
   it("reject path stays a receipt — never fires haptics.success", async () => {
     rpc.offered.mockResolvedValue({ data: [{ id: "offer-1" }], error: null });
     db.offeredFull = [offer];
-    render(<RiderDashboard />);
+    render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     fireEvent.click(await screen.findByRole("button", { name: /confirm reject/i }));

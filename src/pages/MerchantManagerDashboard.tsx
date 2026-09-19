@@ -16,6 +16,13 @@ import { formatMoney } from '@/lib/finance';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
 import StoreQrDialog from '@/components/StoreQrDialog';
+import EmptyState from '@/components/EmptyState';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import GettingStartedChecklist from '@/components/GettingStartedChecklist';
+import { useChecklistOpen } from '@/components/useChecklistOpen';
+import { buildManagerChecklist } from '@/lib/dashboardChecklists';
+import FirstRunHint from '@/components/FirstRunHint';
+import { dashboardEmptyStates } from '@/lib/dashboardEmptyStates';
 import { QrCode } from 'lucide-react';
 
 export default function MerchantManagerDashboard() {
@@ -81,6 +88,16 @@ export default function MerchantManagerDashboard() {
     load();
   };
 
+  // First-run signal (pre-gate so hooks stay unconditional).
+  const scopeMerchantIds = merchants.filter((r) => r.manager_user_id === user?.id).map((r) => r.id);
+  const firstRun = deliveries.filter((d) => scopeMerchantIds.includes(d.merchant_id)).length === 0;
+  const checklistItems = buildManagerChecklist({
+    merchantCount: scopeMerchantIds.length,
+    tariffCount: tariffs.filter((t) => scopeMerchantIds.includes(t.merchant_id)).length,
+    deliveryCount: deliveries.filter((d) => scopeMerchantIds.includes(d.merchant_id)).length,
+  });
+  const [showChecklist, setShowChecklist] = useChecklistOpen("merchant_manager", firstRun, checklistItems.every((i) => i.done));
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   // Scope to merchants this manager is assigned to
@@ -111,10 +128,15 @@ export default function MerchantManagerDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Merchant dashboard</h1>
-        <p className="text-muted-foreground">A quick read on the day's deliveries, revenue and settlements.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">Merchant dashboard</h1>
+          <p className="text-muted-foreground">A quick read on the day's deliveries, revenue and settlements.</p>
+        </div>
+        <TourReplay role="merchant_manager" />
       </div>
+      <DashboardTour role="merchant_manager" runWhen={firstRun} />
+      <FirstRunHint audience="merchant" />
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
@@ -125,6 +147,20 @@ export default function MerchantManagerDashboard() {
         </CardContent>
       </Card>
 
+      {/* First-run: checklist replaces the charts until real data arrives */}
+      {showChecklist ? (
+        <GettingStartedChecklist
+          role="merchant_manager"
+          items={checklistItems}
+          onAction={(id) => {
+            if (id === "tariff" && myMerchants[0]) {
+              setTariffMerchant(myMerchants[0]);
+              setTariffOpen(true);
+            }
+          }}
+          onOpenChange={setShowChecklist}
+        />
+      ) : (
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -148,9 +184,10 @@ export default function MerchantManagerDashboard() {
 
         <WalletWidget />
       </div>
+      )}
 
       {/* My Merchants – quick actions */}
-      <Card>
+      <Card data-tour="manager-merchants">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" />My Merchants</CardTitle>
         </CardHeader>
@@ -189,7 +226,7 @@ export default function MerchantManagerDashboard() {
       </Card>
 
       {/* Tariffs summary */}
-      <Card>
+      <Card data-tour="manager-tariffs">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">My Tariffs</CardTitle>
         </CardHeader>
@@ -203,12 +240,12 @@ export default function MerchantManagerDashboard() {
                 </div>
               ))}
             </div>
-          ) : <p className="text-sm text-muted-foreground">No tariffs set yet</p>}
+          ) : <EmptyState {...dashboardEmptyStates.merchant_manager.tariffs} />}
         </CardContent>
       </Card>
 
       {/* Recent deliveries */}
-      <Card>
+      <Card data-tour="manager-recent">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Recent Deliveries</CardTitle>
         </CardHeader>
@@ -224,7 +261,7 @@ export default function MerchantManagerDashboard() {
                 <Badge variant="secondary" className="capitalize shrink-0">{d.status.replace('_', ' ')}</Badge>
               </div>
             ))}
-            {myDeliveries.length === 0 && <p className="text-center text-muted-foreground py-4">No deliveries yet</p>}
+            {myDeliveries.length === 0 && <EmptyState {...dashboardEmptyStates.merchant_manager.deliveries} />}
           </div>
         </CardContent>
       </Card>

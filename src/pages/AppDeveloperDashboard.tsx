@@ -8,6 +8,12 @@ import { Code2, Package, CheckCircle2, DollarSign, Users, Building2, TrendingUp,
 import { format, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
+import EmptyState from '@/components/EmptyState';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import GettingStartedChecklist from '@/components/GettingStartedChecklist';
+import { useChecklistOpen } from '@/components/useChecklistOpen';
+import { buildDeveloperChecklist } from '@/lib/dashboardChecklists';
+import { dashboardEmptyStates } from '@/lib/dashboardEmptyStates';
 
 export default function AppDeveloperDashboard() {
   const [deliveries, setDeliveries] = useState<any[]>([]);
@@ -46,6 +52,16 @@ export default function AppDeveloperDashboard() {
     return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
+  // First-run signal (pre-gate so hooks stay unconditional).
+  const firstRun = deliveries.length === 0;
+  const checklistItems = buildDeveloperChecklist({
+    merchantCount: merchants.length,
+    riderCount: riders.length,
+    deliveryCount: deliveries.length,
+    alertCount: alerts.length,
+  });
+  const [showChecklist, setShowChecklist] = useChecklistOpen("app_developer", firstRun, checklistItems.every((i) => i.done));
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const delivered = deliveries.filter(d => d.status === 'delivered');
@@ -69,13 +85,17 @@ export default function AppDeveloperDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Code2 className="h-6 w-6" /> Developer Dashboard</h1>
-        <p className="text-muted-foreground">Platform health, metrics & Platform revenue</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Code2 className="h-6 w-6" /> Developer Dashboard</h1>
+          <p className="text-muted-foreground">Platform health, metrics & Platform revenue</p>
+        </div>
+        <TourReplay role="app_developer" />
       </div>
+      <DashboardTour role="app_developer" runWhen={firstRun} />
 
       {/* Operational strip + platform-data links (replaces the 10 hero-metric tiles) */}
-      <Card>
+      <Card data-tour="dev-health">
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
           <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totalRevenue)}</strong>&nbsp;platform revenue</span>
           <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{active.length}</strong>&nbsp;active now</span>
@@ -84,7 +104,20 @@ export default function AppDeveloperDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* First-run: no platform activity yet — one CTA, not blank charts */}
+      {deliveries.length === 0 && (
+        <Card>
+          <CardContent>
+            <EmptyState {...dashboardEmptyStates.app_developer.activity} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* First-run: checklist replaces the charts until real data arrives */}
+      {showChecklist ? (
+        <GettingStartedChecklist role="app_developer" items={checklistItems} onOpenChange={setShowChecklist} />
+      ) : (
+      <div className="grid md:grid-cols-2 gap-4" data-tour="dev-charts">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -107,6 +140,7 @@ export default function AppDeveloperDashboard() {
 
         <WalletWidget />
       </div>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
@@ -128,11 +162,11 @@ export default function AppDeveloperDashboard() {
       </Card>
 
       {/* System health as links (lane-10: dev dashboard should link into platform-data pages) */}
-      <Card>
+      <Card data-tour="dev-links">
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
           <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{riders.filter(r => r.is_online).length}</strong>&nbsp;active riders</span>
           <Link to="/merchants" className="flex items-center gap-1.5 hover:underline underline-offset-4"><Building2 className="h-4 w-4 text-primary" aria-hidden="true" /><strong className="tabular-nums">{merchants.filter(r => r.is_active).length}</strong>&nbsp;active stores</Link>
-          <Link to="/webhook-events" className="flex items-center gap-1.5 hover:underline underline-offset-4"><Package className="h-4 w-4 text-info" aria-hidden="true" />Webhook events</Link>
+          <Link to="/admin/webhook-events" className="flex items-center gap-1.5 hover:underline underline-offset-4"><Package className="h-4 w-4 text-info" aria-hidden="true" />Webhook events</Link>
         </CardContent>
       </Card>
     </div>

@@ -25,9 +25,11 @@ describe('rider/auth copy audit guards', () => {
   });
 
   it('RiderDashboard empty-offers copy points at the unassigned pool', () => {
-    const s = read('src/pages/RiderDashboard.tsx');
-    expect(s).toMatch(/No offers right now\. Claim unassigned jobs from Deliveries\./);
+    // Copy lives in the shared map (slice 01); the dashboard wires it in.
+    const s = read('src/lib/dashboardEmptyStates.ts');
+    expect(s).toMatch(/Unassigned Deliveries wait on the Deliveries queue/);
     expect(s).not.toMatch(/unattended pool/);
+    expect(read('src/pages/RiderDashboard.tsx')).toMatch(/dashboardEmptyStates\.rider\.offers/);
   });
 
   it('Auth controls are sentence case (Sign in / Create account)', () => {

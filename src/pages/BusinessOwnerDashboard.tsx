@@ -7,6 +7,12 @@ import { Building2, Package, CheckCircle2, DollarSign, Users, TrendingUp, PieCha
 import { format, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
+import EmptyState from '@/components/EmptyState';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import GettingStartedChecklist from '@/components/GettingStartedChecklist';
+import { useChecklistOpen } from '@/components/useChecklistOpen';
+import { buildOwnerChecklist } from '@/lib/dashboardChecklists';
+import { dashboardEmptyStates } from '@/lib/dashboardEmptyStates';
 
 const PIE_COLORS = CHART_COLORS;
 
@@ -43,6 +49,16 @@ export default function BusinessOwnerDashboard() {
     return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
+  // First-run signal (pre-gate so hooks stay unconditional).
+  const firstRun = deliveries.length === 0;
+  const ownerDelivered = deliveries.filter((d) => d.status === 'delivered');
+  const checklistItems = buildOwnerChecklist({
+    merchantCount: merchants.length,
+    deliveredCount: ownerDelivered.length,
+    settled: ownerDelivered.some((d) => d.settlement_approved),
+  });
+  const [showChecklist, setShowChecklist] = useChecklistOpen("business_owner", firstRun, checklistItems.every((i) => i.done));
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const delivered = deliveries.filter(d => d.status === 'delivered');
@@ -69,13 +85,17 @@ export default function BusinessOwnerDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Business Overview</h1>
-        <p className="text-muted-foreground">High-level performance across all operations</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Business Overview</h1>
+          <p className="text-muted-foreground">High-level performance across all operations</p>
+        </div>
+        <TourReplay role="business_owner" />
       </div>
+      <DashboardTour role="business_owner" runWhen={firstRun} />
 
       {/* Operational strip (replaces hero-metric stat tiles banned by PRODUCT.md) */}
-      <Card>
+      <Card data-tour="owner-strip">
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
           <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4 text-accent" aria-hidden="true" /><strong className="tabular-nums">{formatMoney(totalRevenue)}</strong>&nbsp;delivered revenue</span>
           <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{active.length}</strong>&nbsp;active now</span>
@@ -85,8 +105,12 @@ export default function BusinessOwnerDashboard() {
         </CardContent>
       </Card>
 
+      {/* First-run: checklist replaces the charts until real data arrives */}
+      {showChecklist ? (
+        <GettingStartedChecklist role="business_owner" items={checklistItems} onOpenChange={setShowChecklist} />
+      ) : (
       <div className="grid md:grid-cols-2 gap-4">
-        <Card>
+        <Card data-tour="owner-trend">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />Revenue Trend (7 Days)
@@ -107,6 +131,7 @@ export default function BusinessOwnerDashboard() {
 
         <WalletWidget />
       </div>
+      )}
 
       {/* Revenue by merchant */}
       {restRevenue.length > 0 && (
@@ -136,6 +161,14 @@ export default function BusinessOwnerDashboard() {
                 ))}
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+      {/* First-run: no revenue yet — one CTA instead of a missing panel */}
+      {restRevenue.length === 0 && (
+        <Card data-tour="owner-revenue">
+          <CardContent>
+            <EmptyState {...dashboardEmptyStates.business_owner.revenue} />
           </CardContent>
         </Card>
       )}

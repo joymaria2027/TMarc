@@ -9,6 +9,12 @@ import { format, subDays } from 'date-fns';
 import { formatMoney, CHART_COLORS } from '@/lib/finance';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
+import EmptyState from '@/components/EmptyState';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import GettingStartedChecklist from '@/components/GettingStartedChecklist';
+import { useChecklistOpen } from '@/components/useChecklistOpen';
+import { buildAccountantChecklist } from '@/lib/dashboardChecklists';
+import { dashboardEmptyStates } from '@/lib/dashboardEmptyStates';
 
 export default function AccountantDashboard() {
   const { user } = useAuth();
@@ -49,6 +55,18 @@ export default function AccountantDashboard() {
     return () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); supabase.removeChannel(ch); };
   }, []);
 
+  // First-run signal (pre-gate so hooks stay unconditional).
+  const firstRun = deliveries.length === 0;
+  const pendingCount = deliveries.filter((d) => !d.settlement_approved).length;
+  const checklistItems = buildAccountantChecklist({
+    settledCount: deliveries.filter((d) => d.settlement_approved).length,
+    withdrawalsTotal: withdrawals.length,
+    withdrawalsPending: withdrawals.filter((w) => w.status === 'pending').length,
+    deliveredTotal: deliveries.length,
+    pendingSettlements: pendingCount,
+  });
+  const [showChecklist, setShowChecklist] = useChecklistOpen("accountant", firstRun, checklistItems.every((i) => i.done));
+
   if (loading) return <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   const pendingSettlements = deliveries.filter(d => !d.settlement_approved).length;
@@ -70,13 +88,17 @@ export default function AccountantDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Accountant Dashboard</h1>
-        <p className="text-muted-foreground">Settlement processing & financial overview</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Accountant Dashboard</h1>
+          <p className="text-muted-foreground">Settlement processing & financial overview</p>
+        </div>
+        <TourReplay role="accountant" />
       </div>
+      <DashboardTour role="accountant" runWhen={firstRun} />
 
       {/* Operational strip (replaces hero-metric stat tiles banned by PRODUCT.md) */}
-      <Card>
+      <Card data-tour="acct-strip">
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
           <Link to="/settlements" className="flex items-center gap-1.5 hover:underline underline-offset-4">
             <Clock className="h-4 w-4 text-warning" aria-hidden="true" /><strong className="tabular-nums">{pendingSettlements}</strong>&nbsp;pending settlement ({approvedSettlements} approved)
@@ -93,8 +115,21 @@ export default function AccountantDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* First-run: no delivered data yet — one CTA, not blank charts */}
+      {deliveries.length === 0 && (
         <Card>
+          <CardContent>
+            <EmptyState {...dashboardEmptyStates.accountant.settlements} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* First-run: checklist replaces the charts until real data arrives */}
+      {showChecklist ? (
+        <GettingStartedChecklist role="accountant" items={checklistItems} onOpenChange={setShowChecklist} />
+      ) : (
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card data-tour="acct-settlements">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Receipt className="h-4 w-4 text-primary" />Settlements (Last 7 Days)
@@ -114,8 +149,9 @@ export default function AccountantDashboard() {
           </CardContent>
         </Card>
 
-        <WalletWidget />
+        <div data-tour="acct-wallet"><WalletWidget /></div>
       </div>
+      )}
 
       {/* Pending withdrawal requests */}
       {pendingWithdrawals.length > 0 && (

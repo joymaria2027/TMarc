@@ -32,6 +32,12 @@ import {
 } from '@/lib/rpcTypes';
 import OdometerCaptureDialog from '@/components/OdometerCaptureDialog';
 import FirstRunHint from '@/components/FirstRunHint';
+import EmptyState from '@/components/EmptyState';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import GettingStartedChecklist from '@/components/GettingStartedChecklist';
+import { useChecklistOpen } from '@/components/useChecklistOpen';
+import { buildRiderChecklist } from '@/lib/dashboardChecklists';
+import { dashboardEmptyStates } from '@/lib/dashboardEmptyStates';
 import OfferCard from '@/components/rider/OfferCard';
 import QueueCard from '@/components/rider/QueueCard';
 
@@ -594,6 +600,15 @@ export default function RiderDashboard() {
     return map[s] || '';
   };
 
+  // First-run signal (pre-gate so hooks stay unconditional).
+  const firstRun = offered.length === 0 && deliveries.length === 0;
+  const checklistItems = buildRiderChecklist({
+    isOnline,
+    queueCount: deliveries.length,
+    deliveredCount: deliveries.filter((d) => d.status === 'delivered').length,
+  });
+  const [showChecklist, setShowChecklist] = useChecklistOpen("rider", firstRun, checklistItems.every((i) => i.done));
+
   if (loading) return (
     <div role="status" aria-label="Loading rider dashboard" className="space-y-3 py-6">
       <Skeleton className="shimmer h-16 w-full rounded-lg" />
@@ -621,24 +636,37 @@ export default function RiderDashboard() {
           <h1 className="text-2xl font-bold tracking-tight">My deliveries</h1>
           <p className="text-muted-foreground">Track, accept, and complete your runs.</p>
         </div>
-        <div
-          className="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2"
-          role="status"
-          aria-label={`You are ${isOnline ? 'online' : 'offline'}`}
-        >
-          <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-success' : 'bg-muted-foreground/40'}`} aria-hidden="true" />
-          <div className="leading-tight">
-            <p className="text-sm font-medium">{isOnline ? 'Online' : 'Offline'}</p>
-            <p className="text-[11px] text-muted-foreground">{onlineUpdating ? 'Saving…' : isOnline ? 'Visible for new jobs' : 'Not receiving new jobs'}</p>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div
+            data-tour="rider-availability"
+            className="flex shrink-0 items-center gap-2 rounded-lg border bg-card px-3 py-2"
+            role="status"
+            aria-label={`You are ${isOnline ? 'online' : 'offline'}`}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-success' : 'bg-muted-foreground/40'}`} aria-hidden="true" />
+            <div className="leading-tight">
+              <p className="text-sm font-medium">{isOnline ? 'Online' : 'Offline'}</p>
+              <p className="text-[11px] text-muted-foreground">{onlineUpdating ? 'Saving…' : isOnline ? 'Visible for new jobs' : 'Not receiving new jobs'}</p>
+            </div>
+            <Switch
+              checked={isOnline}
+              onCheckedChange={toggleOnline}
+              disabled={onlineUpdating}
+              aria-label="Toggle online availability"
+            />
           </div>
-          <Switch
-            checked={isOnline}
-            onCheckedChange={toggleOnline}
-            disabled={onlineUpdating}
-            aria-label="Toggle online availability"
-          />
+          <TourReplay role="rider" />
         </div>
       </div>
+      <DashboardTour role="rider" runWhen={firstRun} />
+      {showChecklist && (
+        <GettingStartedChecklist
+          role="rider"
+          items={checklistItems}
+          onAction={(id) => { if (id === "online") void toggleOnline(true); }}
+          onOpenChange={setShowChecklist}
+        />
+      )}
 
       {/* Wallet Summary */}
       <WalletWidget />
@@ -649,7 +677,7 @@ export default function RiderDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-2 items-start">
       {/* LEFT COLUMN: My queue */}
-      <div className="space-y-6 lg:col-start-1">
+      <div className="space-y-6 lg:col-start-1" data-tour="rider-queue">
       <h2 className="text-base font-semibold">My queue</h2>
       {/* Active delivery with map */}
       {activeDelivery && (
@@ -797,7 +825,7 @@ export default function RiderDashboard() {
       {/* END LEFT COLUMN */}
 
       {/* RIGHT COLUMN: Unassigned / Rejected deliveries */}
-      <div className="space-y-6 lg:col-start-2">
+      <div className="space-y-6 lg:col-start-2" data-tour="rider-offers">
       <h2 className="text-base font-semibold">Unassigned / Rejected</h2>
 
       {/* Delivery Offers — declined by another rider, broadcast to you */}
@@ -829,8 +857,8 @@ export default function RiderDashboard() {
       )}
 
       {offered.length === 0 && (
-        <div className="text-center py-10 text-muted-foreground border border-dashed rounded-lg">
-          <p className="text-sm">No offers right now. Claim unassigned jobs from Deliveries.</p>
+        <div className="text-center py-4 text-muted-foreground border border-dashed rounded-lg">
+          <EmptyState {...dashboardEmptyStates.rider.offers} />
           <FirstRunHint audience="rider" />
         </div>
       )}
@@ -840,7 +868,7 @@ export default function RiderDashboard() {
       {/* END GRID */}
       {deliveries.length === 0 && (
         <div className="text-center py-10 text-muted-foreground">
-          <MapPin className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No deliveries yet</p>
+          <EmptyState {...dashboardEmptyStates.rider.queue} />
         </div>
       )}
 
