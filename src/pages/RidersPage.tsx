@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -291,7 +293,7 @@ export default function RidersPage() {
         {filtered.length === 0 && (
           <div className="col-span-full text-center py-10 text-muted-foreground">
             <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
-            <p>{search ? 'No riders match your search' : 'No riders yet'}</p>
+            {search ? <p>No riders match your search</p> : <EmptyState {...pageEmptyStates.riders.list} />}
           </div>
         )}
       </div>

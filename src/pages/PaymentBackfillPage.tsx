@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -356,7 +358,7 @@ export default function PaymentBackfillPage() {
                     </TableRow>
                   ))}
                   {!runs.length && (
-                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No backfills have been run yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-muted-foreground py-4"><EmptyState {...pageEmptyStates.paymentBackfill.list} /></TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

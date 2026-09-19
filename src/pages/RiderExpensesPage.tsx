@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -746,7 +748,7 @@ export default function RiderExpensesPage() {
           ) : (
             <div className="text-center py-10 text-muted-foreground" role="status">
               <Upload className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p>No expenses recorded yet</p>
+              <EmptyState {...pageEmptyStates.riderExpenses.list} />
             </div>
           )}
         </TabsContent>

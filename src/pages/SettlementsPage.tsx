@@ -19,6 +19,8 @@ import { partitionPayoutDeliveries, summarizeBulkResult } from '@/lib/moneyGuard
 import { formatMoney } from '@/lib/finance';
 import { format } from 'date-fns';
 import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import { pageTours } from '@/lib/dashboardTours';
 
 interface SettlementRow {
   id: string;
@@ -615,23 +617,29 @@ export default function SettlementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Settlements & payouts</h1>
-        <p className="text-muted-foreground max-w-2xl">
-          {isManagerOnly ? 'Settlements for your merchant.' : isAccountantOnly ? 'Settlements for your assigned merchants.' : 'Auto-calculated from merchant tariffs, sharing ratios and rider expenses.'}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">Settlements & payouts</h1>
+          <p className="text-muted-foreground max-w-2xl">
+            {isManagerOnly ? 'Settlements for your merchant.' : isAccountantOnly ? 'Settlements for your assigned merchants.' : 'Auto-calculated from merchant tariffs, sharing ratios and rider expenses.'}
+          </p>
+        </div>
+        <TourReplay tourId="settlements-approval" />
       </div>
+      <DashboardTour tourId="settlements-approval" tourSteps={pageTours["settlements-approval"]} runWhen={rows.filter((r) => !r.settlement_approved).length > 0} />
 
       {/* Summary cards */}
+      <div data-tour="settlements-summary">
       <SettlementSummaryCards
         totalDeliveries={rows.length}
         totalRevenue={totalRevenue}
         approvedCount={approvedCount}
         merchantCount={merchantSummaries.length}
       />
+      </div>
 
       {/* Filter Bar */}
-      <Card className="border-muted/50">
+      <Card className="border-muted/50" data-tour="settlements-filters">
         <CardContent className="flex flex-col sm:flex-row gap-3 p-3 sm:items-end">
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Label htmlFor="settlement-date-from" className="sr-only">Date from</Label>
@@ -685,7 +693,7 @@ export default function SettlementsPage() {
         </CardContent>
       </Card>
 
-      <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
+      <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab} data-tour="settlements-rows">
         <TabsList>
           <TabsTrigger value="merchants">By Merchant</TabsTrigger>
           {!isManagerOnly && !isAccountantOnly && <TabsTrigger value="riders">By Rider</TabsTrigger>}

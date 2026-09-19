@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { supabase } from '@/integrations/supabase/client';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { fetchRidersPage } from '@/lib/queries/riders';
@@ -215,7 +217,7 @@ export default function GpsTrackerPage() {
           {riders.length === 0 && (
             <div className="text-center py-6 text-muted-foreground">
               <Truck className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No active riders</p>
+              <EmptyState {...pageEmptyStates.gpsTracker.list} />
             </div>
           )}
         </div>

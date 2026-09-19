@@ -27,6 +27,8 @@ import {
 } from '@/lib/alertBulk';
 import { nextFocusIndex, prevFocusIndex } from '@/lib/alertKeys';
 import { guardedWrite } from '@/lib/guardedWrite';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import { pageTours } from '@/lib/dashboardTours';
 
 interface AlertItem {
   id: string;
@@ -258,7 +260,8 @@ export default function AlertsPage() {
           </h1>
           <p className="text-muted-foreground">Deliveries, withdrawals, and system notifications</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-tour="alerts-filters">
+          <TourReplay tourId="alerts-triage" />
           <Input
             id="alerts-search"
             ref={searchRef}
@@ -290,7 +293,9 @@ export default function AlertsPage() {
       <p className="text-xs text-muted-foreground">
         Shortcuts: <kbd className="rounded border border-border bg-muted px-1">j</kbd> / <kbd className="rounded border border-border bg-muted px-1">k</kbd> move, <kbd className="rounded border border-border bg-muted px-1">x</kbd> select, <kbd className="rounded border border-border bg-muted px-1">/</kbd> search
       </p>
-      <div className="space-y-3">
+      <DashboardTour tourId="alerts-triage" tourSteps={pageTours["alerts-triage"]} runWhen={unresolvedCount > 0} />
+
+      <div className="space-y-3" data-tour="alerts-list">
         {undoSnapshot && undoSnapshot.length > 0 && (
           <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded border border-accent/40 bg-accent/10 p-3 text-sm">
             <span>
@@ -308,7 +313,7 @@ export default function AlertsPage() {
           </div>
         )}
         {visibleAlerts.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Bulk alert actions">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Bulk alert actions" data-tour="alerts-resolve">
             <label className="flex h-11 w-11 items-center justify-center shrink-0 cursor-pointer">
               <Checkbox
                 checked={selectAllState}

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { paginate } from '@/lib/pagination';
@@ -344,7 +346,7 @@ export default function RejectedDeliveriesPage() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <PackageX className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p>No unattended deliveries right now.</p>
+            <EmptyState {...pageEmptyStates.rejectedDeliveries.list} />
           </CardContent>
         </Card>
       ) : (

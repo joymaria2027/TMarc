@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -486,7 +488,7 @@ export default function PayrollPage() {
               </Table>
             </div>
           ) : (
-            <div className="text-center py-10 text-muted-foreground"><Wallet className="h-10 w-10 mx-auto mb-2 opacity-50" /><p>No payroll assignments yet</p></div>
+            <div className="text-center py-10 text-muted-foreground"><Wallet className="h-10 w-10 mx-auto mb-2 opacity-50" /><EmptyState {...pageEmptyStates.payroll.assignments} /></div>
           )}
         </TabsContent>
 
@@ -577,7 +579,7 @@ export default function PayrollPage() {
               </Table>
             </div>
           ) : (
-            runs.length === 0 && <div className="text-center py-10 text-muted-foreground"><p>No payroll runs yet</p></div>
+            runs.length === 0 && <div className="text-center py-10 text-muted-foreground"><EmptyState {...pageEmptyStates.payroll.runs} /></div>
           )}
           {filteredRuns.length > 0 && filteredRuns.length > runsPaged.paged.length && (
             <div className="flex items-center justify-between gap-2">

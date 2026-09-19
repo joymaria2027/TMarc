@@ -15,6 +15,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import DeliveryMap from '@/components/DeliveryMap';
 import FirstRunHint from '@/components/FirstRunHint';
+import DashboardTour, { TourReplay } from '@/components/DashboardTour';
+import { pageTours } from '@/lib/dashboardTours';
 import DeliveriesTable from '@/components/deliveries/DeliveriesTable';
 import {
   deliveryStatusMeta,
@@ -304,7 +306,8 @@ export default function DeliveriesPage() {
           <h1 className="text-2xl font-bold">Deliveries</h1>
           <p className="text-muted-foreground">Monitor all deliveries with route playback</p>
         </div>
-<div className="flex items-center gap-2 flex-wrap">
+<div className="flex items-center gap-2 flex-wrap" data-tour="deliveries-search">
+          <TourReplay tourId="deliveries-queue" />
           <div className="relative">
             <Label htmlFor="deliveries-search" className="sr-only">Search deliveries</Label>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -340,7 +343,9 @@ export default function DeliveriesPage() {
         </div>
       </div>
 
-      <div className="space-y-3">
+      <DashboardTour tourId="deliveries-queue" tourSteps={pageTours["deliveries-queue"]} runWhen={unattendedList.length > 0} />
+
+      <div className="space-y-3" data-tour="deliveries-unassigned">
         <div className="flex items-center gap-2">
           <Flag className="h-4 w-4 text-amber-800 dark:text-amber-200" aria-hidden="true" />
           <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Unassigned / Rejected ({unattendedList.length})</h2>
@@ -353,7 +358,7 @@ export default function DeliveriesPage() {
           </p>
         )}
         {/* Scrollable region owns the queue's accessible name; rows render in DeliveriesTable. */}
-        <div className="overflow-x-auto" role="region" aria-label="View delivery queue" tabIndex={0}>
+        <div className="overflow-x-auto" role="region" aria-label="View delivery queue" tabIndex={0} data-tour="deliveries-queue">
           <DeliveriesTable
             unassignedRows={unattendedList}
             mainRows={otherList}

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import EmptyState from "@/components/EmptyState";
+import { pageEmptyStates } from "@/lib/pageEmptyStates";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -198,7 +200,7 @@ export default function DispatchAuditPage() {
           <span className="sr-only">Loading audit entries…</span>
         </div>
       ) : grouped.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">No audit entries yet.</CardContent></Card>
+        <Card><CardContent><EmptyState {...pageEmptyStates.dispatchAudit.list} /></CardContent></Card>
       ) : (() => {
         const visible = paginateAudit(grouped, page);
         const pageCount = Math.max(1, Math.ceil(grouped.length / AUDIT_PAGE_SIZE));

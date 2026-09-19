@@ -134,3 +134,67 @@ export const dashboardTours: Record<TourRole, TourStepDef[]> = {
     },
   ],
 };
+
+/**
+ * Slice 04: page-level micro-tours. Same 3-step shape and storage shape
+ * (`dg.tour.<id>.v1`) as role tours. Copy note: `Claim` is canonical on ops
+ * surfaces (Claim = unassigned pool, Accept = dispatched offer), so page
+ * tours use it where dashboard copy avoids it.
+ */
+export const pageTourIds = ["deliveries-queue", "alerts-triage", "settlements-approval"] as const;
+
+export type PageTourId = (typeof pageTourIds)[number];
+
+export const pageTours: Record<PageTourId, TourStepDef[]> = {
+  "deliveries-queue": [
+    {
+      target: '[data-tour="deliveries-queue"]',
+      title: "Delivery queue",
+      content: "Every Delivery passes through this queue. Open a row for the map and tariff.",
+    },
+    {
+      target: '[data-tour="deliveries-unassigned"]',
+      title: "Unassigned pool",
+      content: "Unassigned Deliveries wait here. Claim one to add it to your queue.",
+    },
+    {
+      target: '[data-tour="deliveries-search"]',
+      title: "Search and filter",
+      content: "Search by Customer, Rider, or status when the queue grows.",
+    },
+  ],
+  "alerts-triage": [
+    {
+      target: '[data-tour="alerts-list"]',
+      title: "Alert queue",
+      content: "Open alerts land here. Each row links the Delivery behind it.",
+    },
+    {
+      target: '[data-tour="alerts-resolve"]',
+      title: "Bulk resolve",
+      content: "Tick alerts, add a note, Resolve. One batch clears the queue.",
+    },
+    {
+      target: '[data-tour="alerts-filters"]',
+      title: "Search and filter",
+      content: "Filter by group or status when the queue grows.",
+    },
+  ],
+  "settlements-approval": [
+    {
+      target: '[data-tour="settlements-summary"]',
+      title: "Settlement totals",
+      content: "Totals for Deliveries, revenue and approvals.",
+    },
+    {
+      target: '[data-tour="settlements-rows"]',
+      title: "Approve payouts",
+      content: "Approve a row to release Rider and Merchant earnings.",
+    },
+    {
+      target: '[data-tour="settlements-filters"]',
+      title: "Filter and export",
+      content: "Slice by date, amount, or status. Export CSV for the books.",
+    },
+  ],
+};

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import EmptyState from "@/components/EmptyState";
+import { pageEmptyStates } from "@/lib/pageEmptyStates";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -83,7 +85,7 @@ export default function WebhookEventsPage() {
       </Card>
 
       {filtered.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">No webhook events yet.</CardContent></Card>
+        <Card><CardContent><EmptyState {...pageEmptyStates.webhookEvents.list} /></CardContent></Card>
       ) : filtered.map((e) => (
         <Collapsible key={e.id} asChild>
           <Card>

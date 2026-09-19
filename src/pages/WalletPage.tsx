@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { pageEmptyStates } from '@/lib/pageEmptyStates';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -469,7 +471,7 @@ export default function WalletPage() {
         const useFolders = nonEmpty.length > 1 || myWallets.length > 3;
 
         if (myWallets.length === 0) {
-          return <Card><CardContent className="py-10 text-center text-muted-foreground">No wallets found. Wallets are created automatically when settlements are approved.</CardContent></Card>;
+          return <Card><CardContent><EmptyState {...pageEmptyStates.wallet.list} /></CardContent></Card>;
         }
 
         if (!useFolders) {

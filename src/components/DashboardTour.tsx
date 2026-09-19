@@ -3,12 +3,12 @@ import { Joyride, STATUS } from "react-joyride";
 import type { EventData } from "react-joyride";
 import { Button } from "@/components/ui/button";
 import { dashboardTours, tourKey, REPLAY_EVENT } from "@/lib/dashboardTours";
-import type { TourRole } from "@/lib/dashboardTours";
+import type { TourRole, TourStepDef } from "@/lib/dashboardTours";
 
 /** True once the tour was finished OR dismissed — both mean "never auto-reshow". */
-function isSeen(role: string): boolean {
+function isSeen(key: string): boolean {
   try {
-    return window.localStorage.getItem(tourKey(role)) !== null;
+    return window.localStorage.getItem(key) !== null;
   } catch {
     return true; // private-mode: stay quiet rather than nag
   }
@@ -23,31 +23,38 @@ function prefersReducedMotion(): boolean {
 }
 
 interface DashboardTourProps {
-  role: TourRole;
-  /** Empty/low-data condition from the dashboard — the tour only auto-runs then. */
+  /** Dashboard role (slice 02). Optional when tourId + tourSteps are given. */
+  role?: TourRole;
+  /** Teachable-moment condition — the tour only auto-runs when true. */
   runWhen: boolean;
   /** Increment to replay on demand (replay entry bypasses the seen key). */
   replaySignal?: number;
+  /** Page-level micro-tour id (slice 04). Overrides the role map + key. */
+  tourId?: string;
+  tourSteps?: TourStepDef[];
 }
 
 /**
- * Slice 02: shared contextual spotlight tour. Auto-runs once per role — only
- * when the dashboard is empty AND the tour was never finished or dismissed.
- * Every dismissal path (Skip, X, ESC, overlay click) persists, so help never
- * nags. Power users (data present) never see it.
+ * Slice 02: shared contextual spotlight tour. Auto-runs once — only when
+ * runWhen holds AND the tour was never finished or dismissed. Every
+ * dismissal path (Skip, X, ESC, overlay click) persists, so help never
+ * nags. Slice 04: same wrapper drives page-level micro-tours via
+ * tourId/tourSteps.
  */
-export default function DashboardTour({ role, runWhen, replaySignal = 0 }: DashboardTourProps) {
-  const [run, setRun] = useState(() => runWhen && !isSeen(role));
+export default function DashboardTour({ role, runWhen, replaySignal = 0, tourId, tourSteps }: DashboardTourProps) {
+  const key = tourKey(tourId ?? role ?? "default");
+  const defs = tourSteps ?? (role ? dashboardTours[role] : []);
+  const [run, setRun] = useState(() => runWhen && !isSeen(key));
   const autoStarted = useRef(false);
   const lastReplay = useRef(replaySignal);
 
   // runWhen flips true after the async load resolves on an empty dashboard.
   useEffect(() => {
-    if (runWhen && !autoStarted.current && !isSeen(role)) {
+    if (runWhen && !autoStarted.current && !isSeen(key)) {
       autoStarted.current = true;
       setRun(true);
     }
-  }, [runWhen, role]);
+  }, [runWhen, key]);
 
   useEffect(() => {
     if (replaySignal !== lastReplay.current) {
@@ -58,22 +65,23 @@ export default function DashboardTour({ role, runWhen, replaySignal = 0 }: Dashb
 
   useEffect(() => {
     const onReplay = (e: Event) => {
-      if ((e as CustomEvent<{ role?: string }>).detail?.role === role) setRun(true);
+      const detail = (e as CustomEvent<{ role?: string; tourId?: string }>).detail;
+      if ((detail?.role && detail.role === role) || (tourId && detail?.tourId === tourId)) setRun(true);
     };
     window.addEventListener(REPLAY_EVENT, onReplay);
     return () => window.removeEventListener(REPLAY_EVENT, onReplay);
-  }, [role]);
+  }, [role, tourId]);
 
   const finish = useCallback(
     (value: "done" | "dismissed") => {
       try {
-        window.localStorage.setItem(tourKey(role), value);
+        window.localStorage.setItem(key, value);
       } catch {
         /* private-mode: stopping the tour is what matters */
       }
       setRun(false);
     },
-    [role]
+    [key]
   );
 
   const handleEvent = useCallback(
@@ -86,7 +94,7 @@ export default function DashboardTour({ role, runWhen, replaySignal = 0 }: Dashb
   );
 
   const reduced = prefersReducedMotion();
-  const steps = dashboardTours[role].map((s) => ({
+  const steps = defs.map((s) => ({
     target: s.target,
     title: s.title,
     content: s.content,
@@ -128,7 +136,8 @@ export default function DashboardTour({ role, runWhen, replaySignal = 0 }: Dashb
 }
 
 /** Replay entry — clears the seen key and replays the matching tour. */
-export function TourReplay({ role }: { role: TourRole }) {
+export function TourReplay({ role, tourId }: { role?: TourRole; tourId?: string }) {
+  const key = tourKey(tourId ?? role ?? "default");
   return (
     <Button
       variant="ghost"
@@ -136,11 +145,11 @@ export function TourReplay({ role }: { role: TourRole }) {
       className="min-h-[44px]"
       onClick={() => {
         try {
-          window.localStorage.removeItem(tourKey(role));
+          window.localStorage.removeItem(key);
         } catch {
           /* private-mode: replay still works for this session */
         }
-        window.dispatchEvent(new CustomEvent(REPLAY_EVENT, { detail: { role } }));
+        window.dispatchEvent(new CustomEvent(REPLAY_EVENT, { detail: { role, tourId } }));
       }}
     >
       Take the tour

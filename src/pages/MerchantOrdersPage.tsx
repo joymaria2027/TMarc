@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import EmptyState from "@/components/EmptyState";
+import { pageEmptyStates } from "@/lib/pageEmptyStates";
 import { formatMoney } from "@/lib/finance";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -146,9 +148,8 @@ export default function MerchantOrdersPage() {
           <span className="sr-only">Loading orders…</span>
         </div>
       ) : orders.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground space-y-1">
-          <p>No active orders.</p>
-          <p className="text-sm">New paid orders appear here automatically.</p>
+        <Card><CardContent>
+          <EmptyState {...pageEmptyStates.merchantOrders.list} />
         </CardContent></Card>
       ) : (
         <>

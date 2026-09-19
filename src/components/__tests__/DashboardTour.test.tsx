@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DashboardTour, { TourReplay } from '../DashboardTour';
-import { dashboardTours, tourRoles, tourKey } from '@/lib/dashboardTours';
+import { dashboardTours, tourRoles, tourKey, pageTours, pageTourIds } from '@/lib/dashboardTours';
 
 // Slice 02 contract: 3-step spotlight micro-tours, Skip on every step,
 // progress, first-seen trigger, dismiss respected, reduced-motion safe.
@@ -172,5 +172,78 @@ describe('TourReplay (slice 02 contract)', () => {
     fireEvent.click(screen.getByRole('button', { name: /take the tour/i }));
     expect(window.localStorage.getItem(tourKey('admin'))).toBeNull();
     expect(joyrideState.lastProps?.run).toBe(true);
+  });
+});
+
+describe('pageTours map + override props (slice 04 contract)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    joyrideState.lastProps = null;
+  });
+
+  it('defines the deliveries-queue tour in exactly 3 steps', () => {
+    expect([...pageTourIds]).toContain('deliveries-queue');
+    expect(pageTours['deliveries-queue']).toHaveLength(3);
+    for (const step of pageTours['deliveries-queue']) {
+      expect(step.target.startsWith('[data-tour="deliveries-')).toBe(true);
+      expect(step.content.length).toBeLessThanOrEqual(140);
+    }
+  });
+
+  it('drives steps and storage from tourId/tourSteps, leaving role keys alone', () => {
+    const steps = pageTours['deliveries-queue'].map((s) => ({ ...s }));
+    render(
+      <MemoryRouter>
+        <DashboardTour role="admin" tourId="deliveries-queue" tourSteps={steps} runWhen={true} />
+      </MemoryRouter>
+    );
+    expect(joyrideState.lastProps?.run).toBe(true);
+    const joySteps = joyrideState.lastProps?.steps as Array<{ target: string }>;
+    expect(joySteps.map((s) => s.target)).toEqual(steps.map((s) => s.target));
+    fireJoyride('finished');
+    expect(window.localStorage.getItem(tourKey('deliveries-queue'))).toBe('done');
+    // The dashboard role key is untouched by the page tour.
+    expect(window.localStorage.getItem(tourKey('admin'))).toBeNull();
+  });
+
+  it('replays the page tour via tourId without touching role state', () => {
+    window.localStorage.setItem(tourKey('deliveries-queue'), 'dismissed');
+    const steps = pageTours['deliveries-queue'].map((s) => ({ ...s }));
+    render(
+      <MemoryRouter>
+        <DashboardTour role="admin" tourId="deliveries-queue" tourSteps={steps} runWhen={false} />
+        <TourReplay role="admin" tourId="deliveries-queue" />
+      </MemoryRouter>
+    );
+    expect(joyrideState.lastProps?.run).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /take the tour/i }));
+    expect(window.localStorage.getItem(tourKey('deliveries-queue'))).toBeNull();
+    expect(joyrideState.lastProps?.run).toBe(true);
+  });
+});
+
+describe('pageTours alerts + settlements (slice 05 contract)', () => {
+  it('defines both tours in exactly 3 steps with page-scoped targets', () => {
+    expect([...pageTourIds]).toEqual(
+      expect.arrayContaining(['alerts-triage', 'settlements-approval'])
+    );
+    for (const id of ['alerts-triage', 'settlements-approval'] as const) {
+      expect(pageTours[id]).toHaveLength(3);
+      for (const step of pageTours[id]) {
+        expect(step.target.startsWith('[data-tour="'), `${id} target`).toBe(true);
+        expect(step.title.trim().length).toBeGreaterThan(0);
+        expect(step.content.trim().length).toBeGreaterThan(0);
+        expect(step.content.length, `${id}/${step.title} one concept`).toBeLessThanOrEqual(140);
+      }
+    }
+  });
+
+  it('keeps page-tour copy in domain terms (Claim allowed on ops surfaces)', () => {
+    const banned = /\b(driver|courier|restaurant|store|job)\b/i;
+    for (const id of ['alerts-triage', 'settlements-approval'] as const) {
+      for (const step of pageTours[id]) {
+        expect(`${id}/${step.title}: ${step.content}`).not.toMatch(banned);
+      }
+    }
   });
 });
