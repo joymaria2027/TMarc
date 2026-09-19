@@ -69,8 +69,7 @@ function TypeRow({
   return (
     <>
       <TableRow key={type.id}>
-        <TableCell className="font-medium flex items-center gap-2">
-          {type.is_fuel && <Fuel className="h-4 w-4 text-primary" aria-hidden="true" />}
+        <TableCell className="font-medium">
           {type.name}
         </TableCell>
         <TableCell>
