@@ -87,3 +87,26 @@ describe("webhook debug function removal", () => {
     expect(fs.existsSync(path.resolve(__dirname, "../../../supabase/functions/modempay-webhook-debug"))).toBe(false);
   });
 });
+
+describe("edge function log hygiene (edge-fn-log-audit)", () => {
+  const checkout = read("../../../supabase/functions/modempay-create-checkout/index.ts");
+  const webhook = read("../../../supabase/functions/modempay-webhook/index.ts");
+
+  it("create-checkout never returns or logs the upstream error body", () => {
+    // Upstream bodies can echo submitted fields and auth-failure key hints.
+    // Triage uses status codes + safe fields, not the raw text.
+    expect(checkout).not.toContain("details: txt");
+    expect(checkout).toContain('console.error("ModemPay create-intent failed", mpRes.status)');
+  });
+
+  it("create-checkout never logs the API key value", () => {
+    // Only the constant name may appear; the variable must not be logged.
+    expect(checkout).not.toMatch(/console\.(log|error|warn|info)\(.*apiKey/);
+    expect(checkout).not.toMatch(/console\.(log|error|warn|info)\(.*Bearer/);
+  });
+
+  it("webhook fatal path never logs the raw body or signature", () => {
+    expect(webhook).not.toMatch(/console\.(log|error|warn|info)\(.*\braw\b/);
+    expect(webhook).not.toMatch(/console\.(log|error|warn|info)\(.*signature/i);
+  });
+});

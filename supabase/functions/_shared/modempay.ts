@@ -36,27 +36,10 @@ async function isValidSignature(secret: string, rawBody: string, signatureHeader
     bodyVariants.add(JSON.stringify(parsed));
   } catch { /* ignore */ }
 
-  // --- Safe debug info (no secret value, no full hashes) ---
-  const mask = (h: string) => h.length >= 8 ? `${h.slice(0, 4)}...${h.slice(-4)}(len=${h.length})` : `(len=${h.length})`;
-  console.log("[webhook-sig-debug] secret_len=", cleanSecret.length,
-    "| body_variants=", bodyVariants.size,
-    "| candidates=", candidates.length,
-    "| header_raw_len=", signatureHeader.length);
-  // Log the first candidate for comparison (never log the full secret itself)
-  if (candidates.length > 0) {
-    console.log("[webhook-sig-debug] candidate[0]=", mask(candidates[0]));
-  }
-  // --------------------------------------------------------
-
   const expected: string[] = [];
   for (const body of bodyVariants) {
     expected.push(await hmacHex(cleanSecret, body, "SHA-512"));
     expected.push(await hmacHex(cleanSecret, body, "SHA-256"));
-  }
-
-  // Log what we computed (first expected only) to compare prefix/suffix/length
-  if (expected.length > 0) {
-    console.log("[webhook-sig-debug] expected[0] (SHA-512/raw)=", mask(expected[0]));
   }
 
   for (const candidate of candidates) {
@@ -65,9 +48,6 @@ async function isValidSignature(secret: string, rawBody: string, signatureHeader
     }
   }
 
-  // Log mismatch summary — lengths tell us algorithm, prefix/suffix aids diagnosis.
-  console.warn("[webhook-sig-debug] MISMATCH: secret_len=", cleanSecret.length,
-    "expected_count=", expected.length, "candidate_count=", candidates.length);
   return false;
 }
 

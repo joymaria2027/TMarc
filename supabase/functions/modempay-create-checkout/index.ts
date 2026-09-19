@@ -61,9 +61,12 @@ Deno.serve(async (req) => {
     });
 
     if (!mpRes.ok) {
-      const txt = await mpRes.text();
-      console.error("ModemPay create-intent failed", mpRes.status, txt);
-      return json({ error: "ModemPay error", status: mpRes.status, details: txt }, 502);
+      // Triage via status code + safe fields only: upstream error bodies can
+      // echo submitted request fields and auth-failure key hints, so they
+      // never reach logs or the client response (edge-fn-log-audit #2).
+      await mpRes.body?.cancel();
+      console.error("ModemPay create-intent failed", mpRes.status);
+      return json({ error: "ModemPay error", status: mpRes.status }, 502);
     }
     const mp = await mpRes.json();
     const payment = mp?.data ?? mp?.payload ?? mp;
