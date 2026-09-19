@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Receipt, Download, X, CheckCircle2 } from 'lucide-react';
+import { Receipt, Download, X, CheckCircle2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -632,7 +632,7 @@ export default function SettlementsPage() {
 
       {/* Filter Bar */}
       <Card className="border-muted/50">
-        <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+        <CardContent className="flex flex-col sm:flex-row gap-3 p-3 sm:items-end">
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Label htmlFor="settlement-date-from" className="sr-only">Date from</Label>
             <Input id="settlement-date-from" type="date" className="w-36" value={settlementDateFrom} onChange={e => setSettlementDateFrom(e.target.value)} placeholder="From" />
@@ -647,7 +647,8 @@ export default function SettlementsPage() {
           </div>
           <div className="relative flex-1 max-w-sm">
             <Label htmlFor="settlement-search" className="sr-only">Search order or merchant</Label>
-            <Input id="settlement-search" className="pl-9" placeholder="Search order or merchant..." value={settlementSearch} onChange={e => setSettlementSearch(e.target.value)} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input id="settlement-search" type="search" className="pl-9" placeholder="Search order or merchant..." value={settlementSearch} onChange={e => setSettlementSearch(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="settlement-status">Status</Label>

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { PieChart, Plus, Percent, Trash2, Pencil, CheckCircle2, AlertCircle, Download, X, Search } from 'lucide-react';
+import { PieChart, Plus, Trash2, Pencil, CheckCircle2, AlertCircle, Download, X, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
@@ -321,11 +321,11 @@ export default function RevenueSharingPage() {
 
       {/* Filter Bar */}
       <Card className="border-muted/50">
-        <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+        <CardContent className="flex flex-col sm:flex-row gap-3 p-3 sm:items-end">
           <div className="relative flex-1 max-w-sm">
             <Label htmlFor="share-search" className="sr-only">Search merchant</Label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input id="share-search" className="pl-9" placeholder="Search merchant..." value={shareSearch} onChange={e => setShareSearch(e.target.value)} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input id="share-search" type="search" className="pl-9" placeholder="Search merchant..." value={shareSearch} onChange={e => setShareSearch(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="share-status">Status</Label>
@@ -400,25 +400,16 @@ export default function RevenueSharingPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <span className="inline-flex items-center justify-end gap-1">
-                      <Percent className="h-3 w-3" aria-hidden="true" />
-                      {isRider && !canManage ? `Your share: ${s.rider_percentage}%` : `${s.rider_percentage}%`}
-                    </span>
+                    {isRider && !canManage ? `Your share: ${s.rider_percentage}%` : `${s.rider_percentage}%`}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {(!isRider || canManage) ? (
-                      <span className="inline-flex items-center justify-end gap-1"><Percent className="h-3 w-3" aria-hidden="true" />{s.merchant_percentage}%</span>
-                    ) : '—'}
+                    {(!isRider || canManage) ? `${s.merchant_percentage}%` : '—'}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {(!isRider || canManage) ? (
-                      <span className="inline-flex items-center justify-end gap-1"><Percent className="h-3 w-3" aria-hidden="true" />{s.platform_percentage}%</span>
-                    ) : '—'}
+                    {(!isRider || canManage) ? `${s.platform_percentage}%` : '—'}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {(!isRider || canManage) ? (
-                      <span className="inline-flex items-center justify-end gap-1"><Percent className="h-3 w-3" aria-hidden="true" />{s.ucs_rides_percentage}%</span>
-                    ) : '—'}
+                    {(!isRider || canManage) ? `${s.ucs_rides_percentage}%` : '—'}
                   </TableCell>
                   <TableCell>
                     {balanced ? (

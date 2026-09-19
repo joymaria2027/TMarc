@@ -282,7 +282,7 @@ export default function ReconciliationPage() {
       <p className="text-xs text-muted-foreground">Showing latest {rows.length} of up to 1000 entries. Refine search or status to narrow results.</p>
 
       {/* Filter bar: flat row (F-P3-11 — controls don't need a card wrapper) */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Label htmlFor="recon-date-from" className="sr-only">Date from</Label>
             <Input id="recon-date-from" type="date" className="w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} placeholder="From" />
@@ -297,8 +297,8 @@ export default function ReconciliationPage() {
           </div>
           <div className="relative flex-1 max-w-sm">
             <Label htmlFor="recon-search" className="sr-only">Search reconciliation entries</Label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input id="recon-search" className="pl-9" placeholder="Search reference, party, method..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input id="recon-search" type="search" className="pl-9" placeholder="Search reference, party, method..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="recon-status">Status</Label>

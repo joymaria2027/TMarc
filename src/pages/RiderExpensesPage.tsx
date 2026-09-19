@@ -551,7 +551,7 @@ export default function RiderExpensesPage() {
         <TabsContent value="expenses" className="space-y-3 mt-4">
           {/* Filter Bar */}
           <Card className="border-muted/50">
-            <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+            <CardContent className="flex flex-col sm:flex-row gap-3 p-3 sm:items-end">
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <Label htmlFor="expense-date-from" className="sr-only">Date from</Label>
                 <Input id="expense-date-from" type="date" className="w-36" value={expenseDateFrom} onChange={e => setExpenseDateFrom(e.target.value)} placeholder="From" />
@@ -566,8 +566,8 @@ export default function RiderExpensesPage() {
               </div>
               <div className="relative flex-1 max-w-sm">
                 <Label htmlFor="expense-search" className="sr-only">Search rider or merchant</Label>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                <Input id="expense-search" className="pl-9" placeholder="Search rider or merchant..." value={expenseSearch} onChange={e => setExpenseSearch(e.target.value)} />
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <Input id="expense-search" type="search" className="pl-9" placeholder="Search rider or merchant..." value={expenseSearch} onChange={e => setExpenseSearch(e.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="expense-status">Status</Label>

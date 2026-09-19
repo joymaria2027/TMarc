@@ -376,11 +376,11 @@ export default function PayrollPage() {
 
       {/* Filter Bar for Assignments */}
       <Card className="border-muted/50">
-        <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+        <CardContent className="flex flex-col sm:flex-row gap-3 p-3 sm:items-end">
           <div className="relative flex-1 max-w-sm">
             <Label htmlFor="assignment-search" className="sr-only">Search payee or merchant</Label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <Input id="assignment-search" className="pl-9" placeholder="Search payee or merchant..." value={assignmentSearch} onChange={e => setAssignmentSearch(e.target.value)} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input id="assignment-search" type="search" className="pl-9" placeholder="Search payee or merchant..." value={assignmentSearch} onChange={e => setAssignmentSearch(e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="assignment-status">Status</Label>
@@ -493,11 +493,11 @@ export default function PayrollPage() {
         <TabsContent value="runs" className="space-y-3 mt-4">
           {/* Filter Bar for Runs */}
           <Card className="border-muted/50">
-            <CardContent className="flex flex-col sm:flex-row gap-3 p-3">
+            <CardContent className="flex flex-col sm:flex-row gap-3 p-3 sm:items-end">
               <div className="relative flex-1 max-w-sm">
                 <Label htmlFor="run-search" className="sr-only">Search payee</Label>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                <Input id="run-search" className="pl-9" placeholder="Search payee..." value={runSearch} onChange={e => setRunSearch(e.target.value)} />
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <Input id="run-search" type="search" className="pl-9" placeholder="Search payee..." value={runSearch} onChange={e => setRunSearch(e.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="run-status">Status</Label>
