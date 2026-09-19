@@ -43,6 +43,7 @@ import PaymentBackfillPage from "@/pages/PaymentBackfillPage";
 import MerchantAuditLogPage from "@/pages/MerchantAuditLogPage";
 import StoreLandingPage from "@/pages/StoreLandingPage";
 import LandingPage from "@/pages/LandingPage";
+import Onboarding from "@/pages/Onboarding";
 import PrivacyPage from "@/pages/PrivacyPage";
 import WholesaleApplyPage from "@/pages/WholesaleApplyPage";
 import WholesalersPage from "@/pages/WholesalersPage";
@@ -83,6 +84,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/reset" element={<Auth resetMode />} />
+            <Route path="/welcome" element={<Onboarding />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             {/* Marketing page for visitors, dashboards for signed-in users */}
             <Route path="/" element={<ProtectedIndex />} />

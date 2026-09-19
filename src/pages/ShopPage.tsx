@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import StorefrontLayout from "@/components/StorefrontLayout";
+import FirstRunHint from "@/components/FirstRunHint";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,7 @@ export default function ShopPage() {
           <p className="text-muted-foreground max-w-xl">
             Order from local stores. Pickup or delivery, tracked to your door.
           </p>
+          <FirstRunHint audience="storefront" />
           {isWholesaler && (
             <Badge className="mt-1">Wholesale pricing active</Badge>
           )}

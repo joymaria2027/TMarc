@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowRight, Bike, KeyRound, MapPin, Receipt } from 'lucide-react';
-import { validateAuthField, getEmailAutocomplete, getPasswordAutocomplete } from './auth.helpers';
+import { validateAuthField, getEmailAutocomplete, getPasswordAutocomplete, welcomeTargetFor } from './auth.helpers';
 
 export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
   const { user, loading } = useAuth();
@@ -116,6 +116,7 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
         if (u) await supabase.rpc('self_assign_customer_role' as any);
       }
       toast.success('Account created. Check your email to verify.');
+      navigate(welcomeTargetFor(asCustomer, asWholesaler));
     } catch (err: any) {
       const msg = err?.message ?? 'Sign-up failed.';
       setFieldErrors((p) => ({ ...p, 'email-up': msg }));
@@ -444,6 +445,9 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
                     </>
                   )}
                 </Button>
+                <p className="text-xs text-muted-foreground">
+                  6+ characters. Takes 30 seconds — next: tell us how you&apos;ll use the app.
+                </p>
                 <p className="text-xs text-muted-foreground pt-2">
                   Free to create. We use your email for account and order notices, see our{' '}
                   <Link to="/privacy" className="underline underline-offset-4 hover:text-foreground">privacy policy</Link>.
@@ -480,21 +484,36 @@ function Field({
   error?: string | null;
 }) {
   const messageId = `${id}-message`;
+  const [visible, setVisible] = useState(false);
+  const isPassword = type === 'password';
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id} className="text-xs font-medium text-muted-foreground">{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        required
-        minLength={minLength}
-        autoComplete={autoComplete}
-        aria-invalid={!!error}
-        aria-describedby={error ? messageId : undefined}
-        className="h-11"
-      />
+      <div className="relative">
+        <Input
+          id={id}
+          type={isPassword && visible ? 'text' : type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          required
+          minLength={minLength}
+          autoComplete={autoComplete}
+          aria-invalid={!!error}
+          aria-describedby={error ? messageId : undefined}
+          className={isPassword ? 'h-11 pr-20' : 'h-11'}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-pressed={visible}
+            aria-label={visible ? 'Hide password' : 'Show password'}
+            className="absolute right-1 top-1/2 min-h-[44px] -translate-y-1/2 px-3 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {visible ? 'Hide' : 'Show'}
+          </button>
+        )}
+      </div>
       {error && (
         <p id={messageId} role="alert" aria-live="polite" className="text-sm font-medium text-destructive">
           {error}

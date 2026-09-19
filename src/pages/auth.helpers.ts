@@ -24,3 +24,15 @@ export function getEmailAutocomplete(): string {
 export function getPasswordAutocomplete(mode: 'signin' | 'signup'): string {
   return mode === 'signup' ? 'new-password' : 'current-password';
 }
+
+/**
+ * Post-signup entry into the JTBD onboarding flow. Role intent captured
+ * at auth (`?as=customer` / `?as=wholesaler`) preselects the flow step;
+ * plain signups land on doors. `/welcome` is public so pre-verification
+ * users still reach it.
+ */
+export function welcomeTargetFor(asCustomer: boolean, asWholesaler: boolean): string {
+  if (asCustomer) return '/welcome?role=customer';
+  if (asWholesaler) return '/welcome?role=wholesaler';
+  return '/welcome';
+}

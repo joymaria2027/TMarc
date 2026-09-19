@@ -28,6 +28,7 @@ import {
   rpcRejectDelivery,
 } from '@/lib/rpcTypes';
 import OdometerCaptureDialog from '@/components/OdometerCaptureDialog';
+import FirstRunHint from '@/components/FirstRunHint';
 import OfferCard from '@/components/rider/OfferCard';
 import QueueCard from '@/components/rider/QueueCard';
 
@@ -787,6 +788,7 @@ export default function RiderDashboard() {
       {offered.length === 0 && (
         <div className="text-center py-10 text-muted-foreground border border-dashed rounded-lg">
           <p className="text-sm">No offers right now. Claim unassigned jobs from Deliveries.</p>
+          <FirstRunHint audience="rider" />
         </div>
       )}
       </div>

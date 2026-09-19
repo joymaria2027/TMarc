@@ -14,6 +14,7 @@ import { normalizeRiderSearchQuery } from '@/lib/deliveryRiderSearch';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import DeliveryMap from '@/components/DeliveryMap';
+import FirstRunHint from '@/components/FirstRunHint';
 import DeliveriesTable from '@/components/deliveries/DeliveriesTable';
 import {
   deliveryStatusMeta,
@@ -345,6 +346,7 @@ export default function DeliveriesPage() {
           <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Unassigned / Rejected ({unattendedList.length})</h2>
         </div>
         <div className="text-sm text-muted-foreground tabular-nums" role="status">{describeDeliveryAndRiderResultCount(otherList.length, activeSearch, activeRiderSearch)}</div>
+        <FirstRunHint audience="merchant" />
         {(activeSearch || activeRiderSearch) && otherList.length === 0 && (
           <p role="status" className="text-sm text-muted-foreground">
             No deliveries match “{activeSearch || activeRiderSearch}”.
