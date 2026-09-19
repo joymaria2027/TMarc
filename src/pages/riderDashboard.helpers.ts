@@ -1,6 +1,8 @@
 // Pure helpers for RiderDashboard — kept separate so they can be unit-tested
 // without rendering the whole component (which depends on Supabase, GPS, etc).
 
+import { formatMoney } from '@/lib/finance';
+
 export interface QueueState<T extends { id: string }> {
   deliveries: T[];
   unassigned: T[];
@@ -25,5 +27,45 @@ export function removeDeliveryFromQueue<T extends { id: string }>(
     offered: state.offered.filter(d => d.id !== deliveryId),
     activeDelivery: state.activeDelivery?.id === deliveryId ? null : state.activeDelivery,
     detail: state.detail?.id === deliveryId ? null : state.detail,
+  };
+}
+
+export interface RunSummaryInput {
+  order_reference: string | null;
+  start_odometer_miles?: number | null;
+  end_odometer_miles?: number | null;
+  estimated_tariff?: number | null;
+}
+
+export interface RunSummary {
+  title: string;
+  detail: string;
+  reference: string;
+}
+
+/**
+ * Afterglow copy for a just-completed run (gift-ceremony/02). Pure: miles from
+ * the odometer pair when sane (never negative), payout from the tariff, with a
+ * "pending settlement" fallback. Never throws on nulls.
+ */
+export function describeRunSummary(d: RunSummaryInput): RunSummary {
+  const start = d.start_odometer_miles;
+  const end = d.end_odometer_miles;
+  const miles =
+    start != null && end != null &&
+    Number.isFinite(start) && Number.isFinite(end) && end >= start
+      ? Math.round((end - start) * 10) / 10
+      : null;
+  const tariff =
+    d.estimated_tariff != null && Number.isFinite(Number(d.estimated_tariff))
+      ? Number(d.estimated_tariff)
+      : null;
+  const parts: string[] = [];
+  if (miles != null) parts.push(`${miles.toFixed(1)} mi covered`);
+  parts.push(tariff != null ? `${formatMoney(tariff)} payout` : 'payout pending settlement');
+  return {
+    title: 'Delivery completed',
+    detail: parts.join(' · '),
+    reference: d.order_reference ?? '',
   };
 }

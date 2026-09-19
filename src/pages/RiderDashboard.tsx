@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Play, Square, Navigation, Clock, MapPin, Truck, CheckCircle2, DollarSign, Ruler, Eye } from 'lucide-react';
+import { Play, Square, Navigation, Clock, MapPin, Truck, CheckCircle2, DollarSign, Ruler, Eye, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import WalletWidget from '@/components/WalletWidget';
@@ -20,6 +20,9 @@ import { Switch } from '@/components/ui/switch';
 import { guardedWrite } from '@/lib/guardedWrite';
 import RiderDispatchOffers from '@/components/RiderDispatchOffers';
 import { removeDeliveryFromQueue } from './riderDashboard.helpers';
+import { describeRunSummary } from './riderDashboard.helpers';
+import { haptics } from '@/lib/haptics';
+import GiftReveal from '@/components/celebration/GiftReveal';
 import {
   rpcCancelDeliveryAcceptance,
   rpcClaimDelivery,
@@ -304,6 +307,7 @@ export default function RiderDashboard() {
     );
     if (error) return;
     toast.success('Delivery accepted. Start it when you reach the pickup.');
+    void haptics.success();
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'accepted' } : d));
   };
 
@@ -482,6 +486,7 @@ export default function RiderDashboard() {
       return;
     }
     toast.success('Delivery claimed.');
+    void haptics.success();
     setUnassigned(prev => prev.filter(d => d.id !== delivery.id));
     setOffered(prev => prev.filter(d => d.id !== delivery.id));
     setDetail(null);
@@ -490,6 +495,9 @@ export default function RiderDashboard() {
 
   const [pendingStart, setPendingStart] = useState<Delivery | null>(null);
   const [pendingEnd, setPendingEnd] = useState<Delivery | null>(null);
+  // Gift-ceremony/02 afterglow: run summary shown once per completion, dismissed
+  // by the rider. Seed for a future protectable streak — no counter yet.
+  const [justCompleted, setJustCompleted] = useState<{ reference: string; detail: string } | null>(null);
 
   const handleStartDelivery = (delivery: Delivery) => {
     setPendingStart(delivery);
@@ -535,6 +543,9 @@ export default function RiderDashboard() {
     if (error) { toast.error(error.message); return; }
     const milesCovered = delivery.start_odometer_miles != null ? (miles - delivery.start_odometer_miles) : null;
     toast.success(`Delivery completed${milesCovered != null ? ` · ${milesCovered.toFixed(1)} mi covered` : ''}`);
+    void haptics.success();
+    const summary = describeRunSummary({ ...delivery, end_odometer_miles: miles });
+    setJustCompleted({ reference: summary.reference, detail: summary.detail });
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'delivered', actual_distance_km: distance, end_odometer_miles: miles } : d));
     setActiveDelivery(null);
     setPendingEnd(null);
@@ -549,6 +560,9 @@ export default function RiderDashboard() {
     );
     if (error) return;
     toast.success('Delivery marked as completed');
+    void haptics.success();
+    const summary = describeRunSummary(delivery);
+    setJustCompleted({ reference: summary.reference, detail: summary.detail });
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'delivered' } : d));
   };
 
@@ -700,6 +714,35 @@ export default function RiderDashboard() {
                 onPaymentSaved={(deliveryId, method, bank) => setDeliveries(prev => prev.map(x => x.id === deliveryId ? { ...x, payment_method: method, payment_bank_name: bank || null } : x))}
               />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Afterglow (gift-ceremony/02): run summary kept until dismissed */}
+      {justCompleted && (
+        <div className="p-4 bg-success/10 border border-success/40 dark:bg-success/25 rounded">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <GiftReveal
+                title="Delivery completed"
+                description={justCompleted.detail}
+                icon={<CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />}
+                silent
+              >
+                {justCompleted.reference && (
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">Order {justCompleted.reference}</p>
+                )}
+              </GiftReveal>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Dismiss run summary"
+              onClick={() => setJustCompleted(null)}
+              className="min-h-[44px] min-w-[44px] shrink-0"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
           </div>
         </div>
       )}

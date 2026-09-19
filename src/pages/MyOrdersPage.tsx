@@ -11,8 +11,9 @@ import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import OrderChat from "@/components/OrderChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, ChevronLeft, MessageCircle, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronLeft, MessageCircle, RefreshCw, CheckCircle2 } from "lucide-react";
 import { haptics } from "@/lib/haptics";
+import GiftReveal from "@/components/celebration/GiftReveal";
 import { formatMoney } from "@/lib/finance";
 import { filterOrders, type OrderTab } from "@/lib/orderGroups";
 
@@ -145,7 +146,10 @@ export default function MyOrdersPage() {
                 setAnnouncement(
                   `Order ${payload.new.order_reference ?? "updated"} is now ${humanizeStatus(payload.new.status)}`
                 );
-                haptics.selectionChanged();
+                // Gift-ceremony/03: the delivered moment gets weight; every
+                // other transition keeps the neutral tick.
+                if (payload.new.status === "delivered") void haptics.success();
+                else haptics.selectionChanged();
               }
               return next;
             });
@@ -332,6 +336,19 @@ function OrderCard({ o, unread, preview, onChatOpened }: { o: any; unread: numbe
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Afterglow (gift-ceremony/03): silent — this is a state display for
+            already-delivered orders, not an event. The buzz belongs to the
+            realtime transition above. */}
+        {o.status === "delivered" && (
+          <div className="rounded border border-success/40 bg-success/10 p-3">
+            <GiftReveal
+              silent
+              title="Delivered"
+              description={`Your order from ${o.merchants?.name ?? "the merchant"} arrived.`}
+              icon={<CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />}
+            />
+          </div>
+        )}
         {o.status === "pending_payment" && (
           <div className="rounded border border-warning/40 bg-warning/15 p-3 text-sm">
             <p className="font-medium">Waiting for payment</p>

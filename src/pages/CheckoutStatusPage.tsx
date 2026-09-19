@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import { Loader2, CheckCircle2, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import GiftReveal from "@/components/celebration/GiftReveal";
 
 function humanizePaymentStatus(status: string): string {
   const s = status.toLowerCase();
@@ -144,12 +145,12 @@ export default function CheckoutStatusPage() {
               </div>
             )}
             {status === "paid" && (
-              <div role="status" className="flex items-center gap-3 p-4 bg-success/10 border border-success/40 dark:bg-success/25 rounded">
-                <CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />
-                <div className="text-sm min-w-0">
-                  <p className="font-medium">Payment confirmed</p>
-                  <p className="text-muted-foreground">The merchant has been notified and will start preparing your order.</p>
-                </div>
+              <div className="p-4 bg-success/10 border border-success/40 dark:bg-success/25 rounded">
+                <GiftReveal
+                  title="Payment confirmed"
+                  description="The merchant has been notified and will start preparing your order."
+                  icon={<CheckCircle2 className="h-5 w-5 text-success shrink-0" aria-hidden="true" />}
+                />
               </div>
             )}
             {status === "failed" && (
