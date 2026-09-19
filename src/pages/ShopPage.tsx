@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import FirstRunHint from "@/components/FirstRunHint";
+import { Reveal } from "@/components/motion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -230,18 +231,19 @@ export default function ShopPage() {
               Showing {visible.length} of {filtered.length} {filtered.length === 1 ? "product" : "products"}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {visible.map(p => {
+              {visible.map((p, i) => {
                 const q = quote(p);
                 return (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    merchantName={p.merchants?.name}
-                    imageUrl={imageUrls[p.id] ?? null}
-                    quote={{ price: q.price, retailPrice: Number(p.price), isWholesale: q.isWholesale, minQty: q.minQty }}
-                    canBuy={canBuy(p)}
-                    onAdd={() => handleAdd(p)}
-                  />
+                  <Reveal key={p.id} delay={Math.min(i, 11) * 0.04}>
+                    <ProductCard
+                      product={p}
+                      merchantName={p.merchants?.name}
+                      imageUrl={imageUrls[p.id] ?? null}
+                      quote={{ price: q.price, retailPrice: Number(p.price), isWholesale: q.isWholesale, minQty: q.minQty }}
+                      canBuy={canBuy(p)}
+                      onAdd={() => handleAdd(p)}
+                    />
+                  </Reveal>
                 );
               })}
             </div>

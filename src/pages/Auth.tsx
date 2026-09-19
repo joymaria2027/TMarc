@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowRight, Bike, KeyRound, MapPin, Receipt } from 'lucide-react';
+import { Reveal } from '@/components/motion';
 import { validateAuthField, getEmailAutocomplete, getPasswordAutocomplete, welcomeTargetFor } from './auth.helpers';
 
 export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
@@ -171,44 +172,55 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
         </div>
 
         <div className="relative z-10 space-y-8 max-w-lg">
-          <h1 className="font-display text-5xl xl:text-6xl leading-[1.05] tracking-tight">
-            Track every delivery. Settle every dalasi.
-          </h1>
-          <p className="text-base text-sidebar-foreground/75 leading-relaxed max-w-md">
-            DeliveryAce runs dispatch, tracking, and settlement for delivery teams
-            across The Gambia.
-          </p>
-          <ul className="space-y-3 max-w-md">
-            <Objection icon={<Bike className="h-4 w-4" />}>
-              Riders accept a job with one thumb, even with gloves on.
-            </Objection>
-            <Objection icon={<MapPin className="h-4 w-4" />}>
-              Managers see every rider on a live map. The "where are you?" phone calls stop.
-            </Objection>
-            <Objection icon={<Receipt className="h-4 w-4" />}>
-              Finance settles each day's money the same day.
-            </Objection>
-          </ul>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button asChild size="lg" className="min-h-[48px] text-base press">
-              <Link to="/auth?tab=signup">
-                Start free
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          <Reveal>
+            <h1 className="font-display text-5xl xl:text-6xl leading-[1.05] tracking-tight">
+              Track every delivery. Settle every dalasi.
+            </h1>
+          </Reveal>
+          <Reveal delay={0.06}>
+            <p className="text-base text-sidebar-foreground/75 leading-relaxed max-w-md">
+              DeliveryAce runs dispatch, tracking, and settlement for delivery teams
+              across The Gambia.
+            </p>
+          </Reveal>
+          <Reveal delay={0.12}>
+            <ul className="space-y-3 max-w-md">
+              <Objection icon={<Bike className="h-4 w-4" />}>
+                Riders accept a job with one thumb, even with gloves on.
+              </Objection>
+              <Objection icon={<MapPin className="h-4 w-4" />}>
+                Managers see every rider on a live map. The "where are you?" phone calls stop.
+              </Objection>
+              <Objection icon={<Receipt className="h-4 w-4" />}>
+                Finance settles each day's money the same day.
+              </Objection>
+            </ul>
+          </Reveal>
+          <Reveal delay={0.18}>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button asChild size="lg" className="min-h-[48px] text-base press">
+                <Link to="/auth?tab=signup">
+                  Start free
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </Link>
+              </Button>
+              <span className="text-sm text-sidebar-foreground/70">Free to join, set up in minutes</span>
+            </div>
+          </Reveal>
+          <Reveal delay={0.24}>
+            <p className="text-xs text-sidebar-foreground/70 max-w-md">
+              We respect your privacy. Unsubscribe anytime.{' '}
+              <Link to="/privacy" className="underline underline-offset-4 hover:text-sidebar-foreground">
+                Privacy policy
               </Link>
-            </Button>
-            <span className="text-sm text-sidebar-foreground/70">Free to join, set up in minutes</span>
-          </div>
-          <p className="text-xs text-sidebar-foreground/70 max-w-md">
-            We respect your privacy. Unsubscribe anytime.{' '}
-            <Link to="/privacy" className="underline underline-offset-4 hover:text-sidebar-foreground">
-              Privacy policy
-            </Link>
-          </p>
+            </p>
+          </Reveal>
         </div>
 
         {/* Proof visual: a stylised live-dispatch panel, not decoration — it shows
             the product's core screen (GPS tracking + settlement) in context. */}
         <div className="relative z-10 mt-10 max-w-md" aria-hidden="true">
+          <Reveal delay={0.3} y={16}>
           <div className="rounded-xl border border-sidebar-border bg-sidebar-accent/60 backdrop-blur p-4 space-y-3 shadow-lg">
             <div className="flex items-center justify-between">
               <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
@@ -242,6 +254,7 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
               <MiniStat label="Settled" value="D 8,410" />
             </div>
           </div>
+          </Reveal>
         </div>
       </aside>
 
