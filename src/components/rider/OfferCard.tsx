@@ -80,6 +80,11 @@ export default function OfferCard({
             <span>Platform</span><span className="text-right tabular-nums">{Number(rs.platform_percentage)}%</span>
           </div>
         )}
+        <p className="text-xs text-muted-foreground">
+          {riderShare != null && rs
+            ? `Accept assigns this Delivery to you at D${riderShare.toFixed(2)} (${Number(rs.rider_percentage)}%).`
+            : 'Accept assigns this Delivery to you.'}
+        </p>
         <div className="flex gap-2">
           <Button onClick={() => onAccept(d)} className="flex-1 min-h-[44px]" size="sm">
             <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />Accept
