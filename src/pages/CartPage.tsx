@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 
 export default function CartPage() {
   const { items, remove, setQty, subtotal, groups } = useCart();
@@ -76,12 +77,13 @@ export default function CartPage() {
                               onChange={e => {
                                 const q = parseInt(e.target.value) || 1;
                                 setQty(i.product_id, q);
+                                void haptics.selectionChanged();
                                 setAnnouncement(`${i.name} quantity set to ${q}`);
                               }}
                               className="h-11 w-20 text-center" aria-label={`Quantity for ${i.name}`} />
                             <span className="w-24 text-right font-medium tabular-nums shrink-0">{formatMoney(i.price * i.quantity)}</span>
                             <Button variant="ghost" size="icon" aria-label={`Remove ${i.name} from cart`}
-                              onClick={() => { remove(i.product_id); setAnnouncement(`${i.name} removed from cart`); }}>
+                              onClick={() => { remove(i.product_id); void haptics.selectionChanged(); setAnnouncement(`${i.name} removed from cart`); }}>
                               <Trash2 className="h-4 w-4" aria-hidden="true" />
                             </Button>
                           </div>

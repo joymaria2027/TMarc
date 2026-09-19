@@ -26,6 +26,7 @@ const { authState } = vi.hoisted(() => ({
     user: null as unknown,
     roles: [] as string[],
     loading: true,
+    rolesReady: false,
   },
 }));
 
@@ -98,10 +99,26 @@ describe('RootRoute (content-first cold start at "/")', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('renders the role dashboard once a session exists', async () => {
+  it('keeps painting the landing while the user exists but roles are still resolving', () => {
+    authState.user = { id: 'u1' };
+    authState.roles = [];
+    authState.loading = false;
+    authState.rolesReady = false;
+    renderRoot();
+
+    // The prewarm window: the dashboard must not mount half-primed — the
+    // landing stays up until roles land (issue: prewarm-roles-swap-in/01).
+    expect(
+      screen.getByRole('heading', { level: 1, name: /track every delivery/i })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('renders the role dashboard once the session exists and roles are ready', async () => {
     authState.user = { id: 'u1' };
     authState.roles = ['admin'];
     authState.loading = false;
+    authState.rolesReady = true;
     renderRoot();
 
     // Dashboard content (AdminDashboard renders this under its data spinner).
@@ -113,6 +130,7 @@ describe('RootRoute (content-first cold start at "/")', () => {
   it('falls back to the landing page when there is no session', () => {
     authState.user = null;
     authState.loading = false;
+    authState.rolesReady = false;
     renderRoot();
 
     expect(

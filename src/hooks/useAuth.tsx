@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -9,6 +9,8 @@ interface AuthContextType {
   session: Session | null;
   roles: AppRole[];
   loading: boolean;
+  /** user is known AND roles resolved — the swap-in condition for role-aware UI. */
+  rolesReady: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -17,43 +19,76 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * One in-flight roles query per user id. Session restore and auth-state events
+ * share it instead of racing duplicate queries (the client fires
+ * INITIAL_SESSION and resolves getSession on the same cold start), and a
+ * resolution for a stale user (sign-out/sign-in race) never overwrites the
+ * current user's roles.
+ */
+const rolesInFlight = new Map<string, Promise<void>>();
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  // The user whose roles should be held; async resolutions compare against
+  // this before writing state, so stale fetches are discarded.
+  const currentUserIdRef = useRef<string | null>(null);
 
-  const fetchRoles = useCallback(async (userId: string) => {
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    setRoles((data || []).map(r => r.role as AppRole));
+  const fetchRoles = useCallback((userId: string): Promise<void> => {
+    currentUserIdRef.current = userId;
+    const inFlight = rolesInFlight.get(userId);
+    if (inFlight) return inFlight;
+    const query = (async () => {
+      const { data } = await supabase.from('user_roles').select('role').eq('user_id', userId);
+      if (currentUserIdRef.current === userId) {
+        setRoles((data || []).map(r => r.role as AppRole));
+        setRolesLoading(false);
+      }
+    })();
+    const safe = query.catch(() => {
+      // Roles fetch failed: keep roles empty; the next auth event re-issues.
+      if (currentUserIdRef.current === userId) setRolesLoading(false);
+    });
+    rolesInFlight.set(userId, safe);
+    void safe.then(() => {
+      if (rolesInFlight.get(userId) === safe) rolesInFlight.delete(userId);
+    });
+    return safe;
   }, []);
+
+  const applySession = useCallback((nextSession: Session | null) => {
+    setSession(nextSession);
+    const nextUser = nextSession?.user ?? null;
+    setUser(nextUser);
+    currentUserIdRef.current = nextUser?.id ?? null;
+    if (nextUser) {
+      // Prewarm: the query flies while the root landing paints. setTimeout
+      // keeps the auth-state path deadlock-free (per supabase guidance); the
+      // dedupe map collapses concurrent callers into a single query.
+      setTimeout(() => { void fetchRoles(nextUser.id); }, 0);
+    } else {
+      setRoles([]);
+      setRolesLoading(false);
+    }
+  }, [fetchRoles]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => fetchRoles(session.user.id), 0);
-      } else {
-        setRoles([]);
-      }
+      applySession(session);
       setLoading(false);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchRoles(session.user.id);
-      }
+      applySession(session);
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchRoles]);
+  }, [applySession]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -75,11 +110,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = (role: AppRole) => roles.includes(role);
 
+  const rolesReady = !!user && !rolesLoading;
+
   return (
-    <AuthContext.Provider value={{ user, session, roles, loading, signIn, signUp, signOut, hasRole }}>
+    <AuthContext.Provider value={{ user, session, roles, loading, rolesReady, signIn, signUp, signOut, hasRole }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+/** Test hook: clears the module-level in-flight map between test cases. */
+export function _resetRolesInFlightForTesting() {
+  rolesInFlight.clear();
 }
 
 export function useAuth() {

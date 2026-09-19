@@ -52,10 +52,9 @@ export default function WholesaleApplyPage() {
     load();
   };
 
-  if (authLoading || loading) {
-    return <StorefrontLayout><p className="text-muted-foreground" role="status">Loading wholesale account…</p></StorefrontLayout>;
-  }
-
+  // Content-first: the signed-out page is a static card needing no session,
+  // so a pending auth renders it immediately. Only the signed-in branch waits
+  // on its application fetch (which itself waits for the session via load()).
   if (!user) {
     return (
       <StorefrontLayout>
@@ -73,6 +72,10 @@ export default function WholesaleApplyPage() {
         </Card>
       </StorefrontLayout>
     );
+  }
+
+  if (loading) {
+    return <StorefrontLayout><p className="text-muted-foreground" role="status">Loading wholesale account…</p></StorefrontLayout>;
   }
 
   return (

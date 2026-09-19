@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 import { MapPin, Timer } from "lucide-react";
 
 interface Offer {
@@ -95,7 +96,7 @@ export default function RiderDispatchOffers() {
   const acceptOrder = async (orderId: string) => {
     const { data, error } = await supabase.rpc("claim_dispatched_order", { _order_id: orderId });
     if (error) toast.error(error.message);
-    else if (data) { toast.success("You accepted this delivery"); load(); }
+    else if (data) { toast.success("You accepted this delivery"); void haptics.success(); load(); }
     else toast.error("Another rider got there first");
   };
 

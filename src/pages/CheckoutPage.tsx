@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { haptics } from "@/lib/haptics";
 import { resolveDeliveryFee } from "@/lib/deliveryFee";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { validateCheckout, firstInvalidField, type CheckoutErrors } from "@/lib/checkoutValidation";
@@ -94,16 +95,8 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fulfillment, debouncedAddress, items.length]);
 
-  if (loading) return (
-    <StorefrontLayout>
-      <div role="status" aria-live="polite" aria-label="Loading checkout" className="max-w-2xl mx-auto space-y-3">
-        <span className="sr-only">Loading checkout…</span>
-        <div className="shimmer h-8 rounded w-1/3" aria-hidden="true" />
-        <div className="shimmer h-28 rounded-lg" aria-hidden="true" />
-        <div className="shimmer h-40 rounded-lg" aria-hidden="true" />
-      </div>
-    </StorefrontLayout>
-  );
+  // Content-first: a pending session renders exactly the anonymous checkout
+  // (inline account card + gate at submit), never a blocking skeleton.
   if (items.length === 0) return <Navigate to="/cart" replace />;
 
   const totalDeliveryFees = Object.values(fees).reduce((a, b) => a + b, 0);
@@ -155,7 +148,11 @@ export default function CheckoutPage() {
   };
 
   const submit = async () => {
-    if (!user) {
+    // Press acknowledgement: the app responds to the tap before validation or
+    // any network round trip (transcript: responsiveness reads as premium).
+    void haptics.impact("LIGHT");
+    // Same guard while the session is still resolving — no orders before identity is known.
+    if (loading || !user) {
       const msg = "Create an account or sign in to continue. Your details below are saved.";
       toast.error(msg);
       setAnnouncement(msg);
@@ -243,6 +240,7 @@ export default function CheckoutPage() {
 
       const decision = decidePostOrderNavigation({ merchantIds, orderIds: orderIdsCreated, redirectUrls });
       clear();
+      void haptics.success();
       if (decision.kind === "redirect") {
         toast.success("Order placed — redirecting to payment");
         window.location.href = decision.url;
@@ -271,6 +269,7 @@ export default function CheckoutPage() {
       if (orderIdsCreated.length === 0) {
         // Nothing was created — cart stays fully intact for a clean retry.
         toast.error(err.message ?? 'Could not place your order. Please try again.');
+        void haptics.error();
       } else {
         // Partial failure: keep the created orders reachable and send the user
         // to complete payment from My orders.
