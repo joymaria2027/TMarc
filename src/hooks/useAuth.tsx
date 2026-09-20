@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { markRiderOfflineByUserId, markRiderOnlineByUserId } from '@/lib/riderPresence';
 
 type AppRole = 'admin' | 'rider' | 'accountant' | 'company_manager' | 'business_owner' | 'app_developer' | 'customer' | 'wholesaler';
 
@@ -64,13 +65,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(nextSession);
     const nextUser = nextSession?.user ?? null;
     setUser(nextUser);
+    const prevUserId = currentUserIdRef.current;
     currentUserIdRef.current = nextUser?.id ?? null;
     if (nextUser) {
+      // Ticket: any rider signed in is automatically online. 0-row no-op for
+      // non-riders; fire-and-forget so presence never blocks auth UI.
+      void markRiderOnlineByUserId(nextUser.id).catch(() => {});
       // Prewarm: the query flies while the root landing paints. setTimeout
       // keeps the auth-state path deadlock-free (per supabase guidance); the
       // dedupe map collapses concurrent callers into a single query.
       setTimeout(() => { void fetchRoles(nextUser.id); }, 0);
     } else {
+      if (prevUserId) void markRiderOfflineByUserId(prevUserId).catch(() => {});
       setRoles([]);
       setRolesLoading(false);
     }
@@ -105,6 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    const currentId = currentUserIdRef.current;
+    if (currentId) void markRiderOfflineByUserId(currentId).catch(() => {});
     await supabase.auth.signOut();
   };
 

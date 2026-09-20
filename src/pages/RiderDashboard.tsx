@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import WalletWidget from '@/components/WalletWidget';
 import { Switch } from '@/components/ui/switch';
 import { guardedWrite } from '@/lib/guardedWrite';
+import { markRiderOfflineByRiderId, markRiderOnlineByRiderId } from '@/lib/riderPresence';
 import RiderDispatchOffers from '@/components/RiderDispatchOffers';
 import { removeDeliveryFromQueue } from './riderDashboard.helpers';
 import { describeRunSummary } from './riderDashboard.helpers';
@@ -240,11 +241,13 @@ export default function RiderDashboard() {
     else setActiveDelivery(null);
   };
 
-  // Auto-online when signed in; offline on unmount/sign-out
+  // Auto-online when signed in; offline on unmount/sign-out.
+  // Sign-in itself marks online centrally in useAuth (riderPresence); this
+  // mount effect keeps presence fresh for long-lived dashboard sessions.
   useEffect(() => {
     if (!riderId) return;
-    supabase.from('riders').update({ is_online: true, is_active: true }).eq('id', riderId).then(() => {});
-    const goOffline = () => { supabase.from('riders').update({ is_online: false }).eq('id', riderId).then(() => {}); };
+    void markRiderOnlineByRiderId(riderId).catch(() => {});
+    const goOffline = () => { void markRiderOfflineByRiderId(riderId).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {
       window.removeEventListener('beforeunload', goOffline);
@@ -320,6 +323,8 @@ export default function RiderDashboard() {
   const ensureRiderAvailable = async () => {
     if (!riderId) return null;
     const { error } = await supabase.from('riders').update({ is_online: true, is_active: true }).eq('id', riderId);
+    // Keep the direct update here (return value drives reject gating); the
+    // sign-in path uses the same payload via markRiderOnlineByRiderId.
     // F6 (FRICTION-ANALYSIS-2026-09-18): this is a covert state change — the
     // rider discovers their online status later, out of band. Announce it once.
     if (!error && !isOnlineRef.current) {

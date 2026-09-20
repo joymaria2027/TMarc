@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { CheckCircle2, MapPin, PackageX, Phone, User } from 'lucide-react';
+import { markRiderOnlineByRiderId } from '@/lib/riderPresence';
 
 interface Delivery {
   id: string;
@@ -260,7 +261,7 @@ export default function RejectedDeliveriesPage() {
     if (!isRider) return;
     setClaiming(d.id);
     // Claiming also puts the rider online — say so instead of silently flipping state.
-    await supabase.from('riders').update({ is_online: true, is_active: true }).eq('id', riderId!);
+    await markRiderOnlineByRiderId(riderId!);
     const isUnassigned = d.status === 'unassigned' && !d.rider_id;
     const { error } = isUnassigned
       ? await rpcClaimDelivery(d.id)
