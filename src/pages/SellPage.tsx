@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, MapPin, Receipt, Truck } from "lucide-react";
 import StorefrontLayout from "@/components/StorefrontLayout";
 import { Button } from "@/components/ui/button";
+import { Reveal } from "@/components/motion";
 import { supabase } from "@/integrations/supabase/client";
 import { getProductPublicUrl } from "@/lib/productImage";
 import { usePrefersDark } from "@/hooks/usePrefersDark";
@@ -24,40 +25,43 @@ export default function SellPage() {
             <div className="absolute inset-0 opacity-[0.14] [background-image:repeating-linear-gradient(115deg,transparent_0px,transparent_2px,rgba(255,255,255,0.16)_3px,transparent_4px)]" />
           </div>
           <div className="relative container mx-auto px-4 pt-12 pb-10 md:pt-16 md:pb-14">
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#c9c2b4]">Sell on DeliveryAce</p>
-            <h1 className="mt-3 font-display text-4xl md:text-6xl leading-[1.02] tracking-tight max-w-3xl">
-              Turn your kitchen into orders.
-            </h1>
-            <p className="mt-3 max-w-xl text-[#d8d2c6] text-base md:text-lg">
-              List what you sell. Riders deliver. Money settles the same day.
-            </p>
-            <Button asChild size="lg" className="mt-6 min-h-[44px]">
-              <Link to="/auth?tab=signup">
-                Start selling <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-            {/* Trust tiles — only claims the platform actually makes true */}
-            <dl className="mt-8 flex flex-wrap gap-3">
-              <div className="rounded-lg bg-white/10 px-4 py-3 backdrop-blur-sm min-w-[150px]">
-                <dt className="flex items-center gap-1.5 text-xs text-[#c9c2b4]"><Truck className="h-3.5 w-3.5" aria-hidden="true" />No fleet needed</dt>
-                <dd className="text-sm font-medium">Riders are built in</dd>
-              </div>
-              <div className="rounded-lg bg-white/10 px-4 py-3 backdrop-blur-sm min-w-[150px]">
-                <dt className="flex items-center gap-1.5 text-xs text-[#c9c2b4]"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />Tracked</dt>
-                <dd className="text-sm font-medium">Door to door</dd>
-              </div>
-              <div className="rounded-lg bg-white/10 px-4 py-3 backdrop-blur-sm min-w-[150px]">
-                <dt className="flex items-center gap-1.5 text-xs text-[#c9c2b4]"><Receipt className="h-3.5 w-3.5" aria-hidden="true" />Same-day settlement</dt>
-                <dd className="text-sm font-medium">Money in, day of</dd>
-              </div>
-            </dl>
+            <Reveal>
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#c9c2b4]">Sell on DeliveryAce</p>
+              <h1 className="mt-3 font-display text-4xl md:text-6xl leading-[1.02] tracking-tight max-w-3xl">
+                Turn your kitchen into orders.
+              </h1>
+              <p className="mt-3 max-w-xl text-[#d8d2c6] text-base md:text-lg">
+                List what you sell. Riders deliver. Money settles the same day.
+              </p>
+              <Button asChild size="lg" className="mt-6 min-h-[44px]">
+                <Link to="/auth?tab=signup">
+                  Start selling <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+              {/* Trust tiles — only claims the platform actually makes true */}
+              <dl className="mt-8 flex flex-wrap gap-3">
+                <div className="rounded-lg bg-white/10 px-4 py-3 backdrop-blur-sm min-w-[150px]">
+                  <dt className="flex items-center gap-1.5 text-xs text-[#c9c2b4]"><Truck className="h-3.5 w-3.5" aria-hidden="true" />No fleet needed</dt>
+                  <dd className="text-sm font-medium">Riders are built in</dd>
+                </div>
+                <div className="rounded-lg bg-white/10 px-4 py-3 backdrop-blur-sm min-w-[150px]">
+                  <dt className="flex items-center gap-1.5 text-xs text-[#c9c2b4]"><MapPin className="h-3.5 w-3.5" aria-hidden="true" />Tracked</dt>
+                  <dd className="text-sm font-medium">Door to door</dd>
+                </div>
+                <div className="rounded-lg bg-white/10 px-4 py-3 backdrop-blur-sm min-w-[150px]">
+                  <dt className="flex items-center gap-1.5 text-xs text-[#c9c2b4]"><Receipt className="h-3.5 w-3.5" aria-hidden="true" />Same-day settlement</dt>
+                  <dd className="text-sm font-medium">Money in, day of</dd>
+                </div>
+              </dl>
+            </Reveal>
           </div>
         </section>
 
         {/* Selling is simple — three steps, mono numbers */}
         <section aria-label="Selling is simple" className="container mx-auto px-4 pb-14">
-          <h2 className="font-display text-2xl md:text-3xl tracking-tight">Selling is simple</h2>
-          <ol className="mt-6 grid gap-4 md:grid-cols-3">
+          <Reveal>
+            <h2 className="font-display text-2xl md:text-3xl tracking-tight">Selling is simple</h2>
+            <ol className="mt-6 grid gap-4 md:grid-cols-3">
             <li className="rounded-xl border bg-card p-5">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">01</p>
               <p className="mt-2 font-display text-xl">Open your store</p>
@@ -73,14 +77,16 @@ export default function SellPage() {
               <p className="mt-2 font-display text-xl">Orders come in</p>
               <p className="mt-1 text-sm text-muted-foreground">Riders deliver, and the money settles to you the same day.</p>
             </li>
-          </ol>
+            </ol>
+          </Reveal>
         </section>
 
         <StoresProof />
 
         {/* Close band */}
         <section aria-label="Keep money local" className="container mx-auto px-4 py-14">
-          <div className="rounded-2xl border bg-muted/40 p-8 md:p-10">
+          <Reveal>
+            <div className="rounded-2xl border bg-muted/40 p-8 md:p-10">
             <p className="font-display text-2xl md:text-3xl tracking-tight">Keep money local.</p>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
               Your customers are already on this street. So are our riders.
@@ -88,7 +94,8 @@ export default function SellPage() {
             <Button asChild className="mt-5 min-h-[44px] bg-foreground text-background hover:bg-foreground/90">
               <Link to="/auth?tab=signup">Start selling</Link>
             </Button>
-          </div>
+            </div>
+          </Reveal>
         </section>
       </div>
     </StorefrontLayout>
@@ -142,8 +149,10 @@ function StoresProof() {
 
   return (
     <section aria-label="Meet the stores" className="container mx-auto px-4 pb-14">
-      <h2 className="font-display text-2xl md:text-3xl tracking-tight">Meet the stores</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Already selling on DeliveryAce.</p>
+      <Reveal>
+        <h2 className="font-display text-2xl md:text-3xl tracking-tight">Meet the stores</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Already selling on DeliveryAce.</p>
+      </Reveal>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stores.map(([id, store]) => (
           <Link

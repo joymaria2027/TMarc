@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Bike, CheckCircle2, MapPin, Package, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Reveal } from "@/components/motion";
 import ThemeToggle from "@/components/ThemeToggle";
 import { usePrefersDark } from "@/hooks/usePrefersDark";
 import { supabase } from "@/integrations/supabase/client";
@@ -110,9 +111,11 @@ export default function LandingPage() {
         {/* Statement break: the quiet line between loud sections, Icebug-style */}
         <section className="border-b bg-background">
           <div className="container mx-auto px-4 py-16 text-center">
-            <p className="rise mx-auto max-w-xl font-display text-2xl md:text-3xl tracking-tight text-foreground/90">
-              Every kilometre, every dalasi, accounted for.
-            </p>
+            <Reveal>
+              <p className="mx-auto max-w-xl font-display text-2xl md:text-3xl tracking-tight text-foreground/90">
+                Every kilometre, every dalasi, accounted for.
+              </p>
+            </Reveal>
           </div>
         </section>
 
@@ -127,16 +130,19 @@ export default function LandingPage() {
           }} />
           <div className="absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-primary/15 blur-3xl" aria-hidden="true" />
           <div className="relative container mx-auto px-4 pb-10 pt-20 md:pt-28">
-            <h2 className="rise max-w-lg font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
-              Three jobs. One map.
-            </h2>
+            <Reveal>
+              <h2 className="max-w-lg font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+                Three jobs. One map.
+              </h2>
+            </Reveal>
           </div>
         </section>
 
         {/* The rail: one card per audience, scrollable on small screens */}
         <section className="border-b bg-background">
           <div className="container mx-auto px-4 py-12">
-            <ol className="flex snap-x gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:overflow-visible">
+            <Reveal>
+              <ol className="flex snap-x gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:overflow-visible">
               <Step id="riders" n="1" audience="For riders" icon={<Bike className="h-5 w-5" />} title="Riders accept">
                 A job lands, one tap accepts it. The route, the customer, the tariff,
                 all in one screen built for a gloved thumb.
@@ -149,17 +155,19 @@ export default function LandingPage() {
                 Distances, tariffs, and payouts reconcile themselves. Close the books
                 while the day is still fresh.
               </Step>
-            </ol>
+              </ol>
+            </Reveal>
           </div>
         </section>
 
         {/* Objections: exactly three, ordered by how often they come up */}
         <section className="border-y bg-muted/40">
           <div className="container mx-auto px-4 py-16 md:py-20">
-            <h2 className="font-display text-3xl md:text-4xl tracking-tight max-w-lg">
-              Fair questions
-            </h2>
-            <ul className="mt-8 grid gap-6 max-w-3xl">
+            <Reveal>
+              <h2 className="font-display text-3xl md:text-4xl tracking-tight max-w-lg">
+                Fair questions
+              </h2>
+              <ul className="mt-8 grid gap-6 max-w-3xl">
               <Objection icon={<MapPin className="h-4 w-4" />}>
                 Our riders already have a WhatsApp group. DeliveryAce gives every
                 rider one live map to follow, so nobody has to ask where anyone is.
@@ -172,13 +180,14 @@ export default function LandingPage() {
                 Joining is free. We charge a small fee per settled delivery, so the
                 software pays for itself out of work you already have.
               </Objection>
-            </ul>
+              </ul>
+            </Reveal>
           </div>
         </section>
 
         {/* Doors: Icebug's finder pattern — visitors segment themselves */}
         <section className="border-b bg-background">
-          <div className="container mx-auto grid gap-10 px-4 py-20 md:grid-cols-2 md:gap-8 md:py-24">
+          <Reveal className="container mx-auto grid gap-10 px-4 py-20 md:grid-cols-2 md:gap-8 md:py-24">
             <DoorTile
               kicker="You run deliveries"
               statement="Take your operation from WhatsApp threads to one live map."
@@ -192,7 +201,7 @@ export default function LandingPage() {
               cta="Order a delivery"
               href="/shop"
             />
-          </div>
+          </Reveal>
           <div className="container mx-auto mt-8">
             <p className="text-sm text-muted-foreground">
               Sell instead?{" "}
@@ -203,12 +212,12 @@ export default function LandingPage() {
 
         {/* Promise: kicker, triad statement, small aside — Icebug's pattern */}
         <section className="border-b bg-background">
-          <div className="container mx-auto grid gap-10 px-4 py-20 md:grid-cols-[1.4fr_1fr] md:py-24">
+          <Reveal className="container mx-auto grid gap-10 px-4 py-20 md:grid-cols-[1.4fr_1fr] md:py-24">
             <div className="space-y-6">
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 Our promise to you
               </p>
-              <h2 className="rise max-w-xl font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+              <h2 className="max-w-xl font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
                 Fair fees. Live tracking. Money settled the day it's earned.
               </h2>
             </div>
@@ -216,7 +225,7 @@ export default function LandingPage() {
               The money arrives when we said it would. That is the whole promise,
               and everything else on this page exists to keep it.
             </p>
-          </div>
+          </Reveal>
         </section>
 
         {/* Values band: full-bleed, kicker + centered statement + outlined link */}
@@ -226,20 +235,22 @@ export default function LandingPage() {
               'repeating-linear-gradient(105deg, hsl(var(--sidebar-foreground)) 0 1px, transparent 1px 11px)',
           }} />
           <div className="relative container mx-auto px-4 py-24 md:py-32">
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
-              Who comes first
-            </p>
-            <div className="mt-10 flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
-              <h2 className="rise max-w-xl font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
-                Riders first. Then the merchants. Then us.
-              </h2>
-              <a
-                href="#finance"
-                className="press inline-flex min-h-[44px] items-center border border-sidebar-foreground/60 px-6 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10"
-              >
-                See how settlement works
-              </a>
-            </div>
+            <Reveal>
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
+                Who comes first
+              </p>
+              <div className="mt-10 flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
+                <h2 className="max-w-xl font-display text-4xl md:text-5xl leading-[1.05] tracking-tight">
+                  Riders first. Then the merchants. Then us.
+                </h2>
+                <a
+                  href="#finance"
+                  className="press inline-flex min-h-[44px] items-center border border-sidebar-foreground/60 px-6 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10"
+                >
+                  See how settlement works
+                </a>
+              </div>
+            </Reveal>
           </div>
         </section>
 
@@ -247,10 +258,12 @@ export default function LandingPage() {
         <section className="relative overflow-hidden bg-sidebar text-sidebar-foreground">
           <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-primary/15 to-transparent pointer-events-none" />
           <div className="container relative mx-auto px-4 py-24 md:py-32 text-center space-y-8">
-            <h2 className="rise mx-auto max-w-2xl font-display text-4xl md:text-5xl xl:text-6xl leading-[1.05] tracking-tight">
-              Today's deliveries, accounted for by tonight.
-            </h2>
-            <div className="rise rise-1 flex justify-center">
+            <Reveal>
+              <h2 className="mx-auto max-w-2xl font-display text-4xl md:text-5xl xl:text-6xl leading-[1.05] tracking-tight">
+                Today's deliveries, accounted for by tonight.
+              </h2>
+            </Reveal>
+            <div className="flex justify-center">
               <Link
                 to="/auth?tab=signup"
                 className="press inline-flex min-h-[48px] items-center gap-2 border border-sidebar-foreground/60 px-8 py-2.5 font-mono text-xs uppercase tracking-[0.2em] text-sidebar-foreground transition-colors hover:bg-sidebar-foreground/10"
@@ -268,6 +281,7 @@ export default function LandingPage() {
         <div className="container mx-auto grid gap-10 px-4 py-14 md:grid-cols-[1fr_1fr_1fr_1.4fr]">
           <FooterCol title="Product">
             <Link to="/shop" className="hover:underline underline-offset-4">Order delivery</Link>
+            <Link to="/sell" className="hover:underline underline-offset-4">Sell</Link>
             <Link to="/wholesale" className="hover:underline underline-offset-4">Wholesale</Link>
             <Link to="/auth?tab=signup" className="hover:underline underline-offset-4">Start free</Link>
           </FooterCol>
@@ -296,7 +310,7 @@ export default function LandingPage() {
         </div>
         <div className="border-t">
           <div className="container mx-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            <p>96% on time · WCAG AA · Gambia-built</p>
+            <p>Same-day settlement · WCAG AA · Gambia-built</p>
             <p>© DeliveryAce {new Date().getFullYear()}</p>
           </div>
         </div>

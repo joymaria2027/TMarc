@@ -178,8 +178,31 @@ describe('LandingPage (public marketing page at "/")', () => {
   it('carries mono proof badges in the footer', () => {
     renderLanding();
     const footer = screen.getByRole('contentinfo');
-    const badges = within(footer).getByText(/96% on time/i);
-    expect(badges.closest('div')!.className).toMatch(/font-mono/);
+    // Revision 13: no invented stats. The badges name verifiable facts, not
+    // a made-up percentage (the illustrative dispatch card stays aria-hidden).
+    expect(within(footer).queryByText(/96% on time/i)).not.toBeInTheDocument();
+    const badges = within(footer).getAllByText(/same-day settlement|wcag aa/i);
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges[0].closest('div')!.className).toMatch(/font-mono/);
+  });
+
+  it('links Sell from the footer Product column', () => {
+    renderLanding();
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).getByRole('link', { name: /^sell$/i })).toHaveAttribute('href', '/sell');
+  });
+
+  it('reveals below-the-fold sections with the house Reveal system', () => {
+    const { container } = renderLanding();
+    // Every top-level section after the hero is wrapped in a Reveal
+    // (data-reveal marker). The hero keeps its own load-in .rise.
+    const sections = container.querySelectorAll('main > section');
+    expect(sections.length).toBeGreaterThan(2);
+    const hero = sections[0];
+    expect(hero.querySelector('[data-reveal]')).toBeNull();
+    for (const section of Array.from(sections).slice(1)) {
+      expect(section.querySelector('[data-reveal]')).not.toBeNull();
+    }
   });
 
   it('lets visitors self-segment through two door tiles', () => {

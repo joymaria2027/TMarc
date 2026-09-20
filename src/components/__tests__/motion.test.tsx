@@ -15,4 +15,15 @@ describe("Reveal (shared Motion helper)", () => {
   it("uses the house expo-out curve shared with .rise/.press", () => {
     expect([...MOTION_EASE]).toEqual([0.16, 1, 0.3, 1]);
   });
+
+  it("stamps data-reveal on its wrapper (markup contract for tests + CSS)", () => {
+    const { container } = render(
+      <Reveal>
+        <p>revealed</p>
+      </Reveal>
+    );
+    const wrapper = container.querySelector("[data-reveal]");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper!.textContent).toContain("revealed");
+  });
 });

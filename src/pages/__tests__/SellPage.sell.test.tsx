@@ -112,4 +112,15 @@ describe('SellPage (merchant funnel, Depop Sell-page grammar)', () => {
     ];
   });
 
+  it('reveals every section with the house Reveal system (hero included)', () => {
+    const { container } = renderSell();
+    // StorefrontLayout wraps children in a div inside main, so the sections
+    // sit one level deeper than on the landing page.
+    const sections = container.querySelectorAll('main section');
+    expect(sections.length).toBeGreaterThanOrEqual(3);
+    for (const section of Array.from(sections)) {
+      expect(section.querySelector('[data-reveal]')).not.toBeNull();
+    }
+  });
+
 });
