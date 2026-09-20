@@ -1,13 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Bike, CheckCircle2, MapPin, Receipt } from "lucide-react";
+import { ArrowRight, Bike, CheckCircle2, MapPin, Package, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  usePrefersDark,
-  setThemeMode,
-  getThemeMode,
-  type ThemeMode,
-} from "@/hooks/usePrefersDark";
+import ThemeToggle from "@/components/ThemeToggle";
+import { usePrefersDark } from "@/hooks/usePrefersDark";
+import { supabase } from "@/integrations/supabase/client";
+import { getProductPublicUrl } from "@/lib/productImage";
 
 /**
  * Public marketing page at "/", structured after the Icebug reference:
@@ -118,6 +116,9 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Live product proof: the marketplace is real and shoppable now */}
+        <ProductRail />
+
         {/* Webshop rhythm: full-bleed banner, then the audience rail */}
         <section className="relative overflow-hidden border-b bg-sidebar text-sidebar-foreground">
           <div className="absolute inset-0 opacity-[0.06]" aria-hidden="true" style={{
@@ -191,6 +192,12 @@ export default function LandingPage() {
               cta="Order a delivery"
               href="/shop"
             />
+          </div>
+          <div className="container mx-auto mt-8">
+            <p className="text-sm text-muted-foreground">
+              Sell instead?{" "}
+              <Link to="/sell" className="text-foreground underline underline-offset-4 hover:no-underline">Turn your kitchen into orders</Link>
+            </p>
           </div>
         </section>
 
@@ -294,36 +301,6 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-    </div>
-  );
-}
-
-/** LIGHT / DARK / SYSTEM footer toggle, persisted by the theme store. */
-function ThemeToggle() {
-  const [mode, setMode] = useState<ThemeMode>(getThemeMode());
-  const choose = (next: ThemeMode) => {
-    setThemeMode(next);
-    setMode(next);
-  };
-  return (
-    <div className="font-mono text-[11px] uppercase tracking-[0.18em]" role="group" aria-label="Colour theme">
-      {(["light", "dark", "system"] as const).map((m, i) => (
-        <span key={m}>
-          {i > 0 && <span className="text-muted-foreground/50"> / </span>}
-          <button
-            type="button"
-            onClick={() => choose(m)}
-            aria-pressed={mode === m}
-            className={
-              mode === m
-                ? "underline underline-offset-4 text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }
-          >
-            {m}
-          </button>
-        </span>
-      ))}
     </div>
   );
 }
@@ -510,5 +487,114 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] uppercase tracking-wide text-foreground/60">{label}</p>
       <p className="font-display text-sm text-foreground tabular-nums">{value}</p>
     </div>
+  );
+}
+
+interface RailProduct {
+  id: string;
+  name: string;
+  price: number | string;
+  image_path: string | null;
+  merchants?: { name: string } | null;
+}
+
+/**
+ * Icebug webshop rail: mono kicker + SHOP ALL, Prev/Next controls, flat
+ * tiles with hairline dividers, hover zoom. Progressive — the landing's
+ * static first paint is untouched; the rail fills in when the catalog
+ * query resolves and is omitted entirely on empty or error.
+ */
+function ProductRail() {
+  const [products, setProducts] = useState<RailProduct[]>([]);
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("products")
+          .select("id,name,price,image_path,merchants(name)")
+          .eq("approval_status", "approved")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(8);
+        if (!cancelled && data) setProducts(data as unknown as RailProduct[]);
+      } catch {
+        // Empty page beats a broken page.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (products.length === 0) return null;
+
+  const scroll = (dir: 1 | -1) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    strip.scrollBy({ left: dir * strip.clientWidth * 0.8, behavior: "smooth" });
+  };
+
+  return (
+    <section aria-label="Fresh from the stores" className="border-b">
+      <div className="container mx-auto px-4 pt-14 pb-6 flex items-baseline justify-between gap-3">
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          Fresh from the stores{" "}
+          <Link to="/shop" className="text-foreground underline underline-offset-4 hover:no-underline">Shop all</Link>
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => scroll(-1)}
+            aria-label="Previous products"
+            className="min-h-[44px] px-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            onClick={() => scroll(1)}
+            aria-label="Next products"
+            className="min-h-[44px] px-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+      <div
+        ref={stripRef}
+        data-rail-strip
+        className="flex snap-x snap-mandatory overflow-x-auto border-t"
+      >
+        {products.map((p, i) => (
+          <Link
+            key={p.id}
+            to={`/shop/p/${p.id}`}
+            className="group relative w-56 shrink-0 snap-start border-r p-4 pb-5 [&:nth-child(odd)]:bg-muted/30"
+          >
+            <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted/40">
+              {getProductPublicUrl(p.image_path) ? (
+                <img
+                  src={getProductPublicUrl(p.image_path)!}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  className="max-h-full max-w-full object-contain p-3 transition-transform duration-200 ease-out group-hover:scale-[1.04] [@media(hover:hover)]:group-hover:scale-[1.04]"
+                />
+              ) : (
+                <Package className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
+              )}
+            </div>
+            <p className="mt-3 text-sm font-medium leading-snug line-clamp-2">{p.name}</p>
+            {p.merchants?.name && (
+              <p className="text-xs text-muted-foreground truncate">{p.merchants.name}</p>
+            )}
+            <p className="mt-1 font-display text-base tabular-nums">D {Number(p.price).toFixed(2)}</p>
+            <span aria-hidden="true" className="absolute inset-y-0 left-0 w-px bg-border first:hidden" />
+            {i === 0 && <span className="sr-only">Newest first</span>}
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

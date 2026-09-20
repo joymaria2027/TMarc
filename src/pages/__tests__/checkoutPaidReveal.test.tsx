@@ -17,6 +17,9 @@ vi.mock("@/lib/cart", () => ({
 
 vi.mock("@/hooks/usePrefersDark", () => ({
   usePrefersDark: () => false,
+  getThemeMode: () => "system" as const,
+  setThemeMode: () => {},
+  subscribeThemeMode: () => () => {},
 }));
 
 vi.mock("@/components/UserNotificationBell", () => ({

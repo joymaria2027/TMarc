@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowRight, Bike, KeyRound, MapPin, Receipt } from 'lucide-react';
 import { Reveal } from '@/components/motion';
+import ThemeToggle from '@/components/ThemeToggle';
 import { validateAuthField, getEmailAutocomplete, getPasswordAutocomplete, welcomeTargetFor } from './auth.helpers';
 
 export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
@@ -468,6 +469,11 @@ export default function Auth({ resetMode = false }: { resetMode?: boolean }) {
               </form>
             </TabsContent>
           </Tabs>
+
+          {/* Theme control on every surface: visible on the form panel at all sizes. */}
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <ThemeToggle />
+          </div>
         </div>
       </main>
     </div>

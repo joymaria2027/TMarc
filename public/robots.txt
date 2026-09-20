@@ -3,6 +3,7 @@ User-agent: *
 # Allow public storefront and marketing pages
 Allow: /
 Allow: /shop
+Allow: /sell
 Allow: /wholesale
 Allow: /privacy
 Allow: /auth

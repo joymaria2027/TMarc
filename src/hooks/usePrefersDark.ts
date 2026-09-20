@@ -13,6 +13,21 @@ const STORAGE_KEY = "dg-theme-mode";
 let mode: ThemeMode = readStoredMode();
 const modeListeners = new Set<() => void>();
 
+// Module-level cross-tab sync: the store owns the storage event so every
+// subscriber (toggles, layouts) stays current without needing usePrefersDark
+// mounted on the page.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_KEY && e.newValue) {
+      const stored = e.newValue as ThemeMode;
+      if (stored === "light" || stored === "dark" || stored === "system") {
+        mode = stored;
+        applyMode();
+      }
+    }
+  });
+}
+
 function readStoredMode(): ThemeMode {
   if (typeof window === "undefined") return "system";
   try {
@@ -23,17 +38,35 @@ function readStoredMode(): ThemeMode {
   }
 }
 
+let notifying = false;
+
 function applyMode(): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const dark = mode === "dark" || (mode === "system" && systemDark);
   document.documentElement.classList.toggle("dark", dark);
-  modeListeners.forEach((fn) => fn());
+  // Re-entrancy guard: a listener that calls applyMode (e.g. re-syncing from
+  // storage) must not recurse through the notification loop again.
+  if (notifying) return;
+  notifying = true;
+  try {
+    modeListeners.forEach((fn) => fn());
+  } finally {
+    notifying = false;
+  }
 }
 
 /** Current theme mode. */
 export function getThemeMode(): ThemeMode {
   return mode;
+}
+
+/** Subscribe to theme-mode changes (same-tab via setThemeMode, cross-tab via storage sync). */
+export function subscribeThemeMode(fn: () => void): () => void {
+  modeListeners.add(fn);
+  return () => {
+    modeListeners.delete(fn);
+  };
 }
 
 /** Set the theme mode, persist it, and re-apply the dark class everywhere. */
@@ -59,12 +92,13 @@ export function usePrefersDark(): void {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => applyMode();
     const onModeChange = () => {
-      // Re-read the class state in case another tab changed the mode.
+      // Re-read storage in case another tab changed the mode; only re-apply
+      // when something actually moved (applyMode already ran for this change).
       const stored = readStoredMode();
       if (stored !== mode) {
         mode = stored;
+        applyMode();
       }
-      applyMode();
     };
 
     // Re-sync with storage on every mount: the module-level mode was captured
@@ -76,22 +110,9 @@ export function usePrefersDark(): void {
     mq.addEventListener("change", apply);
     modeListeners.add(onModeChange);
 
-    // Cross-tab sync via the storage event.
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        const stored = e.newValue as ThemeMode;
-        if (stored === "light" || stored === "dark" || stored === "system") {
-          mode = stored;
-          applyMode();
-        }
-      }
-    };
-    window.addEventListener("storage", onStorage);
-
     return () => {
       mq.removeEventListener("change", apply);
       modeListeners.delete(onModeChange);
-      window.removeEventListener("storage", onStorage);
     };
   }, []);
 }

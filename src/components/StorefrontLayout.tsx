@@ -1,6 +1,6 @@
-import { ReactNode } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { ShoppingBag, ShoppingCart, User, Package, Store } from "lucide-react";
+import { ReactNode, FormEvent } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { ShoppingBag, ShoppingCart, User, Package, Store, Search } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
@@ -8,6 +8,7 @@ import { usePrefersDark } from "@/hooks/usePrefersDark";
 import { haptics } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import UserNotificationBell from "@/components/UserNotificationBell";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const tabs = [
   { to: "/shop", label: "Shop", Icon: ShoppingBag, end: true },
@@ -19,8 +20,18 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
   const { user, signOut } = useAuth();
   const { items } = useCart();
   const location = useLocation();
+  const navigate = useNavigate();
   usePrefersDark();
   const count = items.reduce((s, i) => s + i.quantity, 0);
+
+  // Depop's most prominent control: a global header search, on every storefront page.
+  const submitSearch = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    const q = String(data.get("q") ?? "").trim();
+    if (q) navigate(`/shop?q=${encodeURIComponent(q)}`);
+    else navigate("/shop");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,12 +49,27 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
             </div>
             <span className="font-sans text-xl font-semibold tracking-tight">DeliveryAce Shop</span>
           </Link>
+          <form role="search" aria-label="Site search" onSubmit={submitSearch} className="hidden lg:flex flex-1 justify-center px-6">
+            <div className="relative w-full max-w-xl">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="search"
+                name="q"
+                placeholder='Search for "grilled fish"'
+                aria-label="Search products and stores"
+                className="h-11 w-full rounded-full border border-foreground/80 bg-card pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </form>
           <nav aria-label="Primary" className="hidden md:flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
               <Link to="/shop" aria-current={location.pathname === "/shop" ? "page" : undefined}><ShoppingBag className="h-5 w-5 mr-1" aria-hidden="true" />Shop</Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/wholesale" aria-current={location.pathname === "/wholesale" ? "page" : undefined}><Store className="h-5 w-5 mr-1" aria-hidden="true" />Wholesale</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/sell" aria-current={location.pathname === "/sell" ? "page" : undefined}><Store className="h-5 w-5 mr-1" aria-hidden="true" />Sell</Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link
@@ -112,6 +138,7 @@ export default function StorefrontLayout({ children }: { children: ReactNode }) 
       <footer className="border-t bg-card/60">
         <div className="container mx-auto flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-muted-foreground">
           <p>© {new Date().getFullYear()} DeliveryAce</p>
+          <ThemeToggle />
           <nav aria-label="Legal" className="flex items-center gap-4">
             <Link to="/privacy" className="underline-offset-2 hover:underline">Privacy policy</Link>
             <Link to="/wholesale" className="underline-offset-2 hover:underline">Wholesale</Link>

@@ -3,7 +3,7 @@
   <!-- Primary Landing / Homepage -->
   <url>
     <loc>https://t-marc.vercel.app/</loc>
-    <lastmod>2026-09-18</lastmod>
+    <lastmod>2026-09-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -11,9 +11,17 @@
   <!-- Public Storefront & Catalog -->
   <url>
     <loc>https://t-marc.vercel.app/shop</loc>
-    <lastmod>2026-09-18</lastmod>
+    <lastmod>2026-09-20</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
+  </url>
+
+  <!-- Merchant funnel (sell on DeliveryAce) -->
+  <url>
+    <loc>https://t-marc.vercel.app/sell</loc>
+    <lastmod>2026-09-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
 
   <!-- Wholesale Application -->

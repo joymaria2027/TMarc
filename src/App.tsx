@@ -46,6 +46,7 @@ import StoreLandingPage from "@/pages/StoreLandingPage";
 import Onboarding from "@/pages/Onboarding";
 import PrivacyPage from "@/pages/PrivacyPage";
 import WholesaleApplyPage from "@/pages/WholesaleApplyPage";
+import SellPage from "@/pages/SellPage";
 import WholesalersPage from "@/pages/WholesalersPage";
 import NotFound from "@/pages/NotFound";
 
@@ -110,6 +111,7 @@ const App = () => (
             <Route path="/shop/m/:merchantId" element={<MerchantStorefrontPage />} />
             <Route path="/shop/p/:productId" element={<ProductDetailPage />} />
             <Route path="/wholesale" element={<WholesaleApplyPage />} />
+            <Route path="/sell" element={<SellPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/checkout/status/:orderId" element={<CheckoutStatusPage />} />

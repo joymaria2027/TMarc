@@ -23,6 +23,11 @@ export default function Index() {
   if (roles.includes('business_owner')) return <BusinessOwnerDashboard />;
   if (roles.includes('app_developer')) return <AppDeveloperDashboard />;
 
+  // Shoppers are not ops users: their home is the storefront, not a dashboard.
+  if (roles.includes('customer') || roles.includes('wholesaler')) {
+    return <Navigate to="/shop" replace />;
+  }
+
   // Fallback
   return <AdminDashboard />;
 }

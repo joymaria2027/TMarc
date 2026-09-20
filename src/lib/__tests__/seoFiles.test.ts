@@ -21,7 +21,7 @@ describe("SEO Static Files (sitemap.xml & robots.txt)", () => {
       const content = fs.readFileSync(sitemapPath, "utf-8");
 
       // Required public routes
-      const expectedPaths = ["/", "/shop", "/wholesale", "/privacy", "/auth"];
+      const expectedPaths = ["/", "/shop", "/sell", "/wholesale", "/privacy", "/auth"];
 
       for (const p of expectedPaths) {
         // Must contain an entry ending with or matching the path

@@ -10,6 +10,7 @@ import {
   ShoppingBag, Package, CheckSquare, Webhook, ScrollText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface NavItem {
   label: string;
@@ -219,6 +220,9 @@ export default function Layout({ children }: { children: ReactNode }) {
             <LogOut className="h-4 w-4" />
             Sign Out
           </Button>
+          <div className="mt-2 px-1">
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 

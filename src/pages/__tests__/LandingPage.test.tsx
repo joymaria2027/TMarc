@@ -15,6 +15,37 @@ vi.mock('@/hooks/useAuth', () => ({
   }),
 }));
 
+// Revision 10: the landing gains an Icebug-style product rail fed by the
+// same catalog query the shop uses. Mocked here so the rail contract is
+// testable without a backend.
+const railState = vi.hoisted(() => ({
+  products: [
+    { id: 'p1', merchant_id: 'm1', name: 'Chicken Yassa', price: 20, image_path: 'a.jpg', available_today: true, track_inventory: false, quantity: 0, created_at: new Date().toISOString() },
+    { id: 'p2', merchant_id: 'm2', name: 'Fresh Tapalapa', price: 10, image_path: 'b.jpg', available_today: true, track_inventory: false, quantity: 0, created_at: new Date().toISOString() },
+  ] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    from: (table: string) => {
+      const p = {
+        select: () => p,
+        eq: () => p,
+        order: () => p,
+        limit: () => p,
+        then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+          Promise.resolve({ data: table === 'products' ? railState.products : [], error: null }).then(res, rej),
+      };
+      return p;
+    },
+  },
+}));
+
+vi.mock('@/lib/productImage', () => ({
+  getProductPublicUrl: (path: string | null) => (path ? `https://img.test/${path}` : null),
+  getProductImageUrl: async (path: string | null) => (path ? `https://img.test/${path}` : null),
+}));
+
 import LandingPage from '../LandingPage';
 
 const renderLanding = () =>
@@ -189,5 +220,39 @@ describe('LandingPage (public marketing page at "/")', () => {
     const card = Array.from(container.querySelectorAll('[aria-hidden="true"]'))
       .find(el => /live dispatch/i.test(el.textContent ?? ''));
     expect(card).toBeDefined();
+  });
+
+  it('shows live products in an Icebug-style rail with a shop-all door', async () => {
+    renderLanding();
+    const rail = await screen.findByRole('region', { name: /fresh from the stores/i });
+    expect(within(rail).getByRole('link', { name: /shop all/i })).toHaveAttribute('href', '/shop');
+    const yassa = within(rail).getByRole('link', { name: /chicken yassa/i });
+    expect(yassa).toHaveAttribute('href', '/shop/p/p1');
+    expect(within(rail).getByText('D 20.00')).toBeInTheDocument();
+    expect(within(rail).getByText('D 10.00')).toBeInTheDocument();
+  });
+
+  it('rail Prev/Next controls scroll the strip', async () => {
+    renderLanding();
+    const rail = await screen.findByRole('region', { name: /fresh from the stores/i });
+    const strip = rail.querySelector('[data-rail-strip]') as HTMLElement;
+    // jsdom has no scrollBy; provide a stub and assert against it.
+    const scrollBy = vi.fn();
+    strip.scrollBy = scrollBy;
+    fireEvent.click(within(rail).getByRole('button', { name: /next products/i }));
+    expect(scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: expect.any(Number) }));
+    fireEvent.click(within(rail).getByRole('button', { name: /previous products/i }));
+    expect(scrollBy).toHaveBeenCalledTimes(2);
+  });
+
+  it('omits the rail entirely when the catalog is empty', async () => {
+    railState.products = [];
+    renderLanding();
+    await new Promise(r => setTimeout(r, 20));
+    expect(screen.queryByRole('region', { name: /fresh from the stores/i })).not.toBeInTheDocument();
+    railState.products = [
+      { id: 'p1', merchant_id: 'm1', name: 'Chicken Yassa', price: 20, image_path: 'a.jpg', available_today: true, track_inventory: false, quantity: 0, created_at: new Date().toISOString() },
+      { id: 'p2', merchant_id: 'm2', name: 'Fresh Tapalapa', price: 10, image_path: 'b.jpg', available_today: true, track_inventory: false, quantity: 0, created_at: new Date().toISOString() },
+    ];
   });
 });
