@@ -33,6 +33,8 @@ interface SettlementRow {
   receipt_attached: boolean;
   settlement_approved: boolean;
   delivered_at: string | null;
+  picked_up_at: string | null;
+  gps_confirmed: boolean;
   rider_id: string | null;
   merchant_id: string;
   merchant_name: string;
@@ -243,6 +245,8 @@ export default function SettlementsPage() {
         receipt_attached: d.receipt_attached,
         settlement_approved: d.settlement_approved,
         delivered_at: d.delivered_at,
+        picked_up_at: d.picked_up_at,
+        gps_confirmed: d.gps_confirmed,
         rider_id: d.rider_id,
         merchant_id: d.merchant_id,
         merchant_name: rest?.name || 'Unknown',

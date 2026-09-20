@@ -24,6 +24,19 @@ export interface DeliveryStatusMeta {
   icon: LucideIcon;
 }
 
+/**
+ * Anti-abuse: flags delivered rows with neither a start (never picked up)
+ * nor a receipt. Settlement approvers (and the fraud report) see the risk
+ * before money moves. Partial data never flags — unknown is not evidence
+ * (callers on full selects always provide both fields).
+ */
+export function needsProofReview(d: {
+  picked_up_at?: string | null;
+  receipt_attached?: boolean | null;
+}): boolean {
+  return d.picked_up_at == null && d.receipt_attached === false;
+}
+
 const STATUS_META: Record<string, DeliveryStatusMeta> = {
   pending: {
     label: "Pending",

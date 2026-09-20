@@ -21,6 +21,7 @@ import { guardedWrite } from '@/lib/guardedWrite';
 import { markRiderOfflineByRiderId, markRiderOnlineByRiderId } from '@/lib/riderPresence';
 import RiderDispatchOffers from '@/components/RiderDispatchOffers';
 import { removeDeliveryFromQueue } from './riderDashboard.helpers';
+import { canMarkCompleted } from './riderDashboard.helpers';
 import { findActiveDelivery } from './riderDashboard.helpers';
 import { describeRunSummary } from './riderDashboard.helpers';
 import { haptics } from '@/lib/haptics';
@@ -567,6 +568,13 @@ export default function RiderDashboard() {
   };
 
   const handleMarkCompleted = async (delivery: Delivery) => {
+    // Anti-abuse: this shortcut pays out via settlement, so it requires an
+    // attached receipt as proof (the button enforces this too; the database
+    // trigger is the final backstop against direct API calls).
+    if (!canMarkCompleted(delivery)) {
+      toast.error('Attach a delivery receipt first — proof is required to complete.');
+      return;
+    }
     const { error } = await guardedWrite(
       supabase.from('deliveries').update({
         status: 'delivered', delivered_at: new Date().toISOString(), gps_confirmed: false,
@@ -750,6 +758,8 @@ export default function RiderDashboard() {
                 onMarkCompleted={handleMarkCompleted}
                 onCancelAcceptance={handleCancelAcceptance}
                 onPaymentSaved={(deliveryId, method, bank) => setDeliveries(prev => prev.map(x => x.id === deliveryId ? { ...x, payment_method: method, payment_bank_name: bank || null } : x))}
+                userId={user?.id ?? null}
+                onReceiptUploaded={(deliveryId) => setDeliveries(prev => prev.map(x => x.id === deliveryId ? { ...x, receipt_attached: true } : x))}
               />
             ))}
           </div>

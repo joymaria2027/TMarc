@@ -42,6 +42,20 @@ export function findActiveDelivery<T extends { status: string }>(
   return deliveries.find(d => ['picked_up', 'in_transit'].includes(d.status)) ?? null;
 }
 
+/**
+ * Anti-abuse gate for the Mark Completed shortcut. It pays out via settlement,
+ * so it must never fire on a run with zero proof: the delivery must be
+ * accepted AND carry an attached receipt. (Started runs complete through the
+ * End Delivery + end-odometer flow instead. The database trigger enforces the
+ * same rule server-side so direct API calls cannot bypass it.)
+ */
+export function canMarkCompleted(d: {
+  status: string;
+  receipt_attached?: boolean | null;
+}): boolean {
+  return d.status === 'accepted' && d.receipt_attached === true;
+}
+
 export interface RunSummaryInput {
   order_reference: string | null;
   start_odometer_miles?: number | null;

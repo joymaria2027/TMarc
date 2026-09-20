@@ -2,7 +2,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { CheckCircle2, CreditCard } from 'lucide-react';
+import { CheckCircle2, CreditCard, ShieldAlert } from 'lucide-react';
+import { needsProofReview } from '@/lib/deliveries';
 import type { ExpenseItem, SettlementRow } from './MerchantSettlementCard';
 
 interface DeliverySettlementRowProps {
@@ -10,6 +11,9 @@ interface DeliverySettlementRowProps {
     pickup_address?: string;
     dropoff_address?: string;
     delivered_at?: string | null;
+    picked_up_at?: string | null;
+    gps_confirmed?: boolean;
+    receipt_attached?: boolean;
   };
   canApprove: boolean;
   onApprove: (id: string) => void;
@@ -102,6 +106,13 @@ export default function DeliverySettlementRow({
           canApprove && d.sharing && (
             <Button size="sm" className="min-h-[44px]" onClick={() => onApprove(d.id)}>Approve</Button>
           )
+        )}
+        {!d.settlement_approved && needsProofReview(d) && (
+          <span className="block mt-1">
+            <Badge variant="destructive" className="text-xs gap-1" title="Completed with no pickup record and no receipt — verify the run happened before paying">
+              <ShieldAlert className="h-3 w-3" aria-hidden="true" />No start proof — verify before paying
+            </Badge>
+          </span>
         )}
       </TableCell>
     </TableRow>
