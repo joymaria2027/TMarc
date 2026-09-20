@@ -123,7 +123,7 @@ export function WalletBalancesTable({
             const label = getPartyLabel(w);
             return (
               <TableRow key={w.id}>
-                <TableCell className="font-medium">{label}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">{label}</TableCell>
                 <TableCell className="capitalize text-muted-foreground">{w.party_type}</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums text-primary">{formatMoney(w.balance)}</TableCell>
                 <TableCell className="text-right tabular-nums text-success">{formatMoney(income)}</TableCell>

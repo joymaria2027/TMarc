@@ -356,8 +356,8 @@ export default function RevenueSharingPage() {
           <caption className="sr-only">Per-merchant revenue split ratios with live total check and edit actions</caption>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">
-                {canManage && (
+              {canManage && (
+                <TableHead className="w-12">
                   <Checkbox
                     checked={visibleShares.length > 0 && shareSelectedIds.size === visibleShares.length}
                     indeterminate={isShareIndeterminate}
@@ -365,8 +365,8 @@ export default function RevenueSharingPage() {
                     aria-label="Select all visible rows"
                     disabled={visibleShares.length === 0}
                   />
-                )}
-              </TableHead>
+                </TableHead>
+              )}
               <TableHead>Merchant</TableHead>
               <TableHead className="text-right">Rider %</TableHead>
               <TableHead className="text-right">Merchant %</TableHead>
@@ -395,7 +395,7 @@ export default function RevenueSharingPage() {
                     <span className="font-medium">{getMerchantName(s.merchant_id)}</span>
                     {isRider && !canManage && (
                       <span className="block text-xs text-muted-foreground">
-                        {s.rider_id ? 'Personal rate assigned to you' : 'Default rate for this merchant'}
+                        {s.rider_id ? 'Personal rate assigned to you' : 'Default rate'}
                       </span>
                     )}
                   </TableCell>
