@@ -56,8 +56,15 @@ export default function PaymentMethodSelect({ deliveryId, currentMethod, current
     }
   };
 
+  // Saved methods predate the lowercase value set (legacy display names like
+  // "QMoney"/"OMoney" stored raw). Resolve case-insensitively and fall back
+  // to the saved value itself — never render "undefined" from a lookup miss.
+  const known = currentMethod
+    ? PAYMENT_METHODS.find((m) => m.value.toLowerCase() === currentMethod.toLowerCase())
+    : undefined;
   const displayLabel = currentMethod
-    ? PAYMENT_METHODS.find(m => m.value === currentMethod)?.label + (currentMethod === 'bank_transfer' && currentBankName ? ` (${currentBankName})` : '')
+    ? (known?.label ?? currentMethod) +
+      (known?.value === 'bank_transfer' && currentBankName ? ` (${currentBankName})` : '')
     : null;
 
   return (
