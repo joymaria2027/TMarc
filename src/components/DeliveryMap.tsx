@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import type * as Leaflet from 'leaflet';
+import { darkBasemapUrl, DARK_BASEMAP_ATTRIBUTION } from '@/lib/cartoTiles';
 
 interface Waypoint {
   latitude: number;
@@ -73,9 +74,11 @@ export default function DeliveryMap({
       containerRef.current?.classList.toggle('dark-tiles', !!isDark);
       L.tileLayer(
         isDark
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+          ? darkBasemapUrl()
           : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        { attribution: isDark ? '© OpenStreetMap contributors © CARTO' : '© OpenStreetMap contributors' },
+        isDark
+          ? { attribution: DARK_BASEMAP_ATTRIBUTION, subdomains: 'abcd', maxZoom: 20 }
+          : { attribution: '© OpenStreetMap contributors' },
       ).addTo(map);
       setReady(true);
     })();
