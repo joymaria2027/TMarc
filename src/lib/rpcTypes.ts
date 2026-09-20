@@ -46,10 +46,14 @@ export function rpcGetUnassignedDeliveriesForRider(): Promise<{
 }> {
   // Single centralized cast: the RPC exists in the database but is missing
   // from generated types. Regenerate types to drop this.
-  const call = supabase.rpc as unknown as (
-    fn: 'get_unassigned_deliveries_for_rider',
-  ) => Promise<{ data: UnassignedDeliveryRow[] | null; error: PostgrestError | null }>;
-  return call('get_unassigned_deliveries_for_rider');
+  // NOTE: must stay a method call on `supabase` (`supabase.rpc(...)`), never
+  // detached (`const call = supabase.rpc; call(...)`) — postgrest-js reads
+  // `this.rest` internally, so a detached call throws `can't access property
+  // "rest", this is undefined` and whitescreens the awaiting pages.
+  return supabase.rpc('get_unassigned_deliveries_for_rider' as never) as unknown as Promise<{
+    data: UnassignedDeliveryRow[] | null;
+    error: PostgrestError | null;
+  }>;
 }
 
 export function rpcClaimDelivery(deliveryId: string) {
