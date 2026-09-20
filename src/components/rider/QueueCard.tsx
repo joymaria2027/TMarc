@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle2, DollarSign, MapPin, Play, Square } from 'lucide-react';
 import PaymentMethodSelect from '@/components/PaymentMethodSelect';
 import ReceiptUpload from '@/components/ReceiptUpload';
+import CompletionCodeDialog from '@/components/rider/CompletionCodeDialog';
 import { canMarkCompleted } from '@/pages/riderDashboard.helpers';
 
 export interface QueueDelivery {
@@ -49,8 +51,11 @@ export default function QueueCard({
   onReceiptUploaded,
 }: QueueCardProps) {
   // Anti-abuse: Mark Completed pays out via settlement, so it stays locked
-  // until the rider attaches a delivery receipt as proof of the run.
+  // until the rider attaches a delivery receipt as proof of the run. On top of
+  // that sits the customer handover-code gate: clicking opens the code dialog
+  // and only a server-verified code lets the completion update through.
   const markAllowed = canMarkCompleted(d);
+  const [codeOpen, setCodeOpen] = useState(false);
   return (
     <Card>
       <CardContent className="p-4">
@@ -81,7 +86,7 @@ export default function QueueCard({
           )}
           {d.status === 'accepted' && !hasActiveDelivery && (
             <Button
-              onClick={() => onMarkCompleted(d)}
+              onClick={() => setCodeOpen(true)}
               variant="outline"
               className="flex-1 min-h-[44px]"
               size="sm"
@@ -122,6 +127,19 @@ export default function QueueCard({
               onSaved={(method, bank) => onPaymentSaved(d.id, method, bank)}
             />
           </div>
+        )}
+
+        {codeOpen && (
+          <CompletionCodeDialog
+            open={codeOpen}
+            onOpenChange={setCodeOpen}
+            deliveryId={d.id}
+            orderReference={d.order_reference}
+            onVerified={() => {
+              setCodeOpen(false);
+              onMarkCompleted(d);
+            }}
+          />
         )}
       </CardContent>
     </Card>

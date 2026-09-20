@@ -27,6 +27,13 @@ export type HasWithdrawalPinResult = Functions['has_withdrawal_pin']['Returns'];
 export type VerifyWithdrawalPinResult = Functions['verify_withdrawal_pin']['Returns'];
 export type SetWithdrawalPinResult = Functions['set_withdrawal_pin']['Returns'];
 
+// Handover code RPCs ship in migration 20260920000004; generated types do not
+// include them yet, so these mirror the migration signatures until a
+// regeneration (cast `as never` per the established get_unassigned pattern).
+// Returns stay explicit because call sites branch on them.
+export type VerifyHandoverCodeResult = boolean;
+export type GetMyHandoverCodeResult = number | null;
+
 // ---------------------------------------------------------------------------
 // Thin typed wrappers: preserve supabase { data, error } passthrough so call
 // sites keep their toast/optimistic flows, minus the `as any` casts.
@@ -82,4 +89,35 @@ export function rpcVerifyWithdrawalPin(pin: string) {
 
 export function rpcSetWithdrawalPin(pin: string) {
   return supabase.rpc('set_withdrawal_pin', { _pin: pin });
+}
+
+// Ticket: handover-code/02 — rider enters the customer's 6-digit handover code.
+// SECURITY DEFINER RPC; returns true when verified, false on a wrong code,
+// and raises (PostgrestError) on lockout or non-assigned riders.
+export function rpcVerifyHandoverCode(deliveryId: string, code: number): Promise<{
+  data: VerifyHandoverCodeResult | null;
+  error: PostgrestError | null;
+}> {
+  return supabase.rpc('verify_delivery_handover_code' as never, {
+    _delivery_id: deliveryId,
+    _code: code,
+  } as never) as unknown as Promise<{
+    data: VerifyHandoverCodeResult | null;
+    error: PostgrestError | null;
+  }>;
+}
+
+// Ticket: handover-code/03 — the owning Customer (or ops) reads the code to
+// show/relay it. Riders get NULL (their user_id has no customer row), which is
+// the point: the code never reaches the rider through any path.
+export function rpcGetMyHandoverCode(deliveryId: string): Promise<{
+  data: GetMyHandoverCodeResult | null;
+  error: PostgrestError | null;
+}> {
+  return supabase.rpc('get_my_handover_code' as never, {
+    _delivery_id: deliveryId,
+  } as never) as unknown as Promise<{
+    data: GetMyHandoverCodeResult | null;
+    error: PostgrestError | null;
+  }>;
 }

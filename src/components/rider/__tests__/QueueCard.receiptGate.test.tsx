@@ -6,6 +6,14 @@ import { canMarkCompleted } from '../../../pages/riderDashboard.helpers';
 // Anti-abuse: Mark Completed pays out via settlement, so it must require
 // proof. An accepted delivery with no attached receipt cannot be completed;
 // the rider must attach the receipt first (or run the Start/GPS flow).
+//
+// handover-code/02: the receipt gate is now the FIRST gate. A passed gate
+// opens the customer handover-code dialog instead of completing directly.
+
+vi.mock('../CompletionCodeDialog', () => ({
+  default: ({ open }: { open: boolean }) =>
+    open ? <div>handover-code-dialog</div> : null,
+}));
 
 const base = {
   id: 'd1',
@@ -67,11 +75,14 @@ describe('QueueCard Mark Completed receipt gate', () => {
     expect(onMarkCompleted).not.toHaveBeenCalled();
   });
 
-  it('enables Mark Completed once the receipt is attached', () => {
+  it('opens the handover-code dialog once the receipt is attached', () => {
     const { onMarkCompleted } = renderCard(true);
     const btn = screen.getByRole('button', { name: /mark completed/i });
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
-    expect(onMarkCompleted).toHaveBeenCalledTimes(1);
+    // Receipt gate passed → code gate next: the update fires only after the
+    // customer's handover code is verified inside the dialog.
+    expect(screen.getByText('handover-code-dialog')).toBeInTheDocument();
+    expect(onMarkCompleted).not.toHaveBeenCalled();
   });
 });

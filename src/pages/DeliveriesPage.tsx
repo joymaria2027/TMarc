@@ -33,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Flag, Search } from 'lucide-react';
 import { guardedWrite } from '@/lib/guardedWrite';
 import { formatMoney } from '@/lib/finance';
+import { rpcGetMyHandoverCode } from '@/lib/rpcTypes';
 import { format } from 'date-fns';
 
 export const DELIVERIES_PAGE_SIZE = 20;
@@ -82,6 +83,7 @@ export default function DeliveriesPage() {
     shouldKeep: (row) => (row.status === 'unassigned' || row.status === 'pending') && !row.rider_id,
   });
   const [selected, setSelected] = useState<any | null>(null);
+  const [opsHandoverCode, setOpsHandoverCode] = useState<number | null>(null);
   const [waypoints, setWaypoints] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [rejectionCounts, setRejectionCounts] = useState<Record<string, number>>({});
@@ -222,6 +224,11 @@ export default function DeliveriesPage() {
   const viewDelivery = async (delivery: any) => {
     setSelected(delivery);
     setSelectedRejections([]);
+    setOpsHandoverCode(null);
+    // handover-code/03: codes live in an RLS-denied table, so the drawer pulls
+    // the customer/ops-visible code through the SECURITY DEFINER RPC instead
+    // of the row itself.
+    rpcGetMyHandoverCode(delivery.id).then(({ data }) => setOpsHandoverCode(data ?? null));
     const { data } = await supabase.from('delivery_waypoints')
       .select('*').eq('delivery_id', delivery.id).order('recorded_at', { ascending: true });
     setWaypoints(data || []);
@@ -412,6 +419,18 @@ export default function DeliveriesPage() {
                 <div><span className="text-muted-foreground">Delivered:</span> {selected.delivered_at ? format(new Date(selected.delivered_at), 'MMM d, yyyy HH:mm') : '–'}</div>
                 <div><span className="text-muted-foreground">Customer:</span> {selected.customer_name || '–'}</div>
                 <div><span className="text-muted-foreground">Customer Phone:</span> {selected.customer_phone || '–'}</div>
+                {/* handover-code/03: merchant-created (manual) deliveries have no
+                    app customer to show the code — ops relays it via
+                    get_my_handover_code. Never shown once delivered (the code row
+                    is deleted on completion). */}
+                {opsHandoverCode != null && selected.status !== 'delivered' && (
+                  <div>
+                    <span className="text-muted-foreground">Handover code:</span>{' '}
+                    <span className="font-semibold tabular-nums" data-testid="ops-handover-code">
+                      {String(opsHandoverCode).replace(/(\d{3})(\d{3})/, '$1 $2')}
+                    </span>
+                  </div>
+                )}
                 <div><span className="text-muted-foreground">Waypoints:</span> {waypoints.length} points</div>
                 <div><span className="text-muted-foreground">Payment:</span> {
                   selected.payment_method

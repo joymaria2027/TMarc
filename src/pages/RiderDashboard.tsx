@@ -34,6 +34,7 @@ import {
   rpcRejectDelivery,
 } from '@/lib/rpcTypes';
 import OdometerCaptureDialog from '@/components/OdometerCaptureDialog';
+import CompletionCodeDialog from '@/components/rider/CompletionCodeDialog';
 import FirstRunHint from '@/components/FirstRunHint';
 import EmptyState from '@/components/EmptyState';
 import DashboardTour, { TourReplay } from '@/components/DashboardTour';
@@ -511,6 +512,15 @@ export default function RiderDashboard() {
 
   const [pendingStart, setPendingStart] = useState<Delivery | null>(null);
   const [pendingEnd, setPendingEnd] = useState<Delivery | null>(null);
+  // handover-code/02: the End Delivery flow captures the odometer FIRST, then
+  // asks for the customer's handover code; the delivered update fires only
+  // after the server verifies the code (the DB gate enforces the same rule).
+  const [pendingCodeEnd, setPendingCodeEnd] = useState<{
+    delivery: Delivery;
+    miles: number;
+    photoUrl: string;
+    distance: number;
+  } | null>(null);
   // Gift-ceremony/02 afterglow: run summary shown once per completion, dismissed
   // by the rider. Seed for a future protectable streak — no counter yet.
   const [justCompleted, setJustCompleted] = useState<{ reference: string; detail: string } | null>(null);
@@ -543,11 +553,21 @@ export default function RiderDashboard() {
     setPendingEnd(activeDelivery);
   };
 
-  const confirmEndOdometer = async (miles: number, photoUrl: string) => {
+  const confirmEndOdometer = (miles: number, photoUrl: string) => {
     const delivery = pendingEnd;
     if (!delivery) return;
     stopTracking();
+    // Distance is snapshotted now (tracking stops here); the code dialog may
+    // take a while and the reading must not drift while the rider types.
     const distance = calculateDistance();
+    setPendingCodeEnd({ delivery, miles, photoUrl, distance });
+    setPendingEnd(null);
+  };
+
+  const completeDeliveryAfterCode = async () => {
+    const pending = pendingCodeEnd;
+    if (!pending) return;
+    const { delivery, miles, photoUrl, distance } = pending;
     const nowIso = new Date().toISOString();
     const { error } = await supabase.from('deliveries').update({
       status: 'delivered', delivered_at: nowIso,
@@ -556,7 +576,7 @@ export default function RiderDashboard() {
       end_odometer_photo_url: photoUrl,
       end_odometer_at: nowIso,
     }).eq('id', delivery.id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(error.message); setPendingCodeEnd(null); return; }
     const milesCovered = delivery.start_odometer_miles != null ? (miles - delivery.start_odometer_miles) : null;
     toast.success(`Delivery completed${milesCovered != null ? ` · ${milesCovered.toFixed(1)} mi covered` : ''}`);
     void haptics.success();
@@ -564,7 +584,7 @@ export default function RiderDashboard() {
     setJustCompleted({ reference: summary.reference, detail: summary.detail });
     setDeliveries(prev => prev.map(d => d.id === delivery.id ? { ...d, status: 'delivered', actual_distance_km: distance, end_odometer_miles: miles } : d));
     setActiveDelivery(null);
-    setPendingEnd(null);
+    setPendingCodeEnd(null);
   };
 
   const handleMarkCompleted = async (delivery: Delivery) => {
@@ -1021,12 +1041,25 @@ export default function RiderDashboard() {
           open={!!pendingEnd}
           onOpenChange={(o) => !o && setPendingEnd(null)}
           title="End odometer reading"
-          description="Enter your current mileage and snap a photo of the odometer to complete this delivery."
+          description="Enter your current mileage and snap a photo of the odometer, then ask the customer for their handover code to complete this delivery."
           riderId={riderId}
           deliveryId={pendingEnd.id}
           phase="end"
           minMiles={pendingEnd.start_odometer_miles ?? null}
           onConfirmed={confirmEndOdometer}
+        />
+      )}
+      {pendingCodeEnd && (
+        <CompletionCodeDialog
+          open={!!pendingCodeEnd}
+          onOpenChange={(o) => {
+            // A cancel leaves the run in_transit — the rider can redo End
+            // Delivery (odometer re-capture) or hand over later.
+            if (!o) setPendingCodeEnd(null);
+          }}
+          deliveryId={pendingCodeEnd.delivery.id}
+          orderReference={pendingCodeEnd.delivery.order_reference}
+          onVerified={completeDeliveryAfterCode}
         />
       )}
     </div>

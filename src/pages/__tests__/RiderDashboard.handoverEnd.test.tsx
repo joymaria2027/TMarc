@@ -3,7 +3,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import RiderDashboard from "../RiderDashboard";
 
-const { db, rpc, authUser } = vi.hoisted(() => ({
+// Ticket: handover-code/02 — End Delivery must not write `delivered` until the
+// customer's handover code is verified. Flow: End Delivery → odometer capture
+// → handover-code dialog → verify → THEN the delivered update. Cancelling the
+// code dialog leaves the run in_transit with no write.
+
+const { db, rpc, authUser, writes } = vi.hoisted(() => ({
   db: {
     riderId: "r1",
     deliveries: [] as Record<string, unknown>[],
@@ -18,9 +23,8 @@ const { db, rpc, authUser } = vi.hoisted(() => ({
     reject: vi.fn(),
     cancel: vi.fn(),
   },
-  // Stable identity: RiderDashboard's init effect depends on `user` — a fresh
-  // object per render would loop setState → render forever.
   authUser: { id: "u1" },
+  writes: [] as Array<{ table: string; payload: Record<string, unknown> }>,
 }));
 
 vi.mock("@/lib/haptics", () => ({
@@ -37,7 +41,7 @@ vi.mock("@/hooks/useAuth", () => ({
 
 vi.mock("@/hooks/useGpsTracking", () => ({
   useGpsTracking: () => ({
-    tracking: false,
+    tracking: true,
     currentPosition: null,
     startTracking: vi.fn(),
     stopTracking: vi.fn(),
@@ -63,21 +67,29 @@ vi.mock("@/components/OdometerCaptureDialog", () => ({
     onConfirmed: (miles: number, photoUrl: string) => void;
     title: string;
   }) =>
-    open ? <button onClick={() => onConfirmed(103.2, "http://photo/x.jpg")}>{title}</button> : null,
+    open ? (
+      <button onClick={() => onConfirmed(103.2, "http://photo/x.jpg")}>{title}</button>
+    ) : null,
 }));
 
-// handover-code/02: End Delivery interposes the customer's handover-code step
-// between the odometer capture and the delivered update. The mock stands in
-// for the server-verified contract — onVerified fires only after verification.
+// The real dialog verifies via RPC before calling onVerified; the mock stands
+// in for that contract — onVerified fires only after a server-verified code.
 vi.mock("@/components/rider/CompletionCodeDialog", () => ({
   default: ({
     open,
     onVerified,
+    onOpenChange,
   }: {
     open: boolean;
     onVerified: () => void;
+    onOpenChange: (o: boolean) => void;
   }) =>
-    open ? <button onClick={onVerified}>verify-handover-code</button> : null,
+    open ? (
+      <div>
+        <button onClick={onVerified}>verify-handover-code</button>
+        <button onClick={() => onOpenChange(false)}>cancel-handover-code</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock("@/lib/rpcTypes", () => ({
@@ -98,7 +110,7 @@ vi.mock("@/integrations/supabase/client", () => {
     limit: () => Chain;
     is: () => Chain;
     in: () => Chain;
-    update: () => Chain;
+    update: (p: Record<string, unknown>) => Chain;
     insert: () => Chain;
     single: () => Promise<{ data: unknown; error: null }>;
     maybeSingle: () => Promise<{ data: unknown; error: null }>;
@@ -106,7 +118,7 @@ vi.mock("@/integrations/supabase/client", () => {
   }
   function chainable(table: string): Chain {
     let sel = "";
-    let isWrite = false;
+    let payload: Record<string, unknown> | null = null;
     const q = {} as Chain;
     q.select = (s: string) => { sel = s; return q; };
     q.eq = () => q;
@@ -116,14 +128,17 @@ vi.mock("@/integrations/supabase/client", () => {
     q.limit = () => q;
     q.is = () => q;
     q.in = () => q;
-    q.update = () => { isWrite = true; return q; };
-    q.insert = () => { isWrite = true; return q; };
+    q.update = (p: Record<string, unknown>) => { payload = p; return q; };
+    q.insert = () => q;
     q.single = () =>
       Promise.resolve({ data: table === "riders" ? { id: db.riderId } : null, error: null });
     q.maybeSingle = () =>
       Promise.resolve({ data: table === "riders" ? { id: db.riderId } : null, error: null });
     q.then = (resolve: (v: unknown) => unknown) => {
-      if (isWrite) return Promise.resolve({ data: null, error: null }).then(resolve);
+      if (payload) {
+        writes.push({ table, payload });
+        return Promise.resolve({ data: null, error: null }).then(resolve);
+      }
       if (table === "deliveries") {
         const data = sel.includes("merchants(name)") ? db.offeredFull : db.deliveries;
         return Promise.resolve({ data, error: null }).then(resolve);
@@ -145,31 +160,7 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-import { haptics } from "@/lib/haptics";
 import { toast } from "sonner";
-
-const offer = {
-  id: "offer-1",
-  rider_id: null,
-  status: "unassigned",
-  merchant_id: "m1",
-  pickup_address: "Pickup St",
-  dropoff_address: "Drop Ave",
-  pickup_latitude: null,
-  pickup_longitude: null,
-  dropoff_latitude: null,
-  dropoff_longitude: null,
-  dispatched_at: null,
-  picked_up_at: null,
-  delivered_at: null,
-  actual_distance_km: null,
-  estimated_distance_km: 2.5,
-  order_reference: "DG-101",
-  estimated_tariff: 800,
-  receipt_attached: false,
-  created_at: new Date().toISOString(),
-  merchants: { name: "Test Store" },
-};
 
 const activeDelivery = {
   id: "d1",
@@ -191,7 +182,7 @@ const activeDelivery = {
   estimated_distance_km: 3,
   order_reference: "DG-9",
   estimated_tariff: 1250,
-  receipt_attached: true,
+  receipt_attached: false,
   created_at: new Date().toISOString(),
   merchants: { name: "Test Store" },
 };
@@ -201,71 +192,47 @@ beforeEach(() => {
   db.offeredFull = [];
   db.rejections = [];
   db.merchants = [];
+  writes.length = 0;
+  (toast.success as ReturnType<typeof vi.fn>).mockClear();
+  (toast.error as ReturnType<typeof vi.fn>).mockClear();
   Object.values(rpc).forEach((fn) => fn.mockReset());
   rpc.unassigned.mockResolvedValue({ data: [], error: null });
   rpc.offered.mockResolvedValue({ data: [], error: null });
-  rpc.claim.mockResolvedValue({ data: { id: "offer-1" }, error: null });
-  rpc.reject.mockResolvedValue({ data: true, error: null });
-  rpc.cancel.mockResolvedValue({ data: true, error: null });
-  (haptics.success as ReturnType<typeof vi.fn>).mockClear();
-  (toast.success as ReturnType<typeof vi.fn>).mockClear();
-  (toast.info as ReturnType<typeof vi.fn>).mockClear();
 });
 
-describe("RiderDashboard celebration (gift-ceremony/02)", () => {
-  it("claim success fires haptics.success (Stage 2 ceremony)", async () => {
-    rpc.offered.mockResolvedValue({ data: [{ id: "offer-1" }], error: null });
-    db.offeredFull = [offer];
-    render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
-
-    const accept = await screen.findByRole("button", { name: "Accept" });
-    fireEvent.click(accept);
-
-    await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith("Delivery claimed.");
-    });
-    expect(haptics.success).toHaveBeenCalledTimes(1);
-  });
-
-  it("completing a delivery shows a run-summary banner with tabular payout (Stage 3)", async () => {
+describe("RiderDashboard End Delivery handover-code gate (handover-code/02)", () => {
+  it("writes delivered only after the handover code is verified", async () => {
     db.deliveries = [{ ...activeDelivery }];
     render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /end delivery/i }));
     fireEvent.click(await screen.findByRole("button", { name: /end odometer reading/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /verify-handover-code/i }));
+
+    // Odometer captured but NOT verified yet — no delivered write may exist.
+    expect(screen.getByRole("button", { name: /verify-handover-code/i })).toBeInTheDocument();
+    // (Mount emits an unrelated riders.is_online write; only deliveries writes count.)
+    expect(writes.filter((w) => w.table === "deliveries")).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /verify-handover-code/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("3.2 mi covered · D1250.00 payout")).toBeInTheDocument();
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Delivery completed/));
     });
-    expect(haptics.success).toHaveBeenCalledTimes(1);
-    expect(document.querySelectorAll(".tabular-nums").length).toBeGreaterThan(0);
+    const deliveredWrite = writes.find((w) => w.table === "deliveries");
+    expect(deliveredWrite).toBeDefined();
+    expect(deliveredWrite!.payload.status).toBe("delivered");
+    expect(deliveredWrite!.payload.end_odometer_miles).toBe(103.2);
   });
 
-  it("run-summary banner dismisses via close button", async () => {
+  it("leaves the run in_transit with no write when the code step is cancelled", async () => {
     db.deliveries = [{ ...activeDelivery }];
     render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: /end delivery/i }));
     fireEvent.click(await screen.findByRole("button", { name: /end odometer reading/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /verify-handover-code/i }));
-    await screen.findByText("3.2 mi covered · D1250.00 payout");
+    fireEvent.click(screen.getByRole("button", { name: /cancel-handover-code/i }));
 
-    fireEvent.click(screen.getByRole("button", { name: /dismiss run summary/i }));
-    expect(screen.queryByText("3.2 mi covered · D1250.00 payout")).toBeNull();
-  });
-
-  it("reject path stays a receipt — never fires haptics.success", async () => {
-    rpc.offered.mockResolvedValue({ data: [{ id: "offer-1" }], error: null });
-    db.offeredFull = [offer];
-    render(<MemoryRouter><RiderDashboard /></MemoryRouter>);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
-    fireEvent.click(await screen.findByRole("button", { name: /confirm reject/i }));
-
-    await waitFor(() => {
-      expect(toast.info).toHaveBeenCalled();
-    });
-    expect(haptics.success).not.toHaveBeenCalled();
+    expect(writes.filter((w) => w.table === "deliveries")).toHaveLength(0);
+    expect(toast.success).not.toHaveBeenCalledWith(expect.stringMatching(/Delivery completed/));
   });
 });

@@ -65,7 +65,10 @@ export default function MyOrdersPage() {
       try {
         const { data } = await supabase
           .from("orders")
-          .select("*, merchants(name), order_items(*)")
+          // handover-code/03: the customer's own handover code travels with the
+          // delivery embed (column-scoped; the code table itself is RLS-denied
+          // and only surfaced here or via get_my_handover_code).
+          .select("*, merchants(name), order_items(*), deliveries!orders_delivery_id_fkey(status, handover_code)")
           .eq("customer_id", cid)
           .order("created_at", { ascending: false });
         const next = data || [];
@@ -370,6 +373,10 @@ function OrderCard({ o, unread, preview, onChatOpened }: { o: any; unread: numbe
         {o.fulfillment_type === "delivery" && ["picked_up", "in_transit"].includes(o.status) && o.delivery_id && (
           <LiveDeliveryMap orderId={o.id} deliveryId={o.delivery_id} />
         )}
+        {/* handover-code/03: the customer IS the source of the completion code.
+            Shown while the delivery is on the road; the server deletes the code
+            on completion, so a delivered order renders no block. */}
+        <HandoverCodeBlock delivery={o.deliveries} />
         <ul className="space-y-1">
           {o.order_items?.map((it: any) => (
             <li key={it.id} className="flex justify-between items-center gap-3 text-base leading-relaxed min-h-[44px] py-1">
@@ -428,5 +435,47 @@ function OrderCard({ o, unread, preview, onChatOpened }: { o: any; unread: numbe
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function HandoverCodeBlock({ delivery }: { delivery?: { status: string; handover_code: number | null } | null }) {
+  const [copied, setCopied] = useState(false);
+
+  // The server deletes the code row on completion, so delivered orders arrive
+  // with handover_code = null — but render defensively anyway: no code, no block.
+  if (!delivery || delivery.status === "delivered" || !delivery.handover_code) return null;
+
+  const code = String(delivery.handover_code);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      void haptics.selectionChanged();
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div
+      data-testid="handover-code"
+      className="rounded border border-primary/40 bg-primary/5 p-3 text-sm"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-medium">Handover code</p>
+          <p className="text-muted-foreground">Share this code only with your rider — they must enter it to complete the delivery.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-2xl font-bold tracking-[0.3em] tabular-nums" aria-label={`Handover code ${code.slice(0, 3)} ${code.slice(3)}`}>
+            {code.slice(0, 3)} {code.slice(3)}
+          </span>
+          <Button variant="outline" size="sm" onClick={copy} aria-label={`Copy handover code ${code.slice(0, 3)} ${code.slice(3)}`}>
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
