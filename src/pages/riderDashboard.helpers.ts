@@ -30,6 +30,18 @@ export function removeDeliveryFromQueue<T extends { id: string }>(
   };
 }
 
+/**
+ * Selects the run shown in the Active Delivery card (map, GPS, End Delivery).
+ * Only a *started* run counts: `accepted` must stay in My queue behind the
+ * Start Delivery button, which is what opens the start-odometer dialog.
+ * Promoting `accepted` to Active skips the mileage stage entirely.
+ */
+export function findActiveDelivery<T extends { status: string }>(
+  deliveries: T[],
+): T | null {
+  return deliveries.find(d => ['picked_up', 'in_transit'].includes(d.status)) ?? null;
+}
+
 export interface RunSummaryInput {
   order_reference: string | null;
   start_odometer_miles?: number | null;

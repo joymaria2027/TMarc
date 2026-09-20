@@ -21,6 +21,7 @@ import { guardedWrite } from '@/lib/guardedWrite';
 import { markRiderOfflineByRiderId, markRiderOnlineByRiderId } from '@/lib/riderPresence';
 import RiderDispatchOffers from '@/components/RiderDispatchOffers';
 import { removeDeliveryFromQueue } from './riderDashboard.helpers';
+import { findActiveDelivery } from './riderDashboard.helpers';
 import { describeRunSummary } from './riderDashboard.helpers';
 import { haptics } from '@/lib/haptics';
 import GiftReveal from '@/components/celebration/GiftReveal';
@@ -236,7 +237,10 @@ export default function RiderDashboard() {
     const { data } = await supabase.from('deliveries').select('*').eq('rider_id', rId).order('created_at', { ascending: false });
     const list = ((data as Delivery[]) || []).filter(d => !isRecentlyRejected(d.id));
     setDeliveries(list);
-    const active = list.find(d => ['accepted', 'picked_up', 'in_transit'].includes(d.status));
+    // Only a started run is Active — `accepted` stays in My queue behind
+    // Start Delivery (the start-odometer gate). Promoting it here auto-starts
+    // the run and skips the mileage stage.
+    const active = findActiveDelivery(list);
     if (active) setActiveDelivery(active);
     else setActiveDelivery(null);
   };
