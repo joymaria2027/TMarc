@@ -597,6 +597,7 @@ export default function RiderDashboard() {
     const map: Record<string, string> = {
       pending: 'bg-muted text-muted-foreground',
       dispatched: 'bg-info/10 text-info',
+      accepted: 'bg-success/10 text-success',
       picked_up: 'bg-warning/10 text-warning',
       in_transit: 'bg-primary/10 text-primary',
       delivered: 'bg-accent/10 text-accent',

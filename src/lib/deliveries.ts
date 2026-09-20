@@ -40,6 +40,11 @@ const STATUS_META: Record<string, DeliveryStatusMeta> = {
     badgeClassName: "bg-info/10 text-info border-info/20",
     icon: Truck,
   },
+  accepted: {
+    label: "Accepted",
+    badgeClassName: "bg-success/10 text-success border-success/20",
+    icon: CheckCircle2,
+  },
   in_transit: {
     label: "In transit",
     badgeClassName: "bg-primary/10 text-primary border-primary/20",
@@ -197,6 +202,7 @@ const STATUS_SORT_ORDER: readonly string[] = [
   "pending",
   "unassigned",
   "dispatched",
+  "accepted",
   "in_transit",
   "delivered",
   "cancelled",
