@@ -87,6 +87,35 @@ describe("customer + staff code reveal", () => {
     // Merchant managers create manual deliveries — they relay the code too.
     expect(sql).toMatch(/has_role\(auth\.uid\(\), 'merchant_manager'::app_role\)/);
   });
+
+  it("is corrected by 20260920000006: selects c.handover_code, never c.code", () => {
+    // Regression: 04 shipped `SELECT c.code` (wrong column); Postgres only
+    // resolves plpgsql column refs at first execution, so the bug survived
+    // CREATE and surfaced as SQLSTATE 42703 on the first live call.
+    const fix = fs.readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../supabase/migrations/20260920000006_fix_handover_code_reveal.sql",
+      ),
+      "utf-8",
+    );
+    expect(fix).toMatch(/SELECT c\.handover_code INTO/);
+    expect(fix).not.toMatch(/SELECT c\.code INTO/);
+  });
+
+  it("uses the real app_role enum value company_manager, not merchant_manager", () => {
+    // SQLSTATE 22P02: 'merchant_manager' is not a value of app_role; the
+    // merchant-facing manager role in this database is company_manager.
+    const fix = fs.readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../supabase/migrations/20260920000006_fix_handover_code_reveal.sql",
+      ),
+      "utf-8",
+    );
+    expect(fix).toContain("'company_manager'::app_role");
+    expect(fix).not.toContain("'merchant_manager'::app_role");
+  });
 });
 
 describe("completion gate hardening", () => {
