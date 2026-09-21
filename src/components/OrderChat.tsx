@@ -34,6 +34,10 @@ export default function OrderChat({
   onLastMessage?: (msg: { body: string; created_at: string; mine: boolean } | null) => void;
 }) {
   const { user } = useAuth();
+  // Bubble sides mirror by viewer role (customer left / merchant right from
+  // merchant POV and vice versa). Identity (user.id) is only for read
+  // receipts + previews — one account can hold both roles.
+  const counterpart = senderRole === "customer" ? "merchant" : "customer";
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -154,7 +158,7 @@ export default function OrderChat({
         role="log"
         aria-live="polite"
         aria-relevant="additions"
-        aria-label="Messages with merchant"
+        aria-label={`Messages with ${counterpart}`}
         className="flex-1 min-h-0"
       >
         <ScrollArea className="h-full p-3">
@@ -166,7 +170,7 @@ export default function OrderChat({
             ) : (
               <ul className="space-y-2">
                 {messages.map((m) => {
-                  const mine = m.sender_user_id === user?.id;
+                  const mine = m.sender_role === senderRole;
                   return (
                     <li key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                       <ContextMenu>
@@ -221,13 +225,13 @@ export default function OrderChat({
         }}
       >
         <label htmlFor={inputId} className="sr-only">
-          Message merchant
+          Message {counterpart}
         </label>
         <Input
           id={inputId}
           value={text}
           placeholder="Type a message…"
-          aria-label="Message merchant"
+          aria-label={`Message ${counterpart}`}
           type="text"
           enterKeyHint="send"
           autoCapitalize="sentences"
