@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DeliverySettlementRow from '../DeliverySettlementRow';
 import { needsProofReview } from '@/lib/deliveries';
 
@@ -87,5 +87,42 @@ describe('DeliverySettlementRow proof badge', () => {
       />,
     );
     expect(screen.queryByText(/no start proof/i)).toBeNull();
+  });
+});
+
+describe('DeliverySettlementRow proof gate (05-proof-gate-approve)', () => {
+  const sharing = { rider_percentage: 50, merchant_percentage: 20, platform_percentage: 15, ucs_rides_percentage: 15 };
+  const proofRow = { ...rowBase, sharing, picked_up_at: null, receipt_attached: false };
+  const cleanRow = { ...rowBase, sharing, picked_up_at: '2026-09-20T09:00:00Z', receipt_attached: false };
+
+  it('proof row: Approve opens a confirm and pays nothing on its own', async () => {
+    const onApprove = vi.fn();
+    render(<DeliverySettlementRow {...propsBase} onApprove={onApprove} delivery={proofRow} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await waitFor(() =>
+      expect(screen.getByText(/verify the run happened before paying/i)).toBeInTheDocument(),
+    );
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('proof row: confirming pays', async () => {
+    const onApprove = vi.fn();
+    render(<DeliverySettlementRow {...propsBase} onApprove={onApprove} delivery={proofRow} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await waitFor(() =>
+      expect(screen.getByText(/verify the run happened before paying/i)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve anyway' }));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith('d1');
+  });
+
+  it('clean row: Approve pays at once with no dialog', () => {
+    const onApprove = vi.fn();
+    render(<DeliverySettlementRow {...propsBase} onApprove={onApprove} delivery={cleanRow} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(onApprove).toHaveBeenCalledWith('d1');
+    expect(screen.queryByText(/verify the run happened before paying/i)).toBeNull();
   });
 });
