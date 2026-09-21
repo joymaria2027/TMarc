@@ -221,6 +221,7 @@ export type Database = {
           route_deviation_detected: boolean
           settlement_approved: boolean
           settlement_approved_by: string | null
+          settlement_source: string
           start_odometer_at: string | null
           start_odometer_miles: number | null
           start_odometer_photo_url: string | null
@@ -262,6 +263,7 @@ export type Database = {
           route_deviation_detected?: boolean
           settlement_approved?: boolean
           settlement_approved_by?: string | null
+          settlement_source?: string
           start_odometer_at?: string | null
           start_odometer_miles?: number | null
           start_odometer_photo_url?: string | null
@@ -303,6 +305,7 @@ export type Database = {
           route_deviation_detected?: boolean
           settlement_approved?: boolean
           settlement_approved_by?: string | null
+          settlement_source?: string
           start_odometer_at?: string | null
           start_odometer_miles?: number | null
           start_odometer_photo_url?: string | null
@@ -885,6 +888,7 @@ export type Database = {
           parent_merchant_id: string | null
           phone: string | null
           rejection_reason: string | null
+          settlement_mode: string
           updated_at: string
         }
         Insert: {
@@ -905,6 +909,7 @@ export type Database = {
           parent_merchant_id?: string | null
           phone?: string | null
           rejection_reason?: string | null
+          settlement_mode?: string
           updated_at?: string
         }
         Update: {
@@ -925,6 +930,7 @@ export type Database = {
           parent_merchant_id?: string | null
           phone?: string | null
           rejection_reason?: string | null
+          settlement_mode?: string
           updated_at?: string
         }
         Relationships: [
@@ -2316,6 +2322,7 @@ export type Database = {
           route_deviation_detected: boolean
           settlement_approved: boolean
           settlement_approved_by: string | null
+          settlement_source: string
           start_odometer_at: string | null
           start_odometer_miles: number | null
           start_odometer_photo_url: string | null
@@ -2407,6 +2414,7 @@ export type Database = {
           route_deviation_detected: boolean
           settlement_approved: boolean
           settlement_approved_by: string | null
+          settlement_source: string
           start_odometer_at: string | null
           start_odometer_miles: number | null
           start_odometer_photo_url: string | null

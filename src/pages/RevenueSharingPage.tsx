@@ -30,6 +30,7 @@ interface ShareRow {
 interface MerchantRow {
   id: string;
   name: string;
+  settlement_mode?: string | null;
 }
 
 export default function RevenueSharingPage() {
@@ -61,7 +62,7 @@ export default function RevenueSharingPage() {
   const load = useCallback(async () => {
     const [sharesRes, restRes] = await Promise.all([
       supabase.from('revenue_sharing').select('*').order('created_at', { ascending: false }),
-      supabase.from('merchants').select('id, name'),
+      supabase.from('merchants').select('id, name, settlement_mode'),
     ]);
     setShares(sharesRes.data || []);
     setMerchants(restRes.data || []);
@@ -78,6 +79,7 @@ export default function RevenueSharingPage() {
     const channel = supabase
       .channel('revenue-sharing-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'revenue_sharing' }, () => scheduleReload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchants' }, () => scheduleReload())
       .subscribe();
     return () => {
       if (reloadTimer.current) clearTimeout(reloadTimer.current);
@@ -233,6 +235,20 @@ export default function RevenueSharingPage() {
     return merchants.find(r => r.id === id)?.name || id.slice(0, 8);
   };
 
+  const getSettlementMode = (id: string | null): 'manual' | 'auto' => {
+    if (!id) return 'manual';
+    return merchants.find(r => r.id === id)?.settlement_mode === 'auto' ? 'auto' : 'manual';
+  };
+
+  const toggleSettlementMode = async (merchantId: string | null) => {
+    if (!merchantId) return;
+    const next = getSettlementMode(merchantId) === 'auto' ? 'manual' : 'auto';
+    const { error } = await supabase.from('merchants').update({ settlement_mode: next }).eq('id', merchantId);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Settlement mode set to ${next} for ${getMerchantName(merchantId)}`);
+    load();
+  };
+
   const editShare = (s: ShareRow) => {
     setForm({
       merchant_id: s.merchant_id || '',
@@ -373,6 +389,7 @@ export default function RevenueSharingPage() {
               <TableHead className="text-right">Platform %</TableHead>
               <TableHead className="text-right">UCS %</TableHead>
               <TableHead>Total check</TableHead>
+              <TableHead>Settlement</TableHead>
               {canManage && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -416,6 +433,22 @@ export default function RevenueSharingPage() {
                       <span className="inline-flex items-center gap-1 text-xs text-success"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />Σ 100%</span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />Σ {total}%</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {canManage ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="min-h-[44px] gap-1 px-2"
+                        onClick={() => toggleSettlementMode(s.merchant_id)}
+                        aria-label={`Settlement mode is ${getSettlementMode(s.merchant_id)} for ${getMerchantName(s.merchant_id)} — activate to switch`}
+                        title={getSettlementMode(s.merchant_id) === 'auto' ? 'Auto-settle on delivery — click for manual' : 'Manual approval — click for auto-settle on delivery'}
+                      >
+                        {getSettlementMode(s.merchant_id) === 'auto' ? 'Auto' : 'Manual'}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{getSettlementMode(s.merchant_id) === 'auto' ? 'Auto' : 'Manual'}</span>
                     )}
                   </TableCell>
                   {canManage && (

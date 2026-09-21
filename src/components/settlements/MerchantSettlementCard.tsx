@@ -11,6 +11,7 @@ export interface SettlementRow {
   merchant_id: string;
   merchant_name: string;
   settlement_approved: boolean;
+  settlement_source?: string | null;
   sharing: {
     rider_percentage: number;
     merchant_percentage: number;
@@ -133,7 +134,7 @@ export default function MerchantSettlementCard({
                       <div className="flex items-center gap-2">
                         <span className="tabular-nums">D{d.tariff.toFixed(2)}</span>
                         {d.settlement_approved ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-accent"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Approved</span>
+                          <span className="inline-flex items-center gap-1 text-xs text-accent"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Approved{d.settlement_source === 'auto' ? ' (auto)' : ''}</span>
                         ) : (
                           canApprove && d.sharing && (
                             <Button size="sm" variant="outline" className="min-h-[44px] text-xs" onClick={() => onApprove(d.id)}>Approve</Button>

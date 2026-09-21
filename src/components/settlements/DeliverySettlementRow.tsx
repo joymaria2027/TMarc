@@ -101,7 +101,10 @@ export default function DeliverySettlementRow({
       </TableCell>
       <TableCell className="text-right">
         {d.settlement_approved ? (
-          <Badge className="bg-accent/10 text-accent gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Approved</Badge>
+          <span className="inline-flex items-center gap-1">
+            <Badge className="bg-accent/10 text-accent gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Approved</Badge>
+            {d.settlement_source === 'auto' && <Badge variant="secondary" className="text-xs">Auto</Badge>}
+          </span>
         ) : (
           canApprove && d.sharing && (
             <Button size="sm" className="min-h-[44px]" onClick={() => onApprove(d.id)}>Approve</Button>

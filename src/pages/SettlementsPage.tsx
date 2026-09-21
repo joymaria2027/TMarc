@@ -32,6 +32,7 @@ interface SettlementRow {
   estimated_tariff: number | null;
   receipt_attached: boolean;
   settlement_approved: boolean;
+  settlement_source?: string | null;
   delivered_at: string | null;
   picked_up_at: string | null;
   gps_confirmed: boolean;
@@ -131,6 +132,7 @@ interface DeliveryRow {
   estimated_tariff: number | null;
   receipt_attached: boolean;
   settlement_approved: boolean;
+  settlement_source?: string | null;
   delivered_at: string | null;
   rider_id: string | null;
   merchant_id: string;
@@ -244,6 +246,7 @@ export default function SettlementsPage() {
         estimated_tariff: d.estimated_tariff,
         receipt_attached: d.receipt_attached,
         settlement_approved: d.settlement_approved,
+        settlement_source: d.settlement_source ?? null,
         delivered_at: d.delivered_at,
         picked_up_at: d.picked_up_at,
         gps_confirmed: d.gps_confirmed,
@@ -561,6 +564,7 @@ export default function SettlementsPage() {
       { key: 'platform_share', header: 'Platform', format: (v: number) => formatMoney(v) },
       { key: 'ucs_rides_share', header: 'UCS', format: (v: number) => formatMoney(v) },
       { key: 'settlement_approved', header: 'Approved', format: (v: boolean) => v ? 'Yes' : 'No' },
+      { key: 'settlement_source', header: 'Source', format: (v: string | null) => v || 'manual' },
     ];
     const rowsWithNet = visibleRows.map(d => ({
       ...d,
