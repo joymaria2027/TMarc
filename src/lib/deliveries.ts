@@ -37,6 +37,22 @@ export function needsProofReview(d: {
   return d.picked_up_at == null && d.receipt_attached === false;
 }
 
+/**
+ * Bulk-approve partition: proof rows are held for per-row verification and
+ * never paid by a bulk tap. Partial data never holds — unknown is not
+ * evidence (mirrors needsProofReview).
+ */
+export function splitProofRows<T extends { picked_up_at?: string | null; receipt_attached?: boolean | null }>(
+  rows: T[],
+): { approvable: T[]; held: T[] } {
+  const approvable: T[] = [];
+  const held: T[] = [];
+  for (const r of rows) {
+    (needsProofReview(r) ? held : approvable).push(r);
+  }
+  return { approvable, held };
+}
+
 const STATUS_META: Record<string, DeliveryStatusMeta> = {
   pending: {
     label: "Pending",

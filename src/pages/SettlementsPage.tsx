@@ -16,6 +16,7 @@ import MerchantSettlementCard from '@/components/settlements/MerchantSettlementC
 import RiderSettlementCard from '@/components/settlements/RiderSettlementCard';
 import DeliverySettlementRow from '@/components/settlements/DeliverySettlementRow';
 import { partitionPayoutDeliveries, summarizeBulkResult } from '@/lib/moneyGuards';
+import { splitProofRows } from '@/lib/deliveries';
 import { formatMoney } from '@/lib/finance';
 import { format } from 'date-fns';
 import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
@@ -492,11 +493,24 @@ export default function SettlementsPage() {
   const handleDeliveryBulkApprove = async (visibleRows: SettlementRow[]) => {
     const ids = Array.from(deliverySelectedIds);
     if (ids.length === 0) return;
+    const selected = ids
+      .map(id => visibleRows.find(r => r.id === id))
+      .filter((r): r is SettlementRow => r != null);
+    // Proof rows never pay by bulk tap — verify per-row first.
+    const { approvable, held } = splitProofRows(selected);
+    if (approvable.length === 0) {
+      toast.error(
+        held.length > 0
+          ? `${held.length} selected ${held.length === 1 ? 'settlement needs' : 'settlements need'} start-proof verification — approve per-row after verifying`
+          : 'No selected settlements to approve',
+      );
+      return;
+    }
     setDeliveryBulkActionPending('approve');
     let successCount = 0;
     let failCount = 0;
-    for (const id of ids) {
-      const row = visibleRows.find(r => r.id === id);
+    for (const row of approvable) {
+      const id = row.id;
       if (!row?.sharing) { failCount++; continue; }
       const { error } = await supabase.from('deliveries').update({
         settlement_approved: true,
@@ -509,10 +523,13 @@ export default function SettlementsPage() {
         successCount++;
       }
     }
-    if (successCount > 0) toast.success(`${successCount} ${successCount === 1 ? 'settlement' : 'settlements'} approved`);
+    if (successCount > 0) toast.success(`${successCount} ${successCount === 1 ? 'settlement' : 'settlements'} approved${held.length > 0 ? `; ${held.length} skipped — no start proof, verify per-row before paying` : ''}`);
     setDeliverySelectedIds(prev => {
       const next = new Set(prev);
-      if (failCount === 0) next.clear();
+      // Held rows stay selected — still unactioned and visible.
+      if (failCount === 0) {
+        for (const row of approvable) next.delete(row.id);
+      }
       return next;
     });
     setDeliveryBulkActionPending(null);
