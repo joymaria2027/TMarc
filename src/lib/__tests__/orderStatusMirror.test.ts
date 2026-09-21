@@ -20,7 +20,7 @@ const MIRROR = path.resolve(
 );
 const MIGRATION = path.resolve(
   __dirname,
-  "../../../supabase/migrations/20260920000004_allow_enroute_order_status.sql",
+  "../../../supabase/migrations/20260921000004_allow_enroute_order_status.sql",
 );
 
 function inList(sql: string, constraint: string): string[] {
