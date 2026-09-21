@@ -23,6 +23,7 @@ interface LiveLoc {
 export default function LiveDeliveryMap({ orderId, deliveryId, className }: Props) {
   const [loc, setLoc] = useState<LiveLoc | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const lastAnnouncedRef = useRef<number>(0);
 
@@ -35,9 +36,29 @@ export default function LiveDeliveryMap({ orderId, deliveryId, className }: Prop
   };
 
   const fetchLoc = async () => {
-    const { data } = await supabase.rpc("get_order_live_location", { _order_id: orderId });
+    const { data, error } = await supabase.rpc("get_order_live_location", { _order_id: orderId });
+    if (error) {
+      // Never conflate a failed load with "rider hasn't shared GPS yet":
+      // the 400s seen in prod (e.g. P0001 Not authorized from the RPC's
+      // auth checks) need the server message visible to diagnose.
+      console.error("[LiveDeliveryMap] get_order_live_location failed", {
+        code: (error as { code?: string }).code,
+        message: error.message,
+        orderId,
+      });
+      setLoadError(error.message);
+      setLoading(false);
+      return;
+    }
+    setLoadError(null);
     if (data && data.length > 0) setLoc(data[0] as LiveLoc);
     setLoading(false);
+  };
+
+  const retry = () => {
+    setLoadError(null);
+    setLoading(true);
+    void fetchLoc();
   };
 
   useEffect(() => {
@@ -75,6 +96,23 @@ export default function LiveDeliveryMap({ orderId, deliveryId, className }: Prop
   }
 
   if (!loc) {
+    if (loadError) {
+      return (
+        <div className={className} role="alert" aria-label="Live delivery map failed to load">
+          <div className="h-56 w-full rounded-lg border border-dashed flex flex-col items-center justify-center text-center text-muted-foreground p-4">
+            <p className="text-sm font-medium">We couldn&apos;t load the live location</p>
+            <p className="text-xs mt-1">The rider&apos;s location couldn&apos;t be fetched right now.</p>
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-3 inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className={className} role="status" aria-label="Live delivery map unavailable">
         <div className="h-56 w-full rounded-lg border border-dashed flex flex-col items-center justify-center text-center text-muted-foreground p-4">
