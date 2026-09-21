@@ -54,7 +54,7 @@ const navItems: NavItem[] = [
   { label: 'Analytics', href: '/analytics', icon: <BarChart3 className="h-4 w-4" />, roles: ['admin', 'business_owner', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
   { label: 'Fraud Prevention', href: '/fraud', icon: <Shield className="h-4 w-4" />, roles: ['admin'], group: 'Admin & Developer', groupOrder: 4 },
   { label: 'Permissions', href: '/permissions', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
-  { label: 'RLS Verification', href: '/rls-verification', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer', 'business_owner', 'company_manager', 'accountant', 'rider'], group: 'Admin & Developer', groupOrder: 4 },
+  { label: 'RLS Verification', href: '/rls-verification', icon: <ShieldCheck className="h-4 w-4" />, roles: ['admin', 'app_developer'], group: 'Admin & Developer', groupOrder: 4 },
   { label: 'Settings', href: '/settings', icon: <Settings className="h-4 w-4" />, roles: ['admin'], group: 'Admin & Developer', groupOrder: 4 },
 ];
 

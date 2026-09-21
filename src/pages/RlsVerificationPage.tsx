@@ -176,6 +176,28 @@ export default function RlsVerificationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, isPlatformRole]);
 
+  if (!isPlatformRole) {
+    return (
+      <div className="space-y-6 max-w-5xl">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 text-primary" /> RLS Verification
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Sign in as each role and load this page to confirm row-level security returns only the data that role should see.
+          </p>
+        </div>
+        <Card>
+          <CardContent className="p-8 text-center space-y-2">
+            <ShieldCheck className="h-8 w-8 mx-auto text-muted-foreground" aria-hidden="true" />
+            <p className="font-medium text-foreground">Access Restricted</p>
+            <p className="text-sm text-muted-foreground">Admins and app developers only.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div className="flex items-start justify-between gap-4">
