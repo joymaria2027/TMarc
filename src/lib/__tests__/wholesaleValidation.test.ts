@@ -78,4 +78,28 @@ describe("wholesaleValidation (cart & checkout min-quantity guards)", () => {
     const violations = validateWholesaleQuantities(items, retailQuoteFn);
     expect(violations).toHaveLength(0);
   });
+
+  it("skips minimum validation for lines the buyer explicitly bought at retail (PDP variant choice)", () => {
+    // A wholesale-eligible buyer chose STANDARD PRICE on the product page:
+    // the line is priced at retail and flagged, so the wholesale minimum
+    // must not apply even though the quote would demand 5 units.
+    const items: CartItem[] = [
+      { product_id: "p1", merchant_id: "m1", name: "Flour 50kg", price: 100, quantity: 1, pricingMode: "retail" },
+    ];
+
+    const violations = validateWholesaleQuantities(items, mockQuoteFn);
+    expect(violations).toHaveLength(0);
+    expect(getWholesaleQuantityErrors(items, mockQuoteFn)).toEqual({});
+  });
+
+  it("still enforces minimums for unflagged wholesale lines mixed with retail-flagged ones", () => {
+    const items: CartItem[] = [
+      { product_id: "p1", merchant_id: "m1", name: "Flour 50kg", price: 100, quantity: 2 }, // unflagged → violation (min 5)
+      { product_id: "p2", merchant_id: "m1", name: "Sugar 25kg", price: 50, quantity: 3, pricingMode: "retail" }, // flagged → skipped
+    ];
+
+    const violations = validateWholesaleQuantities(items, mockQuoteFn);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].productId).toBe("p1");
+  });
 });

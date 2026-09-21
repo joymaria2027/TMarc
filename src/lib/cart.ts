@@ -8,6 +8,10 @@ export interface CartItem {
   price: number;
   quantity: number;
   image_path?: string | null;
+  /** Set when a wholesale-eligible buyer explicitly chose the standard (retail)
+   *  price on the product page; cart/checkout minimum-quantity validation
+   *  skips such lines. Absent for normal (wholesale-priced) lines. */
+  pricingMode?: "retail";
 }
 
 const KEY = "delivery-ace-cart-v1";
@@ -45,6 +49,13 @@ export function useCart() {
     const existing = cur.find(c => c.product_id === item.product_id);
     if (existing) {
       existing.quantity += item.quantity;
+      // A wholesale-priced line re-prices the merged line (the buyer is
+      // eligible and the accumulated quantity meets the minimum); a
+      // retail-flagged line never overrides an existing wholesale price.
+      if (!item.pricingMode) {
+        existing.price = item.price;
+        delete existing.pricingMode;
+      }
       saveCart([...cur]);
     } else {
       saveCart([...cur, item]);

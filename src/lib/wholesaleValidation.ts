@@ -21,6 +21,10 @@ export function validateWholesaleQuantities(
   const violations: WholesaleViolation[] = [];
 
   for (const item of items) {
+    // A line the buyer explicitly bought at the standard (retail) price —
+    // chosen via the PDP's variant radio — is exempt from wholesale minimums.
+    if (item.pricingMode === "retail") continue;
+
     const q = quoteFn({
       id: item.product_id,
       merchant_id: item.merchant_id,
