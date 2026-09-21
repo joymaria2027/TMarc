@@ -99,7 +99,10 @@ export async function processWebhookEvent(
   const { data: logRow, error: logErr } = await admin
     .from("modempay_webhook_events")
     .insert({
-      event_id: opts?.retryOfId ? `${eventId}:retry:${Date.now()}` : eventId,
+      // Natural retries (ModemPay redelivers non-2xx up to 3x) get a suffixed
+      // id like admin replays do — otherwise the redelivery 500s on the
+      // unique event_id index instead of resolving as duplicate below.
+      event_id: opts?.retryOfId || dupOf ? `${eventId}:retry:${Date.now()}` : eventId,
       event_type: eventType || null,
       order_id: orderId,
       payment_reference: reference,
