@@ -1721,6 +1721,9 @@ export type Database = {
       rider_expenses: {
         Row: {
           amount: number
+          auto_verified: boolean
+          confidence_reasons: Json
+          confidence_score: number | null
           consumed_amount: number
           created_at: string
           deducted_in_delivery_id: string | null
@@ -1731,6 +1734,7 @@ export type Database = {
           id: string
           merchant_id: string | null
           receipt_url: string | null
+          review_note: string | null
           rider_id: string
           status: string
           uploaded_by: string
@@ -1739,6 +1743,9 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          auto_verified?: boolean
+          confidence_reasons?: Json
+          confidence_score?: number | null
           consumed_amount?: number
           created_at?: string
           deducted_in_delivery_id?: string | null
@@ -1749,6 +1756,7 @@ export type Database = {
           id?: string
           merchant_id?: string | null
           receipt_url?: string | null
+          review_note?: string | null
           rider_id: string
           status?: string
           uploaded_by: string
@@ -1757,6 +1765,9 @@ export type Database = {
         }
         Update: {
           amount?: number
+          auto_verified?: boolean
+          confidence_reasons?: Json
+          confidence_score?: number | null
           consumed_amount?: number
           created_at?: string
           deducted_in_delivery_id?: string | null
@@ -1767,6 +1778,7 @@ export type Database = {
           id?: string
           merchant_id?: string | null
           receipt_url?: string | null
+          review_note?: string | null
           rider_id?: string
           status?: string
           uploaded_by?: string

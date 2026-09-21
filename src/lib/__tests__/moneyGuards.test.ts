@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { partitionPayoutDeliveries, validateRunPeriod } from "../moneyGuards";
+import { partitionPayoutDeliveries, validateRunPeriod, confidenceBand, requiresReviewReason } from "../moneyGuards";
 
 describe("validateRunPeriod (payroll run guard)", () => {
   it("requires both dates", () => {
@@ -37,5 +37,28 @@ describe("partitionPayoutDeliveries (honest payout toast)", () => {
 
   it("is empty-safe", () => {
     expect(partitionPayoutDeliveries([])).toEqual({ approvable: [], skippedNoRatio: [] });
+  });
+});
+
+describe("confidenceBand (expense auto-verify grades)", () => {
+  it("grades A at 85+, B at 60-84, C below 60", () => {
+    expect(confidenceBand(100)).toBe("A");
+    expect(confidenceBand(85)).toBe("A");
+    expect(confidenceBand(84)).toBe("B");
+    expect(confidenceBand(60)).toBe("B");
+    expect(confidenceBand(59)).toBe("C");
+    expect(confidenceBand(0)).toBe("C");
+  });
+
+  it("treats unscored legacy rows as B (today's behavior)", () => {
+    expect(confidenceBand(null)).toBe("B");
+    expect(confidenceBand(undefined)).toBe("B");
+  });
+
+  it("requires a reason only for C-band", () => {
+    expect(requiresReviewReason(59)).toBe(true);
+    expect(requiresReviewReason(60)).toBe(false);
+    expect(requiresReviewReason(95)).toBe(false);
+    expect(requiresReviewReason(null)).toBe(false);
   });
 });

@@ -66,3 +66,27 @@ export function bulkResultMessage(summary: BulkSummary, action: string): string 
   const ids = summary.failedIds.map(id => `#${id.slice(0, 8)}`).join(', ');
   return `${summary.succeeded} ${summary.succeeded === 1 ? 'entry' : 'entries'} ${action}; ${summary.failed} failed (${ids}) — retry the failed rows`;
 }
+
+/** Expense confidence bands (dual-mode settlement, ticket issue 02).
+ *  A (>=85): auto-verify eligible (amount <= cap, daily budget left).
+ *  B (60-84): human queue, one-click verify allowed.
+ *  C (<60, unscored legacy rows count as B): human queue, reason required.
+ */
+export const CONFIDENCE_AUTO_SCORE = 85;
+export const CONFIDENCE_AUTO_AMOUNT_CAP = 100;
+export const CONFIDENCE_AUTO_DAILY_CAP = 300;
+export const CONFIDENCE_REVIEW_BELOW = 60;
+
+export type ConfidenceBand = 'A' | 'B' | 'C';
+
+export function confidenceBand(score: number | null | undefined): ConfidenceBand {
+  if (typeof score !== 'number') return 'B';
+  if (score >= CONFIDENCE_AUTO_SCORE) return 'A';
+  if (score >= CONFIDENCE_REVIEW_BELOW) return 'B';
+  return 'C';
+}
+
+/** C-band expenses cannot be one-click verified — a reason is required. */
+export function requiresReviewReason(score: number | null | undefined): boolean {
+  return confidenceBand(score) === 'C';
+}

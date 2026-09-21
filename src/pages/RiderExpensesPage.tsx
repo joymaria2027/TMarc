@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { formatMoney } from '@/lib/finance';
 import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
+import { confidenceBand, requiresReviewReason, CONFIDENCE_REVIEW_BELOW } from '@/lib/moneyGuards';
 
 export default function RiderExpensesPage() {
   const { user, hasRole } = useAuth();
@@ -55,6 +56,10 @@ export default function RiderExpensesPage() {
     status: string;
     created_at: string;
     deducted_in_delivery_id: string | null;
+    confidence_score: number | null;
+    confidence_reasons: string[] | null;
+    auto_verified: boolean;
+    review_note: string | null;
   }
 
   interface ExpenseType {
@@ -151,6 +156,9 @@ export default function RiderExpensesPage() {
   const [expenseSelectedIds, setExpenseSelectedIds] = useState<Set<string>>(new Set());
   const [expenseBulkActionPending, setExpenseBulkActionPending] = useState<'verify' | 'reject' | null>(null);
   const [verifyPendingId, setVerifyPendingId] = useState<string | null>(null);
+  // Low-confidence (C-band) verify requires a typed reason, via this dialog.
+  const [reasonFor, setReasonFor] = useState<ExpenseItem | null>(null);
+  const [reasonText, setReasonText] = useState('');
 
   const isRiderOnly = hasRole('rider') && !hasRole('admin') && !hasRole('accountant') && !hasRole('app_developer');
   const isManager = hasRole('company_manager') && !hasRole('admin');
@@ -349,12 +357,13 @@ export default function RiderExpensesPage() {
     load();
   };
 
-  const verifyExpense = async (expense: ExpenseItem, action: 'verified' | 'rejected') => {
+  const verifyExpense = async (expense: ExpenseItem, action: 'verified' | 'rejected', note?: string) => {
     setVerifyPendingId(expense.id);
     const { error } = await supabase.from('rider_expenses').update({
       status: action,
       verified_by: user!.id,
       verified_at: new Date().toISOString(),
+      review_note: note ?? null,
     }).eq('id', expense.id);
 
     if (error) {
@@ -386,9 +395,11 @@ export default function RiderExpensesPage() {
     load();
   };
 
-  // Filtered expenses with client-side search (merchant/rider name search)
+  // Filtered expenses with client-side search (merchant/rider name search).
+  // Pending rows surface lowest-confidence first so the riskiest items get
+  // human eyes earliest; settled rows keep newest-first.
   const filteredExpenses = useMemo(() => {
-    return expenses.filter(e => {
+    const list = expenses.filter(e => {
       if (expenseSearch) {
         const q = expenseSearch.toLowerCase();
         const riderName = getRiderName(e.rider_id).toLowerCase();
@@ -396,6 +407,13 @@ export default function RiderExpensesPage() {
         return riderName.includes(q) || merchantName.includes(q);
       }
       return true;
+    });
+    return [...list].sort((a, b) => {
+      const ap = a.status === 'pending' ? 0 : 1;
+      const bp = b.status === 'pending' ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      if (ap === 0) return (a.confidence_score ?? CONFIDENCE_REVIEW_BELOW) - (b.confidence_score ?? CONFIDENCE_REVIEW_BELOW);
+      return b.created_at.localeCompare(a.created_at);
     });
   }, [expenses, expenseSearch, getRiderName, getMerchantName]);
 
@@ -424,9 +442,18 @@ export default function RiderExpensesPage() {
     if (expenseSelectedIds.size === 0) return;
     setExpenseBulkActionPending(action);
     const ids = Array.from(expenseSelectedIds);
+    // C-band expenses need an individual reason — bulk never one-clicks them.
+    const gated = action === 'verified'
+      ? ids.filter(id => {
+          const row = expenses.find(e => e.id === id);
+          return row ? requiresReviewReason(row.confidence_score) : false;
+        })
+      : [];
+    const succeededIds: string[] = [];
     let successCount = 0;
     let failCount = 0;
     for (const id of ids) {
+      if (gated.includes(id)) continue;
       const { error } = await supabase.from('rider_expenses').update({
         status: action,
         verified_by: user!.id,
@@ -437,12 +464,15 @@ export default function RiderExpensesPage() {
         toast.error(`Failed to ${action} ${id.slice(0, 8)}: ${error.message}`);
       } else {
         successCount++;
+        succeededIds.push(id);
       }
     }
     if (successCount > 0) toast.success(`${successCount} ${successCount === 1 ? 'expense' : 'expenses'} ${action === 'verified' ? 'verified' : 'rejected'}`);
+    if (gated.length > 0) toast.warning(`${gated.length} low-confidence ${gated.length === 1 ? 'expense needs' : 'expenses need'} individual review with a reason — skipped in bulk`);
     setExpenseSelectedIds(prev => {
       const next = new Set(prev);
-      if (failCount === 0) next.clear();
+      // Gated rows stay selected so the manager sees what still needs review.
+      succeededIds.forEach(id => next.delete(id));
       return next;
     });
     setExpenseBulkActionPending(null);
@@ -460,6 +490,7 @@ export default function RiderExpensesPage() {
       { key: 'consumed_amount', header: 'Consumed', format: (v: number | null) => formatMoney(v || 0) },
       { key: 'remaining', header: 'Remaining', format: (v: number) => formatMoney(v) },
       { key: 'status', header: 'Status' },
+      { key: 'confidence_score', header: 'Score', format: (v: number | null) => v == null ? '—' : `${confidenceBand(v)} (${v})` },
       { key: 'receipt_url', header: 'Receipt', format: (v: string | null) => v ? 'Attached' : 'No receipt' },
     ];
     const rowsWithNames = filteredExpenses.map(e => ({
@@ -621,6 +652,7 @@ export default function RiderExpensesPage() {
                       <TableHead>Consumed</TableHead>
                       <TableHead>Remaining</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Score</TableHead>
                       <TableHead>Receipt</TableHead>
                       {canVerify && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
@@ -652,12 +684,31 @@ export default function RiderExpensesPage() {
                             <TableCell className="text-right tabular-nums text-muted-foreground">D{remaining.toFixed(2)}</TableCell>
                             <TableCell>
                               {e.status === 'verified' ? (
-                                <Badge className="bg-success/10 text-success border-success/30 gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Verified</Badge>
+                                <span className="inline-flex items-center gap-1">
+                                  <Badge className="bg-success/10 text-success border-success/30 gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden="true" />Verified</Badge>
+                                  {e.auto_verified && <Badge variant="secondary" className="text-xs">System</Badge>}
+                                </span>
                               ) : e.status === 'rejected' ? (
                                 <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" aria-hidden="true" />Rejected</Badge>
                               ) : (
                                 <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" aria-hidden="true" />Pending</Badge>
                               )}
+                            </TableCell>
+                            <TableCell>
+                              {(() => {
+                                const band = confidenceBand(e.confidence_score);
+                                return e.confidence_score == null ? (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                ) : (
+                                  <Badge
+                                    variant={band === 'A' ? 'default' : band === 'B' ? 'secondary' : 'destructive'}
+                                    className="tabular-nums"
+                                    title={(e.confidence_reasons || []).join(' • ') || `Score ${e.confidence_score}/100`}
+                                  >
+                                    {band} ({e.confidence_score})
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell>
                               {e.receipt_url ? (
@@ -671,9 +722,15 @@ export default function RiderExpensesPage() {
                             {canVerify && e.status === 'pending' && (
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
-                                  <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-success" disabled={verifyPendingId !== null} onClick={() => verifyExpense(e, 'verified')}>
-                                    <CheckCircle2 className="h-3 w-3" aria-hidden="true" />{verifyPendingId === e.id ? 'Verifying…' : 'Verify'}
-                                  </Button>
+                                  {requiresReviewReason(e.confidence_score) ? (
+                                    <Button size="sm" variant="outline" className="min-h-[44px] gap-1" disabled={verifyPendingId !== null} onClick={() => { setReasonFor(e); setReasonText(e.review_note || ''); }} aria-label={`Review low-confidence expense ${e.description}`}>
+                                      <CheckCircle2 className="h-3 w-3" aria-hidden="true" />Review…
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-success" disabled={verifyPendingId !== null} onClick={() => verifyExpense(e, 'verified')}>
+                                      <CheckCircle2 className="h-3 w-3" aria-hidden="true" />{verifyPendingId === e.id ? 'Verifying…' : 'Verify'}
+                                    </Button>
+                                  )}
                                   <Button size="sm" variant="outline" className="min-h-[44px] gap-1 text-destructive" disabled={verifyPendingId !== null} onClick={() => verifyExpense(e, 'rejected')}>
                                     <XCircle className="h-3 w-3" aria-hidden="true" />{verifyPendingId === e.id ? 'Rejecting…' : 'Reject'}
                                   </Button>
@@ -683,7 +740,7 @@ export default function RiderExpensesPage() {
                           </TableRow>
                           {showExpand && expandedRow === e.id && (
                             <TableRow>
-                              <TableCell colSpan={canVerify ? 10 : 9} className="py-0">
+                              <TableCell colSpan={canVerify ? 12 : 11} className="py-0">
                                 <div className="space-y-1 text-xs rounded border bg-muted/20 px-3 py-2">
                                   {rowCons.map(c => (
                                     <div key={c.id} className="flex justify-between gap-2 items-center">
@@ -710,7 +767,7 @@ export default function RiderExpensesPage() {
                     <TableFooter>
                       <TableRow>
                         <TableCell colSpan={2} />
-                        <TableCell colSpan={canVerify ? 8 : 7} className="text-right">
+                        <TableCell colSpan={canVerify ? 10 : 9} className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
                               size="sm"
@@ -848,6 +905,42 @@ export default function RiderExpensesPage() {
         </TabsContent>
       </Tabs>
 
+      <Dialog open={!!reasonFor} onOpenChange={(o) => { if (!o) { setReasonFor(null); setReasonText(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verify low-confidence expense</DialogTitle>
+          </DialogHeader>
+          {reasonFor && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {reasonFor.description} — {formatMoney(Number(reasonFor.amount))} for {getRiderName(reasonFor.rider_id)}
+                scored {reasonFor.confidence_score ?? '—'}/100 (grade {confidenceBand(reasonFor.confidence_score)}).
+                A reason is required to verify below grade B.
+              </p>
+              <div className="space-y-1">
+                <Label htmlFor="expense-review-note">Reason</Label>
+                <Input
+                  id="expense-review-note"
+                  value={reasonText}
+                  onChange={e => setReasonText(e.target.value)}
+                  placeholder="Why is this expense legitimate?"
+                />
+              </div>
+              <Button
+                className="w-full min-h-[44px]"
+                disabled={verifyPendingId !== null || reasonText.trim().length < 4}
+                onClick={async () => {
+                  await verifyExpense(reasonFor, 'verified', reasonText.trim());
+                  setReasonFor(null);
+                  setReasonText('');
+                }}
+              >
+                {verifyPendingId ? 'Verifying…' : 'Verify with reason'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!selectedDelivery} onOpenChange={(o) => { if (!o) { setSelectedDelivery(null); setSelectedWaypoints([]); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
