@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Bell, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -262,15 +262,19 @@ export default function AlertsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2" data-tour="alerts-filters">
           <TourReplay tourId="alerts-triage" />
-          <Input
-            id="alerts-search"
-            ref={searchRef}
-            value={search}
-            onChange={e => { setSearch(e.target.value); setSelected([]); setUndoSnapshot(null); }}
-            placeholder="Search alerts…"
-            aria-label="Search alerts by message or type"
-            className="max-w-xs"
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="alerts-search"
+              ref={searchRef}
+              type="search"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSelected([]); setUndoSnapshot(null); }}
+              placeholder="Search alerts…"
+              aria-label="Search alerts by message or type"
+              className="pl-9 w-48 sm:w-56"
+            />
+          </div>
           <Select value={group} onValueChange={v => { setGroup(v as AlertGroup); setSelected([]); setUndoSnapshot(null); }}>
             <SelectTrigger className="w-36" aria-label="Filter by alert group"><SelectValue /></SelectTrigger>
             <SelectContent>
