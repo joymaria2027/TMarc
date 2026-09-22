@@ -252,7 +252,7 @@ function DeliveryRowCells({
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => onDelete(d.id)}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    variant="destructive"
                   >
                     Delete
                   </AlertDialogAction>

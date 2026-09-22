@@ -490,7 +490,7 @@ export default function ReconciliationPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => bulkConfirm && handleBulkAction(bulkConfirm.action)}
-              className={bulkConfirm?.action === 'disputed' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+              variant={bulkConfirm?.action === 'disputed' ? 'destructive' : undefined}
             >
               {bulkConfirm?.action === 'matched' ? `Mark ${bulkConfirm?.count} Matched` : `Mark ${bulkConfirm?.count} Disputed`}
             </AlertDialogAction>
@@ -510,7 +510,7 @@ export default function ReconciliationPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => actionRow && setStatus(actionRow.row, actionRow.action)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={() => actionRow && setStatus(actionRow.row, actionRow.action)} variant="destructive">
               {actionRow?.action === 'matched' ? 'Mark Matched' : 'Mark Disputed'}
             </AlertDialogAction>
           </AlertDialogFooter>
