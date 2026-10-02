@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CheckoutPage from '../CheckoutPage';
 
@@ -138,6 +138,23 @@ beforeEach(() => {
   authState.loading = false;
 });
 
+/**
+ * Render and let the async customer-prefill effect settle.
+ *
+ * CheckoutPage's `[user]` effect loads the customer row and overwrites
+ * fullName/phone/address with whatever the DB holds. These tests always
+ * signed in with a `customers` mock that has no name/phone, so the prefill
+ * blanks the form. The old synchronous getByRole query happened to click in the
+ * same tick as the typing and win that race; now that the Pay button is gated on
+ * delivery fees resolving, the click is genuinely later and the prefill wins
+ * unless we flush it first.
+ */
+async function renderCheckoutSettled() {
+  renderCheckout();
+  await waitFor(() => expect(fromSpy).toHaveBeenCalledWith('customers'));
+  await act(async () => { await Promise.resolve(); });
+}
+
 /** Fill the required fields so validation passes and submit reaches the DB path. */
 function fillValidForm() {
   fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: 'Fatou Jallow' } });
@@ -148,10 +165,13 @@ function fillValidForm() {
 describe('CheckoutPage haptics (haptics-key-moments/01)', () => {
   it('acknowledges the press with a light impact immediately at submit', async () => {
     mockHappyPath();
-    renderCheckout();
+    await renderCheckoutSettled();
     fillValidForm();
 
-    fireEvent.click(screen.getByRole('button', { name: /pay .* with modempay/i }));
+    // The Pay button is now gated on delivery fees resolving (plan 007), so it is
+    // legitimately absent for a tick after mount. Await it rather than querying
+    // synchronously; the haptics behaviour under test is unchanged.
+    fireEvent.click(await screen.findByRole('button', { name: /pay .* with modempay/i }));
 
     // Press ack fires synchronously at click — before any await settles.
     expect(hapticSpies.impact).toHaveBeenCalledWith('LIGHT');
@@ -163,10 +183,13 @@ describe('CheckoutPage haptics (haptics-key-moments/01)', () => {
 
   it('fires a success notification when orders are placed', async () => {
     mockHappyPath();
-    renderCheckout();
+    await renderCheckoutSettled();
     fillValidForm();
 
-    fireEvent.click(screen.getByRole('button', { name: /pay .* with modempay/i }));
+    // The Pay button is now gated on delivery fees resolving (plan 007), so it is
+    // legitimately absent for a tick after mount. Await it rather than querying
+    // synchronously; the haptics behaviour under test is unchanged.
+    fireEvent.click(await screen.findByRole('button', { name: /pay .* with modempay/i }));
 
     await waitFor(() => expect(hapticSpies.success).toHaveBeenCalled());
     expect(hapticSpies.error).not.toHaveBeenCalled();
@@ -179,10 +202,13 @@ describe('CheckoutPage haptics (haptics-key-moments/01)', () => {
       if (table === 'orders') return chain([{ data: null, error: new Error('insert failed') }]);
       return chain([{ data: [], error: null }]);
     });
-    renderCheckout();
+    await renderCheckoutSettled();
     fillValidForm();
 
-    fireEvent.click(screen.getByRole('button', { name: /pay .* with modempay/i }));
+    // The Pay button is now gated on delivery fees resolving (plan 007), so it is
+    // legitimately absent for a tick after mount. Await it rather than querying
+    // synchronously; the haptics behaviour under test is unchanged.
+    fireEvent.click(await screen.findByRole('button', { name: /pay .* with modempay/i }));
 
     await waitFor(() => expect(hapticSpies.error).toHaveBeenCalled());
     expect(hapticSpies.success).not.toHaveBeenCalled();

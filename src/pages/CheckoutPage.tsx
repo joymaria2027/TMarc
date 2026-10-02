@@ -76,11 +76,32 @@ export default function CheckoutPage() {
     })();
   }, [user]);
 
-  // resolve per-merchant delivery fee whenever fulfillment/debounced address/groups change
+  // The merchants currently in the cart, as a *referentially stable* list.
+  //
+  // `groups` is rebuilt by groupByMerchant() on every render, so it can never be
+  // an effect dependency — putting it in the deps would re-run the fee lookup on
+  // every render and loop. `items` is state and only changes when the cart does,
+  // so this memo is stable and carries exactly what the fee effect needs.
+  // This is the same set as Object.keys(groups), just without the identity churn.
+  const feeMerchantIds = useMemo(
+    () => Array.from(new Set(items.map(i => i.merchant_id))),
+    [items],
+  );
+
+  // Every merchant in the cart must have an entry in `fees` before an order can
+  // be written. Without this, tapping Pay while a lookup is in flight — or
+  // inside the 400ms address debounce — creates the Order with delivery_fee = 0
+  // and the fee revenue is lost silently. Completeness is the real precondition,
+  // not a timer, so this self-corrects when the cart changes.
+  const feesResolved =
+    fulfillment === "pickup" ||
+    (feeMerchantIds.length > 0 && feeMerchantIds.every(id => id in fees));
+
+  // resolve per-merchant delivery fee whenever fulfillment/debounced address/cart change
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const merchantIds = Object.keys(groups);
+      const merchantIds = feeMerchantIds;
       if (fulfillment === "pickup") {
         setFees(Object.fromEntries(merchantIds.map(id => [id, 0])));
         return;
@@ -92,14 +113,17 @@ export default function CheckoutPage() {
       if (!cancelled) setFees(Object.fromEntries(entries));
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fulfillment, debouncedAddress, items.length]);
+  }, [fulfillment, debouncedAddress, feeMerchantIds]);
 
   // Content-first: a pending session renders exactly the anonymous checkout
   // (inline account card + gate at submit), never a blocking skeleton.
   if (items.length === 0) return <Navigate to="/cart" replace />;
 
-  const totalDeliveryFees = Object.values(fees).reduce((a, b) => a + b, 0);
+  // Sum only the merchants actually in the cart. Summing Object.values(fees) also
+  // counted merchants no longer in the cart, so the displayed grand total could
+  // disagree with the total written to any Order. Same iteration source as
+  // submit(), so display and write agree by construction.
+  const totalDeliveryFees = feeMerchantIds.reduce((sum, id) => sum + (fees[id] ?? 0), 0);
   const total = subtotal + totalDeliveryFees;
 
   const useGps = () => {
@@ -184,6 +208,13 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Not just a button guard: submit() is also reachable by keyboard and by any
+    // programmatic call. Writing an Order with an unresolved fee would create it
+    // with delivery_fee = 0 and lose the fee revenue silently.
+    if (!feesResolved) {
+      toast.error("Still calculating delivery fees — try again in a moment.");
+      return;
+    }
     setSubmitting(true);
     const merchantIds = Object.keys(groups);
     const orderIdsCreated: string[] = [];
@@ -451,18 +482,28 @@ export default function CheckoutPage() {
         <Button
           size="lg"
           className="w-full"
-          disabled={submitting || wholesaleViolations.length > 0}
+          // Only gate on fees when there is a signed-in user who could actually
+          // pay. The signed-out button leads to the account card, not to an Order,
+          // so it must stay clickable or a visitor cannot reach sign-in.
+          disabled={submitting || (!!user && !feesResolved) || wholesaleViolations.length > 0}
           onClick={submit}
-          aria-describedby={!user ? "checkout-auth-hint" : wholesaleViolations.length > 0 ? "checkout-wholesale-alert" : undefined}
+          aria-describedby={!user ? "checkout-auth-hint" : wholesaleViolations.length > 0 ? "checkout-wholesale-alert" : !feesResolved ? "checkout-fees-resolving" : undefined}
         >
           {!user
             ? "Create an account or sign in to continue"
             : wholesaleViolations.length > 0
             ? "Fix wholesale quantities to continue"
+            : !feesResolved
+            ? "Calculating delivery fees…"
             : submitting
             ? "Placing orders…"
             : `Pay ${formatMoney(total)} with ModemPay`}
         </Button>
+        {!feesResolved && user && wholesaleViolations.length === 0 && (
+          <p id="checkout-fees-resolving" className="sr-only" aria-live="polite">
+            Delivery fees are still being calculated. Payment is unavailable until they resolve.
+          </p>
+        )}
       </div>
     </StorefrontLayout>
   );
