@@ -19,9 +19,10 @@ import { Switch } from '@/components/ui/switch';
 import StoreQrDialog from '@/components/StoreQrDialog';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  groupMerchants, paginateList, validateMerchantForm, validateDeliveryForm,
+  groupMerchants, validateMerchantForm, validateDeliveryForm,
   validateTariffForm, type Errors,
 } from './merchantGroup.helpers';
+import { paginate } from '@/lib/pagination';
 import { parseHighlightId } from '@/lib/deliveries';
 import { guardedWrite } from '@/lib/guardedWrite';
 
@@ -54,7 +55,7 @@ export default function MerchantsPage() {
   const [subParent, setSubParent] = useState<any>(null);
   const [subForm, setSubForm] = useState({ name: '', address: '', phone: '', latitude: '', longitude: '' });
   const [subErrors, setSubErrors] = useState<Errors>({});
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -130,7 +131,7 @@ export default function MerchantsPage() {
     };
   }, [load, scheduleLoad]);
 
-  useEffect(() => { setPage(0); }, [filterType]);
+  useEffect(() => { setPage(1); }, [filterType]);
 
   // Deep-link contract (mirrors DeliveriesPage): /merchants?highlight=<id>
   // highlights the matching merchant card + scrolls it into view once per id.
@@ -327,16 +328,23 @@ export default function MerchantsPage() {
     [merchants, businessTypes, filterType, isAdmin, user?.id],
   );
   const totalCount = useMemo(() => allGroups.reduce((n, g) => n + g.items.length, 0), [allGroups]);
-  const groupPages = Math.max(1, Math.ceil(totalCount / MERCHANT_PAGE_SIZE));
-  const safePage = Math.min(page, groupPages - 1);
+  const flat = useMemo(() => {
+    const rows: { groupId: string; item: any }[] = [];
+    for (const g of allGroups) for (const item of g.items) rows.push({ groupId: g.id, item });
+    return rows;
+  }, [allGroups]);
+
+  const paged = useMemo(
+    () => paginate(flat, page, MERCHANT_PAGE_SIZE),
+    [flat, page],
+  );
+  const { items: pageSlice, page: safePage, totalPages: groupPages } = paged;
+
   const visibleGroups = useMemo(() => {
-    const flat: { groupId: string; item: any }[] = [];
-    for (const g of allGroups) for (const item of g.items) flat.push({ groupId: g.id, item });
-    const slice = paginateList(flat, safePage, MERCHANT_PAGE_SIZE);
     const byId = new Map(allGroups.map(g => [g.id, { ...g, items: [] as any[] }]));
-    for (const row of slice) byId.get(row.groupId)?.items.push(row.item);
+    for (const row of pageSlice) byId.get(row.groupId)?.items.push(row.item);
     return allGroups.map(g => byId.get(g.id)!).filter(g => g.items.length > 0);
-  }, [allGroups, safePage]);
+  }, [allGroups, pageSlice]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-20" role="status">
@@ -679,10 +687,10 @@ export default function MerchantsPage() {
           ))}
           {groupPages > 1 && (
             <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
-              <span className="text-xs text-muted-foreground" role="status">Page {safePage + 1} of {groupPages} · {totalCount} merchants</span>
+              <span className="text-xs text-muted-foreground" role="status">Page {safePage} of {groupPages} · {totalCount} merchants</span>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={safePage === 0} aria-label="Previous merchants page" onClick={() => setPage(p => p - 1)}>Previous</Button>
-                <Button size="sm" variant="outline" disabled={safePage + 1 >= groupPages} aria-label="Next merchants page" onClick={() => setPage(p => p + 1)}>Next</Button>
+                <Button size="sm" variant="outline" disabled={safePage <= 1} aria-label="Previous merchants page" onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="outline" disabled={safePage >= groupPages} aria-label="Next merchants page" onClick={() => setPage(p => p + 1)}>Next</Button>
               </div>
             </div>
           )}

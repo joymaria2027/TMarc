@@ -6,21 +6,6 @@ export function formatMoney(value: number | string | null | undefined): string {
   return `D${n.toFixed(2)}`;
 }
 
-export function paginate<T>(items: T[], page: number, pageSize: number) {
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const safe = Math.min(Math.max(1, page), totalPages);
-  const startIdx = (safe - 1) * pageSize;
-  const paged = items.slice(startIdx, startIdx + pageSize);
-  return {
-    paged,
-    totalPages,
-    page: safe,
-    start: items.length === 0 ? 0 : startIdx + 1,
-    end: Math.min(startIdx + pageSize, items.length),
-    total: items.length,
-  };
-}
-
 export function debounce<A extends unknown[]>(fn: (...args: A) => void, delay = 500) {
   let t: ReturnType<typeof setTimeout> | null = null;
   return (...args: A) => {

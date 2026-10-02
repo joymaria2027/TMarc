@@ -16,7 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { toast } from 'sonner';
 import { Plus, Play, Wallet, CheckCircle2, Download, X, Search } from 'lucide-react';
 import { format } from 'date-fns';
-import { formatMoney, paginate } from '@/lib/finance';
+import { formatMoney } from '@/lib/finance';
+import { paginate } from '@/lib/pagination';
 import { validateRunPeriod } from '@/lib/moneyGuards';
 import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
 import type { Database } from "@/integrations/supabase/types";
@@ -591,9 +592,9 @@ export default function PayrollPage() {
           ) : (
             runs.length === 0 && <div className="text-center py-10 text-muted-foreground"><EmptyState {...pageEmptyStates.payroll.runs} /></div>
           )}
-          {filteredRuns.length > 0 && filteredRuns.length > runsPaged.paged.length && (
+          {filteredRuns.length > 0 && filteredRuns.length > runsPaged.items.length && (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground" role="status">Page {runsPaged.page} of {runsPaged.totalPages} · {runsPaged.total} runs</span>
+              <span className="text-xs text-muted-foreground" role="status">Page {runsPaged.page} of {runsPaged.totalPages} · {runsPaged.totalItems} runs</span>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={runsPaged.page <= 1} aria-label="Previous runs page" onClick={() => setRunsPage(p => p - 1)}>Previous</Button>
                 <Button size="sm" variant="outline" disabled={runsPaged.page >= runsPaged.totalPages} aria-label="Next runs page" onClick={() => setRunsPage(p => p + 1)}>Next</Button>

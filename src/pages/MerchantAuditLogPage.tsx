@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollText, ChevronDown } from 'lucide-react';
-import { filterAuditRows, paginateList } from './merchantGroup.helpers';
+import { filterAuditRows } from './merchantGroup.helpers';
+import { paginate } from '@/lib/pagination';
 
 const EVENT_LABELS: Record<string, string> = {
   submerchant_created: 'Sub-merchant created',
@@ -31,7 +32,7 @@ export default function MerchantAuditLogPage() {
   const [eventFilter, setEventFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -82,8 +83,11 @@ export default function MerchantAuditLogPage() {
     actorText: (uid: string) => profiles[uid]?.full_name || profiles[uid]?.email || '',
   }), [rows, merchantFilter, eventFilter, debouncedSearch, profiles, merchants]);
 
-  const pageRows = paginateList(filtered, page, PAGE_SIZE);
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const { items: pageRows, page: safePage, totalPages: pages } = paginate(
+    filtered,
+    page,
+    PAGE_SIZE,
+  );
   const filtersActive = merchantFilter !== 'all' || eventFilter !== 'all' || debouncedSearch.trim() !== '';
 
   return (
@@ -97,7 +101,7 @@ export default function MerchantAuditLogPage() {
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="audit-store" className="text-xs">Store</Label>
-          <Select value={merchantFilter} onValueChange={v => { setMerchantFilter(v); setPage(0); }}>
+          <Select value={merchantFilter} onValueChange={v => { setMerchantFilter(v); setPage(1); }}>
             <SelectTrigger id="audit-store" className="min-h-[44px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All stores</SelectItem>
@@ -107,7 +111,7 @@ export default function MerchantAuditLogPage() {
         </div>
         <div className="space-y-1">
           <Label htmlFor="audit-event" className="text-xs">Event</Label>
-          <Select value={eventFilter} onValueChange={v => { setEventFilter(v); setPage(0); }}>
+          <Select value={eventFilter} onValueChange={v => { setEventFilter(v); setPage(1); }}>
             <SelectTrigger id="audit-event" className="min-h-[44px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All events</SelectItem>
@@ -117,7 +121,7 @@ export default function MerchantAuditLogPage() {
         </div>
         <div className="space-y-1">
           <Label htmlFor="audit-search" className="text-xs">Search</Label>
-          <Input id="audit-search" className="min-h-[44px]" placeholder="Store or person" autoComplete="off" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+          <Input id="audit-search" className="min-h-[44px]" placeholder="Store or person" autoComplete="off" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
       </div>
 
@@ -188,10 +192,10 @@ export default function MerchantAuditLogPage() {
           </Table>
           </div>
           <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
-            <span className="text-xs text-muted-foreground" role="status">Page {page + 1} of {pages}</span>
+            <span className="text-xs text-muted-foreground" role="status">Page {safePage} of {pages}</span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={page === 0} aria-label="Previous audit page" onClick={() => setPage(p => p - 1)}>Previous</Button>
-              <Button size="sm" variant="outline" disabled={page + 1 >= pages} aria-label="Next audit page" onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="sm" variant="outline" disabled={safePage <= 1} aria-label="Previous audit page" onClick={() => setPage(p => p - 1)}>Previous</Button>
+              <Button size="sm" variant="outline" disabled={safePage >= pages} aria-label="Next audit page" onClick={() => setPage(p => p + 1)}>Next</Button>
             </div>
           </div>
         </div>

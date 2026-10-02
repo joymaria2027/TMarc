@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  paginateList,
   groupMerchants,
   validateMerchantForm,
   validateDeliveryForm,
@@ -226,18 +225,8 @@ describe("realtime + pagination contracts", () => {
 });
 
 // ---- pure helper contracts (impacted callers) ----
-describe("paginateList", () => {
-  const list = [1, 2, 3, 4, 5];
-  it("slices pages", () => {
-    expect(paginateList(list, 0, 2)).toEqual([1, 2]);
-    expect(paginateList(list, 1, 2)).toEqual([3, 4]);
-    expect(paginateList(list, 2, 2)).toEqual([5]);
-  });
-  it("clamps out-of-range pages", () => {
-    expect(paginateList(list, 9, 2)).toEqual([5]);
-    expect(paginateList(list, -1, 2)).toEqual([1, 2]);
-  });
-});
+// Pagination moved to the single seam in src/lib/pagination.ts (1-based);
+// see src/lib/__tests__/pagination.test.ts for that contract.
 
 describe("groupMerchants", () => {
   const merchants = [

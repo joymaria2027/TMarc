@@ -3,12 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   formatMoney,
-  paginate,
   validateSharing,
   validateWithdrawal,
   validateServiceArea,
   entityIdOf,
 } from '@/lib/finance';
+import { paginate } from '@/lib/pagination';
 import { summarizeBulkResult } from '@/lib/moneyGuards';
 import { buildWithdrawalFilterKey } from '@/components/wallet/withdrawalFilters';
 
@@ -45,7 +45,7 @@ describe('paginate helper (P1: paginate/virtualize)', () => {
   it('slices and reports range', () => {
     const items = [1, 2, 3, 4, 5];
     const r = paginate(items, 2, 2);
-    expect(r.paged).toEqual([3, 4]);
+    expect(r.items).toEqual([3, 4]);
     expect(r.totalPages).toBe(3);
     expect(r.start).toBe(3);
     expect(r.end).toBe(4);

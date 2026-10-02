@@ -5,11 +5,12 @@ import { resolve } from 'node:path';
 const root = resolve(__dirname, '../../..');
 const read = (p: string) => readFileSync(resolve(root, p), 'utf8');
 
+// Pagination is NOT mirrored here: this suite exercises the real seam in
+// src/lib/pagination.ts, so a change to that module cannot pass this test by
+// leaving a stale copy behind. Pages are 1-based.
+import { paginate } from '@/lib/pagination';
+
 // Pure helpers under test (mirrors implementations wired into pages).
-export function paginate<T>(rows: T[], page: number, pageSize: number): T[] {
-  const safe = Math.max(0, page);
-  return rows.slice(safe * pageSize, safe * pageSize + pageSize);
-}
 export function telHref(phone: string | null | undefined): string | null {
   const v = (phone || '').trim();
   if (!v || v === '—' || v === '-') return null;
@@ -26,11 +27,11 @@ export function queueVerb(status: string, hasRider: boolean): 'Claim' | 'Accept'
 describe('core-ops helpers', () => {
   it('paginate slices deterministically', () => {
     const rows = Array.from({ length: 45 }, (_, i) => i);
-    expect(paginate(rows, 0, 20)).toHaveLength(20);
-    expect(paginate(rows, 1, 20)).toHaveLength(20);
-    expect(paginate(rows, 2, 20)).toHaveLength(5);
-    expect(paginate(rows, 0, 20)[0]).toBe(0);
-    expect(paginate(rows, 1, 20)[0]).toBe(20);
+    expect(paginate(rows, 1, 20).items).toHaveLength(20);
+    expect(paginate(rows, 2, 20).items).toHaveLength(20);
+    expect(paginate(rows, 3, 20).items).toHaveLength(5);
+    expect(paginate(rows, 1, 20).items[0]).toBe(0);
+    expect(paginate(rows, 2, 20).items[0]).toBe(20);
   });
   it('telHref guards empty/placeholder phones', () => {
     expect(telHref(null)).toBeNull();

@@ -21,14 +21,6 @@ export interface MerchantGroup {
   items: MerchantLike[];
 }
 
-/** Slice a list into 0-based pages; out-of-range pages clamp. */
-export function paginateList<T>(list: T[], page: number, pageSize: number): T[] {
-  if (pageSize <= 0) return list;
-  const pages = Math.max(1, Math.ceil(list.length / pageSize));
-  const p = Math.min(Math.max(0, page), pages - 1);
-  return list.slice(p * pageSize, p * pageSize + pageSize);
-}
-
 /**
  * Visibility + grouping contract shared by MerchantsPage.
  * Admins see everything; managers see own stores + child branches.

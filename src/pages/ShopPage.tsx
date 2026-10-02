@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ProductCard from "@/components/ProductCard";
 import { getProductImageUrl, getProductPublicUrl } from "@/lib/productImage";
-import { paginate, pageCount } from "@/lib/pagination";
+import { paginate } from "@/lib/pagination";
 import { useCart } from "@/lib/cart";
 import { useWholesale } from "@/lib/wholesale";
 import { cn } from "@/lib/utils";
@@ -164,9 +164,7 @@ export default function ShopPage() {
   const canBuy = (p: Product) =>
     p.available_today && (!p.track_inventory || p.quantity > 0);
 
-  const totalPages = pageCount(filtered.length, PAGE_SIZE);
-  const safePage = Math.min(Math.max(1, page), totalPages);
-  const visible = paginate(filtered, safePage, PAGE_SIZE);
+  const { items: visible, page: safePage, totalPages } = paginate(filtered, page, PAGE_SIZE);
 
   useEffect(() => { setPage(1); }, [search, btFilter, catFilter, maxPrice, sort]);
 

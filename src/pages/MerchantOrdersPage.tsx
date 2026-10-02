@@ -12,7 +12,8 @@ import OrderStatusTimeline from "@/components/OrderStatusTimeline";
 import PaymentStatusBadge from "@/components/PaymentStatusBadge";
 import OrderChat from "@/components/OrderChat";
 import { MessageCircle } from "lucide-react";
-import { paginateList, unreadLabel } from "./merchantGroup.helpers";
+import { unreadLabel } from "./merchantGroup.helpers";
+import { paginate } from "@/lib/pagination";
 
 const nextActions: Record<string, { label: string; to: string }[]> = {
   paid: [{ label: "Accept", to: "accepted" }],
@@ -30,7 +31,7 @@ export default function MerchantOrdersPage() {
   const [merchantIds, setMerchantIds] = useState<string[] | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
 
   // Resolve which merchants this user manages (admins see all)
   useEffect(() => {
@@ -110,7 +111,7 @@ export default function MerchantOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, merchantIds]);
 
-  useEffect(() => { setPage(0); }, [orders.length]);
+  useEffect(() => { setPage(1); }, [orders.length]);
 
   const transition = async (orderId: string, to: string) => {
     try {
@@ -130,9 +131,11 @@ export default function MerchantOrdersPage() {
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const pages = Math.max(1, Math.ceil(orders.length / ORDER_PAGE_SIZE));
-  const safePage = Math.min(page, pages - 1);
-  const visible = paginateList(orders, safePage, ORDER_PAGE_SIZE);
+  const { items: visible, page: safePage, totalPages: pages } = paginate(
+    orders,
+    page,
+    ORDER_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-4">
@@ -158,10 +161,10 @@ export default function MerchantOrdersPage() {
           ))}
           {pages > 1 && (
             <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
-              <span className="text-xs text-muted-foreground" role="status">Page {safePage + 1} of {pages}</span>
+              <span className="text-xs text-muted-foreground" role="status">Page {safePage} of {pages}</span>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={safePage === 0} aria-label="Previous orders page" onClick={() => setPage(p => p - 1)}>Previous</Button>
-                <Button size="sm" variant="outline" disabled={safePage + 1 >= pages} aria-label="Next orders page" onClick={() => setPage(p => p + 1)}>Next</Button>
+                <Button size="sm" variant="outline" disabled={safePage <= 1} aria-label="Previous orders page" onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="outline" disabled={safePage >= pages} aria-label="Next orders page" onClick={() => setPage(p => p + 1)}>Next</Button>
               </div>
             </div>
           )}

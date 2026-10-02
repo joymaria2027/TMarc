@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import { pageEmptyStates } from "@/lib/pageEmptyStates";
+import { paginate } from "@/lib/pagination";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,9 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 
 export const AUDIT_PAGE_SIZE = 20;
-export function paginateAudit<T>(rows: T[], page: number, pageSize = AUDIT_PAGE_SIZE): T[] {
-  return rows.slice(page * pageSize, page * pageSize + pageSize);
-}
 
 interface AuditRow {
   id: string;
@@ -54,7 +52,7 @@ export default function DispatchAuditPage() {
   const [to, setTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scheduleReload = () => {
@@ -147,7 +145,7 @@ export default function DispatchAuditPage() {
             id="audit-search"
             placeholder="Search by order reference…"
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="max-w-xs"
           />
         </div>
@@ -159,7 +157,7 @@ export default function DispatchAuditPage() {
               type="date"
               aria-label="Filter from date"
               value={from}
-              onChange={e => { setFrom(e.target.value); setPage(0); }}
+              onChange={e => { setFrom(e.target.value); setPage(1); }}
               className="max-w-[10rem]"
             />
           </div>
@@ -171,7 +169,7 @@ export default function DispatchAuditPage() {
               aria-label="Filter to date"
               value={to}
               min={from || undefined}
-              onChange={e => { setTo(e.target.value); setPage(0); }}
+              onChange={e => { setTo(e.target.value); setPage(1); }}
               className="max-w-[10rem]"
             />
           </div>
@@ -179,7 +177,7 @@ export default function DispatchAuditPage() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => { setFrom(""); setTo(""); setPage(0); }}
+              onClick={() => { setFrom(""); setTo(""); setPage(1); }}
               aria-label="Clear date filters"
             >
               Clear dates
@@ -204,8 +202,11 @@ export default function DispatchAuditPage() {
       ) : grouped.length === 0 ? (
         <Card><CardContent><EmptyState {...pageEmptyStates.dispatchAudit.list} /></CardContent></Card>
       ) : (() => {
-        const visible = paginateAudit(grouped, page);
-        const pageCount = Math.max(1, Math.ceil(grouped.length / AUDIT_PAGE_SIZE));
+        const { items: visible, page: safePage, totalPages: totalPages } = paginate(
+          grouped,
+          page,
+          AUDIT_PAGE_SIZE,
+        );
         return (
           <>
             {visible.map(([key, events]) => {
@@ -254,11 +255,11 @@ export default function DispatchAuditPage() {
       })}
             <div className="flex items-center justify-between gap-2 pt-2 flex-wrap" role="navigation" aria-label="Audit pages">
               <p className="text-xs text-muted-foreground tabular-nums" role="status">
-                Page {page + 1} of {pageCount} · {grouped.length} orders
+                Page {safePage} of {totalPages} · {grouped.length} orders
               </p>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage(p => p + 1)}>Next</Button>
+                <Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
               </div>
             </div>
           </>

@@ -253,7 +253,7 @@ export default function RejectedDeliveriesPage() {
   // TODO(data-layer): page it on the server via fetchDeliveriesPage once the
   // rejected-ids prefetch moves into a query helper.
   const visibleRows = useMemo(
-    () => paginate(filtered, 1, visibleCount),
+    () => paginate(filtered, 1, visibleCount).items,
     [filtered, visibleCount],
   );
 
