@@ -13,6 +13,11 @@
 
 ## Status
 
+> **EXECUTED** — fixes 1, 2 and 4 in `1f7754d` (APPLIED). Fix 3 (the
+> `wallets.balance` guard) was STOPPED as originally designed and shipped
+> separately as `d3ad8eb` (APPLIED) against a `current_user` predicate; see the
+> "Execution note" at the end of this file and `plans/README.md`.
+
 - **Priority**: P1
 - **Effort**: M
 - **Risk**: MED
@@ -512,3 +517,22 @@ Stop and report back (do not improvise) if:
   verification, the `receipts` bucket, and the double-debit paths in plan 006.
   This plan is scoped to balance/amount integrity so it can be reviewed and
   applied as one unit.
+
+
+---
+
+## Execution note (added after execution)
+
+Fix 3 was originally stopped because its ledger-presence predicate cannot work in
+a BEFORE trigger: every credit path updates `wallets.balance` *before* inserting
+its `wallet_transactions` row, so at trigger time the row does not exist. It
+shipped in `d3ad8eb` against a `current_user` predicate instead.
+
+`current_user` is decidable because all four functions that write
+`wallets.balance` are `SECURITY DEFINER` (verified against the live database),
+so inside them `current_user` is the owner rather than the invoking session role.
+The guard denies `anon` and `authenticated` — the only roles PostgREST uses for
+end-user requests — and fails open otherwise, so an unexpected future writer is
+not silently blocked from settling.
+
+The step 4 text in this plan should not be followed as written; use `d3ad8eb`.
