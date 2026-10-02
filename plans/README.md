@@ -18,9 +18,9 @@ and update your row when done.
 | [001](001-fix-three-shipped-runtime-crashes.md) | Fix the three shipped runtime crashes | P1 | S | LOW | — | DONE (`14b5110`) |
 | [002](002-verification-baseline.md) | Establish a green verification baseline | P1 | M | LOW | 001 | DONE (`df4bb8c`, `565e3fb`) |
 | [003](003-webhook-fail-closed.md) | Fail closed when the ModemPay webhook secret is unconfigured | P1 | S | LOW | 002 | DONE (`54e5445`) |
-| [004](004-guard-delivery-settlement-columns.md) | Block Riders from writing settlement and tariff columns | P1 | M | HIGH | 002 | DONE (`448a6ad`) — migration unapplied, needs staging apply |
+| [004](004-guard-delivery-settlement-columns.md) | Block Riders from writing settlement and tariff columns | P1 | M | HIGH | 002 | DONE (`448a6ad`) — migration APPLIED to production |
 | [005](005-money-ledger-integrity.md) | Close the money-ledger integrity gaps | P1 | M | MED | 002 | PARTIAL (`1f7754d`) — 3 of 4 shipped; step 4 STOPPED, `wallets.balance` still writable |
-| [006](006-no-double-debits.md) | Eliminate the two double-debit paths | P1 | M | MED | 002, 005 | DONE (`a20dfc2`, `95c22af`) — migrations unapplied |
+| [006](006-no-double-debits.md) | Eliminate the two double-debit paths | P1 | M | MED | 002, 005 | DONE (`a20dfc2`, `95c22af`) — migrations APPLIED to production |
 | [007](007-checkout-delivery-fee-race.md) | Stop checkout writing a zero delivery fee | P2 | S | LOW | 002 | DONE (`92bc383`) |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (with a one-line
@@ -64,11 +64,17 @@ All four plans executed. Verification: `npm test` 857 passed / 115 files,
 `npm run typecheck` 0 errors, `npx eslint .` 0 errors / 1201 warnings (unchanged
 from baseline), `npm run build` succeeds.
 
-**No migration is applied.** `supabase db push` is still blocked by the known
-local/remote history drift. All three migrations were additionally validated
-against the live database inside `BEGIN … ROLLBACK` — they compile against the
-real schema — and the behaviour was exercised there per scenario. Nothing was
-persisted. Applying them remains a human task on staging, in timestamp order.
+**All three migrations are APPLIED** to the live project (`ynlbzxqmaixyrtggwkwn`)
+via `supabase db push`, in timestamp order. `supabase_migrations.schema_migrations`
+now holds 113 rows with no drift in either direction — the "~76-row drift"
+recorded in these plans was stale and no longer exists, so `db push` worked
+without needing `migration repair` (which the plans forbade).
+
+Pre- and post-apply state was compared and is byte-identical: 146 ledger rows,
+total wallet balance 7514.00, 16/2/2 withdrawal statuses, 1 payroll run, 38
+deliveries. No test data persisted. All 11 acceptance scenarios were re-run
+against the permanently-applied objects (each inside `BEGIN … ROLLBACK`) and
+pass.
 
 ### 005 is PARTIAL, and why
 
@@ -110,6 +116,18 @@ does not list it. The fee gate moved the click later, which let the async
 customer-prefill effect blank the form before `submit()`; those tests had only
 ever passed by clicking in the same tick as the field changes. They now flush the
 prefill first.
+
+### Reconciliation item found by the post-apply fraud report
+
+`fraud_audit_report.ledger_drift` reports **1 critical, pre-existing** (present
+in the before-snapshot, not caused by these plans): rider wallet
+`21f8cd28-c42b-43e2-a4cc-8b932e0b110a` (Ida Sanally) has `balance = 397` while
+its ledger sums to `377`. The gap is exactly D20, matching a completed
+`Withdrawal via Bank Transfer (Access)` on 2026-04-29 whose ledger debit exists
+but whose balance decrement did not. The other completed withdrawal (D3) did
+both. `duplicate_credit` and `tariff_override_large` are both 0, so there is no
+evidence plan 004's Rider-tariff hole was ever exploited. The D20 needs a human
+reconciliation decision; it was deliberately not "fixed" here.
 
 ### Not done, still open
 
