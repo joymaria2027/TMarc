@@ -23,6 +23,13 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // Ratchet, not cleanup. `no-explicit-any` was inherited as "error" from
+      // tseslint.configs.recommended, which made `npx eslint .` report 281
+      // pre-existing `any`s as errors — a permanently-red gate is a
+      // permanently-ignored one, so it was hiding the 2 rules-of-hooks errors
+      // and the other real defects. Downgraded to "warn" so red now means
+      // something new. The count is 281 and should only go DOWN, never up.
+      "@typescript-eslint/no-explicit-any": "warn",
       // Trial: @shadcn/lint warn-only (ticket .scratch/shadcn-lint-adoption).
       // Slice 01: measure arbitrary-value usage.
       "shadcn/no-arbitrary-values": "warn",
@@ -66,6 +73,13 @@ export default tseslint.config(
     // Components style their own internals — don't lint the design system
     // against itself (upstream recommendation).
     files: ["src/components/ui/**/*.{ts,tsx}"],
-    rules: { "shadcn/no-restyle": "off" },
+    rules: {
+      "shadcn/no-restyle": "off",
+      // Vendored shadcn primitives use `interface X extends Y {}` as their
+      // documented prop-extension idiom (command.tsx, textarea.tsx). Editing
+      // them to satisfy a lint rule would be undone by the next `shadcn add`
+      // sync, so exempt the directory rather than fork upstream.
+      "@typescript-eslint/no-empty-object-type": "off",
+    },
   },
 );

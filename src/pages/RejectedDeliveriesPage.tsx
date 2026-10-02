@@ -85,7 +85,7 @@ export default function RejectedDeliveriesPage() {
       const { data } = await rpcGetRiderRejectedDeliveries();
       const rows = data ?? [];
       const restIds = Array.from(new Set(rows.map(r => r.merchant_id).filter(Boolean)));
-      let restMap: Record<string, { name: string }> = {};
+      const restMap: Record<string, { name: string }> = {};
       if (restIds.length > 0) {
         const { data: rests } = await supabase.from('merchants').select('id, name').in('id', restIds);
         ((rests as any[]) || []).forEach(r => { restMap[r.id] = { name: r.name }; });
@@ -115,7 +115,7 @@ export default function RejectedDeliveriesPage() {
       const { data } = await rpcGetUnassignedDeliveriesForRider();
       const rows = (data ?? []).filter((d) => d.status === 'unassigned' || d.status === 'pending');
       const mIds = Array.from(new Set(rows.map((r: any) => r.merchant_id).filter(Boolean)));
-      let mMap: Record<string, { name: string }> = {};
+      const mMap: Record<string, { name: string }> = {};
       if (mIds.length > 0) {
         const { data: ms } = await supabase.from('merchants').select('id, name').in('id', mIds as string[]);
         ((ms as any[]) || []).forEach(m => { mMap[m.id] = { name: m.name }; });
@@ -150,7 +150,7 @@ export default function RejectedDeliveriesPage() {
       .order('created_at', { ascending: false });
     const rejList = (rejRows as any[]) || [];
     const riderIds = Array.from(new Set(rejList.map(r => r.rider_id)));
-    let infoByRider: Record<string, { name: string; phone: string | null }> = {};
+    const infoByRider: Record<string, { name: string; phone: string | null }> = {};
     if (riderIds.length > 0) {
       const { data: ridersData } = await supabase.from('riders').select('id, user_id, rider_code').in('id', riderIds);
       const userIds = ((ridersData as any[]) || []).map(r => r.user_id);

@@ -64,7 +64,7 @@ export default function StoreQrDialog({ open, onOpenChange, merchantId, merchant
       <img src="${dataUrl}" alt="QR code for ${merchantName} store" />
       <p class="cta">Scan to order</p>
       <p class="url">${storeUrl}</p>
-      <script>window.onload = () => { window.focus(); window.print(); };<\/script>
+      <script>window.onload = () => { window.focus(); window.print(); };</script>
       </body></html>`);
     w.document.close();
     logEvent('qr_printed');

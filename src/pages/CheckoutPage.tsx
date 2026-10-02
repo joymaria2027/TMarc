@@ -130,7 +130,10 @@ export default function CheckoutPage() {
           return;
         }
         await signUp(authEmail, authPassword, fullName);
-        try { await supabase.rpc("self_assign_customer_role" as any); } catch {}
+        // Best-effort: the account is already created. If the role backfill
+        // fails, the customer still signs in — the storefront is scoped by
+        // account, not by role, so swallowing this must not fail signup.
+        try { await supabase.rpc("self_assign_customer_role" as any); } catch { /* role backfill is non-fatal */ }
         toast.success("Account created — you can place your order now");
         setAnnouncement("Account created. You can place your order now.");
       } else {

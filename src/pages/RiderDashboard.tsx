@@ -171,7 +171,7 @@ export default function RiderDashboard() {
     }
     // hydrate merchant names
     const mIds = Array.from(new Set(rows.map(d => d.merchant_id).filter(Boolean))) as string[];
-    let mMap: Record<string, { name: string }> = {};
+    const mMap: Record<string, { name: string }> = {};
     if (mIds.length > 0) {
       const { data: ms } = await supabase.from('merchants').select('id, name').in('id', mIds);
       ((ms as any[]) || []).forEach(m => { mMap[m.id] = { name: m.name }; });
