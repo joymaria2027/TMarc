@@ -67,10 +67,16 @@ recommended remediation are in `docs/testing.md`.
 
 ### Where money logic lives
 
+- `supabase/migrations/**` — the real ledger. Nothing in `src/` computes money
+  the ledger also computes.
 - `src/lib/moneyGuards.ts` — client-side money guards.
-- `src/lib/netRevenue.ts` — a **hand-maintained mirror** of the SQL trigger. Its
-  header comment points at a migration glob (`*_settlement_net_revenue*.sql`)
-  that **does not exist**; the real migrations are `2026041*` / `2026052*`. Treat
-  the SQL as the ledger and this file as a copy that can drift.
-- `supabase/migrations/**` — the real ledger.
 - `src/lib/guardedWrite.ts` — the **required** wrapper for client-side writes.
+- `docs/settlement-net-revenue.md` — **prose only.** A readable description of
+  the `credit_wallets_on_settlement` net-income formula, pointing at
+  `20260520120446`. Not code, not tested, not authoritative. When it disagrees
+  with the SQL, the SQL wins and the doc is the bug.
+
+A `src/lib/netRevenue.ts` mirror used to sit here with a test suite that could
+not detect its own drift (every assertion was computed from the mirror itself),
+so it was green, exported and typechecked while verifying nothing. Do not
+reintroduce a hand-maintained copy of ledger math here.
