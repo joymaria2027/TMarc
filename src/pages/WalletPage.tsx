@@ -24,7 +24,7 @@ import {
 } from '@/lib/rpcTypes';
 import type { HasWithdrawalPinResult } from '@/lib/rpcTypes';
 import { validateWithdrawal, formatMoney } from '@/lib/finance';
-import { summarizeBulkResult, bulkResultMessage } from '@/lib/moneyGuards';
+import { summarizeBulkResult, bulkResultMessage, partitionWithdrawableRequests, WITHDRAWAL_BULK_ALLOWED_STATUSES } from '@/lib/moneyGuards';
 import { buildWithdrawalFilterKey } from '@/components/wallet/withdrawalFilters';
 import type { Database } from "@/integrations/supabase/types";
 
@@ -358,8 +358,26 @@ export default function WalletPage() {
     if (withdrawSelectedIds.size === 0) return;
     setWithdrawBulkActionPending(action);
     const ids = Array.from(withdrawSelectedIds);
-    const results = [] as { id: string; error: { message?: string } | null }[];
-    for (const id of ids) {
+
+    // Partition BEFORE writing. A completed withdrawal must never be rewound to
+    // manager_approved: it would look like "Awaiting Accountant", could be
+    // finalized again, and process_withdrawal_completion would run the wallet
+    // debit a second time. The allowed-status SET is imported from moneyGuards so
+    // this partition and the .in() predicate below cannot disagree about the data
+    // (each site still applies its own predicate to it).
+    const selected = withdrawals.filter(wr => ids.includes(wr.id));
+    const { actionable, skippedWrongState } = partitionWithdrawableRequests(selected, action);
+    const allowedStatuses = WITHDRAWAL_BULK_ALLOWED_STATUSES[action];
+    const verb = action === 'approve' ? 'approved' : 'rejected';
+
+    if (actionable.length === 0) {
+      toast.error(`None of the ${skippedWrongState.length} selected ${skippedWrongState.length === 1 ? 'withdrawal' : 'withdrawals'} can be ${verb} — nothing changed`);
+      setWithdrawBulkActionPending(null);
+      return;
+    }
+
+    const writes = [] as { id: string; error: { message?: string } | null }[];
+    for (const wr of actionable) {
       const base = {
         processed_by: user!.id,
         processed_at: new Date().toISOString(),
@@ -369,17 +387,30 @@ export default function WalletPage() {
         .update(action === 'approve'
           ? { ...base, status: 'manager_approved' }
           : { ...base, status: 'rejected', notes: 'Bulk rejected by manager' })
-        .eq('id', id);
-      results.push({ id, error });
+        .eq('id', wr.id)
+        // Belt and braces: the partition above is UX, this is the control. A
+        // status change landing between partition and write is rejected here.
+        .in('status', allowedStatuses);
+      writes.push({ id: wr.id, error });
     }
-    // F1: honest about partial failure — names which rows did not land.
-    const summary = summarizeBulkResult(results);
-    const verb = action === 'approve' ? 'approved' : 'rejected';
-    if (summary.succeeded > 0 && summary.failed === 0) toast.success(`${summary.succeeded} ${summary.succeeded === 1 ? 'request' : 'requests'} ${verb}`);
-    else if (summary.failed > 0) toast.error(bulkResultMessage(summary, verb));
+
+    // F1: honest about partial failure — names which rows did not land. Rows the
+    // client already knew were ineligible count as failures too, so they are
+    // reported rather than silently dropped.
+    const summary = summarizeBulkResult([
+      ...writes,
+      ...skippedWrongState.map(wr => ({ id: wr.id, error: { message: 'wrong state' } })),
+    ]);
+    if (summary.failed === 0) toast.success(`${summary.succeeded} ${summary.succeeded === 1 ? 'request' : 'requests'} ${verb}`);
+    else toast.error(bulkResultMessage(summary, verb));
+
+    // Clear the whole consumed selection. Ineligible rows are reported by the
+    // toast above; leaving them selected would strand the manager, because the
+    // row checkbox is disabled for exactly those statuses (see
+    // WithdrawalRequestsTable) so a checked+disabled row can never be cleared.
     setWithdrawSelectedIds(prev => {
       const next = new Set(prev);
-      for (const r of results) if (!r.error) next.delete(r.id);
+      for (const id of ids) next.delete(id);
       return next;
     });
     setWithdrawBulkActionPending(null);

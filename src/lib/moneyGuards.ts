@@ -31,6 +31,52 @@ export function partitionPayoutDeliveries<T extends PayoutDelivery>(
   return { approvable, skippedNoRatio };
 }
 
+export type WithdrawalBulkAction = 'approve' | 'reject';
+
+/**
+ * Statuses a manager's bulk action may legally move, per action.
+ *
+ * `approve` only ever acts on `pending`. Critically it does NOT include
+ * `manager_approved`: rewinding an already-approved row to the same value looks
+ * like a no-op in the UI, but it discards the accountant's turn, and if the row
+ * had reached `completed` it lets `process_withdrawal_completion` run the wallet
+ * debit a SECOND time. `completed` is the row that must never be rewound.
+ *
+ * This set is the shared source for the allowed statuses: the page uses it for
+ * the client-side partition AND for the `.in('status', …)` predicate, so the two
+ * cannot disagree about which values are allowed. Each site still applies its
+ * own predicate to it, so extending this set is a deliberate act — a status with
+ * no rule is silently skipped, which is the safe default.
+ */
+export const WITHDRAWAL_BULK_ALLOWED_STATUSES: Record<WithdrawalBulkAction, readonly string[]> = {
+  approve: ['pending'],
+  reject: ['pending', 'manager_approved'],
+};
+
+export interface WithdrawalRequest {
+  id: string;
+  status: string;
+}
+
+/**
+ * Split a manager's bulk withdrawal selection by whether the row is still in a
+ * state this action can legally move. Skipped rows are reported, not silently
+ * dropped, so the toast can say which rows did not land.
+ */
+export function partitionWithdrawableRequests<T extends WithdrawalRequest>(
+  requests: T[],
+  action: WithdrawalBulkAction,
+): { actionable: T[]; skippedWrongState: T[] } {
+  const allowed = WITHDRAWAL_BULK_ALLOWED_STATUSES[action];
+  const actionable: T[] = [];
+  const skippedWrongState: T[] = [];
+  for (const r of requests) {
+    if (allowed.includes(r.status)) actionable.push(r);
+    else skippedWrongState.push(r);
+  }
+  return { actionable, skippedWrongState };
+}
+
 export interface BulkWriteResult {
   id: string;
   error: { message?: string } | null;

@@ -8,6 +8,7 @@ import { ArrowDownToLine, CheckCircle2, Clock, Search, XCircle, Download, X } fr
 import type { WalletRow } from './WalletFolderCard';
 import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatMoney } from '@/lib/finance';
+import { WITHDRAWAL_BULK_ALLOWED_STATUSES } from '@/lib/moneyGuards';
 import { buildCsvRows, downloadCsv, generateExportFilename } from '@/lib/financeExport';
 
 export interface WithdrawalRow {
@@ -281,12 +282,18 @@ export default function WithdrawalRequestsTable({
                 <TableBody>
                   {paged.map(wr => {
                     const wallet = wallets.find(w => w.id === wr.wallet_id);
+                    // Defence in depth: the bulk write's `.in('status', …)`
+                    // predicate is the control, but a manager should not be able
+                    // to select a row that neither bulk action can move.
+                    const selectable = WITHDRAWAL_BULK_ALLOWED_STATUSES.approve.includes(wr.status)
+                      || WITHDRAWAL_BULK_ALLOWED_STATUSES.reject.includes(wr.status);
                     return (
                       <TableRow key={wr.id}>
                         <TableCell className="w-12">
                           <Checkbox
                             checked={selectedIdsSet.has(wr.id)}
                             onCheckedChange={() => onToggleRow(wr.id)}
+                            disabled={!selectable}
                             aria-label={`Select row ${wr.id.slice(0, 8)}`}
                           />
                         </TableCell>
