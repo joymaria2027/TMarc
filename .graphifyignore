@@ -1,0 +1,15 @@
+# Agent tooling and scaffold, not project knowledge.
+#
+# Without these, ~31% of the knowledge graph is the agent's own skill library.
+# Those files produce clusters that look meaningful and are not: communities
+# named "react", "lucide-react", "vitest" and "dependencies" were built from
+# tokens *mentioned in skill documentation*, not from anything this codebase
+# does. That is worse than no label, because it looks like a real finding.
+#
+# Skip graphify-overlapping paths with .gitignore too; this file is additive
+# and takes precedence.
+.claude/
+.agents/
+.lovable/
+.lovablable/
+.scratch/
