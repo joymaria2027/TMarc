@@ -56,18 +56,61 @@ async function sha256Hex(body: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Outcome of the webhook signature decision.
+ *
+ * - "valid"        the HMAC checked out, or checking was deliberately skipped.
+ * - "invalid"      the HMAC was checked and did not match.
+ * - "unconfigured" there is no usable secret, so nothing was checked at all.
+ *
+ * The third state is the whole point. The previous code used a tri-state
+ * `boolean | null` where `null` meant "never checked", but then gated on
+ * `=== false` only — so an unconfigured secret silently fell through and let
+ * any caller drive an order to paid. A three-valued return makes that
+ * unrepresentable: every state has a branch, and collapsing "never checked"
+ * into "valid" is now a type error rather than a silent auth bypass.
+ */
+export type SignatureVerdict = "valid" | "invalid" | "unconfigured";
+
+/**
+ * Resolve the signature decision for a webhook delivery.
+ *
+ * Pure: takes the secret as an argument and touches no Deno, Supabase, or
+ * clock global, so it is directly unit-testable from Vitest even though this
+ * module otherwise runs on the Deno edge runtime.
+ *
+ * ORDER IS LOAD-BEARING: `skipSignature` is checked before the secret. The
+ * admin-gated replay endpoint passes `skipSignature: true` and must keep
+ * working in an environment that has no secret configured. Swapping these two
+ * lines breaks admin replay in production.
+ */
+export async function resolveSignatureVerdict(
+  secret: string | null | undefined,
+  rawBody: string,
+  signatureHeader: string,
+  skipSignature = false,
+): Promise<SignatureVerdict> {
+  if (skipSignature) return "valid";
+  // Whitespace-only counts as absent: a secret that trims to nothing cannot
+  // produce a matching HMAC, so treating it as configured would just turn a
+  // deployment mistake into a wall of 401s instead of one clear config error.
+  if (!secret || !secret.trim()) return "unconfigured";
+  if (!signatureHeader) return "invalid";
+  return (await isValidSignature(secret, rawBody, signatureHeader)) ? "valid" : "invalid";
+}
+
 export async function processWebhookEvent(
   admin: any,
   rawBody: string,
   signatureHeader: string,
   opts?: { retryOfId?: string; skipSignature?: boolean },
 ) {
-  const webhookSecret = Deno.env.get("MODEMPAY_WEBHOOK_SECRET");
-  let signatureValid: boolean | null = null;
-  if (webhookSecret && !opts?.skipSignature) {
-    if (!signatureHeader) signatureValid = false;
-    else signatureValid = await isValidSignature(webhookSecret, rawBody, signatureHeader);
-  }
+  const verdict = await resolveSignatureVerdict(
+    Deno.env.get("MODEMPAY_WEBHOOK_SECRET"),
+    rawBody,
+    signatureHeader,
+    opts?.skipSignature,
+  );
 
   let payload: any = null;
   try { payload = JSON.parse(rawBody); } catch { /* leave null */ }
@@ -107,7 +150,10 @@ export async function processWebhookEvent(
       order_id: orderId,
       payment_reference: reference,
       signature_header: signatureHeader || null,
-      signature_valid: signatureValid,
+      // Persisted for triage only; control flow branches on `verdict`. null
+      // means "there was no secret to check with" — exactly the fact an
+      // operator needs to see when auditing a misconfigured deployment.
+      signature_valid: verdict === "valid" ? true : verdict === "invalid" ? false : null,
       payload_json: payload,
       raw_body: rawBody.length > 20000 ? rawBody.slice(0, 20000) : rawBody,
       processing_status: "pending",
@@ -126,11 +172,24 @@ export async function processWebhookEvent(
       .eq("id", logRow.id);
   };
 
-  if (signatureValid === false) {
+  if (verdict === "invalid") {
     // Fail closed: an invalid HMAC is rejected outright. Triage happens
     // out-of-band via the events table (or an admin replay), never inline.
     await setStatus("invalid_signature", "HMAC signature mismatch");
     return { status: 401, body: { error: "invalid signature" }, logId: logRow.id };
+  }
+
+  if (verdict === "unconfigured") {
+    // Fail closed: a missing secret means signature enforcement is OFF, so
+    // continuing would let any unauthenticated caller POST a `charge.succeeded`
+    // for a known order_id and credit a merchant wallet. Matches the precedent
+    // in modempay-create-checkout, which refuses outright when its key is
+    // missing. `config_error` is distinct from `invalid_signature` on purpose:
+    // one means "someone forged this", the other means "we are misconfigured".
+    // This branch must stay ahead of every order mutation below.
+    console.error("MODEMPAY_WEBHOOK_SECRET is not configured");
+    await setStatus("config_error", "MODEMPAY_WEBHOOK_SECRET is not configured");
+    return { status: 500, body: { error: "webhook not configured" }, logId: logRow.id };
   }
 
 
