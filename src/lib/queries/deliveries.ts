@@ -53,6 +53,19 @@ type JoinedDeliveryRow = Omit<DeliveryRow, 'merchants' | 'merchant_name' | 'ride
     | null;
 };
 
+/**
+ * Normalize a joined select result into flat `DeliveryRow`s.
+ *
+ * The cast is sound and lives here once: the select string embeds
+ * `merchants(name)` and `riders(...)`, which supabase-js's SelectQueryError type
+ * cannot model, so `data` comes back over-narrowed. `withMerchantAndRiderName`
+ * immediately normalizes the array-or-object embed, which is why
+ * `JoinedDeliveryRow` accepts both forms.
+ */
+function toDeliveryRows(data: unknown): DeliveryRow[] {
+  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
+}
+
 /** Normalize the join embeds to flat fields. */
 function withMerchantAndRiderName(row: JoinedDeliveryRow): DeliveryRow {
   const joinedMerchant = Array.isArray(row.merchants)
@@ -124,12 +137,7 @@ export async function fetchDeliveriesPage({
 
   const { data, error } = await query.range(from, to);
   if (error) throw error;
-  // Sound cast: the select string embeds `merchants(name)` and
-  // `riders(...)`, which supabase-js's SelectQueryError type cannot model,
-  // so `data` is over-narrowed. `withMerchantAndRiderName` immediately
-  // normalizes the array-or-object embed, which is why JoinedDeliveryRow
-  // accepts both forms.
-  return ((data ?? []) as unknown as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
+  return toDeliveryRows(data);
 }
 
 export interface UnassignedPageParams {
@@ -157,12 +165,7 @@ export async function fetchUnassignedPage({
   if (excludeIds.length > 0) query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   const { data, error } = await query.range(from, to);
   if (error) throw error;
-  // Sound cast: the select string embeds `merchants(name)` and
-  // `riders(...)`, which supabase-js's SelectQueryError type cannot model,
-  // so `data` is over-narrowed. `withMerchantAndRiderName` immediately
-  // normalizes the array-or-object embed, which is why JoinedDeliveryRow
-  // accepts both forms.
-  return ((data ?? []) as unknown as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
+  return toDeliveryRows(data);
 }
 
 /**

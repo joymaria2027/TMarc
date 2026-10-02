@@ -18,7 +18,7 @@ Run all four before calling a change done. They are the same four steps CI runs.
 
 | Command | What it proves |
 |---|---|
-| `npm test` | 804 tests / 109 files, jsdom, ~50s |
+| `npm test` | 819 tests / 111 files, jsdom, ~50s |
 | `npm run lint` | `eslint .` — currently **0 errors** |
 | `npm run typecheck` | `tsc --noEmit -p tsconfig.app.json` — must be **0 errors** |
 | `npm run build` | Vite production build |
@@ -33,14 +33,15 @@ it means the command most people and agents reach for first is a silent no-op.
 **Always use `npm run typecheck`.** Never trust a bare `npx tsc --noEmit`.
 
 This is not hypothetical: three `ReferenceError` crashes and a hook-order crash
-shipped to production while `tsc` reported them. See `plans/001-*.md`.
+shipped to production precisely *because* that command reported nothing. See
+`plans/001-*.md`.
 
 ### Lint ratchet
 
-`npx eslint .` reports **0 errors** and ~1202 warnings. Two families dominate,
+`npx eslint .` reports **0 errors** and ~1201 warnings. Two families dominate,
 both deliberately non-blocking:
 
-- **281 × `@typescript-eslint/no-explicit-any`** — ratcheted from `error` to
+- **280 × `@typescript-eslint/no-explicit-any`** — ratcheted from `error` to
   `warn` so a permanently-red gate would not mask new defects. **The count may
   go down. Never go up.**
 - **890 × `shadcn/no-arbitrary-values` / `shadcn/no-restyle`** — deliberately
@@ -51,10 +52,15 @@ both deliberately non-blocking:
 
 `vitest.config.ts` sets `include: ["src/**/*.{test,spec}.{ts,tsx}"]`, and **no
 tsconfig includes `supabase/functions/**`**. So the Deno edge functions are
-neither typechecked nor tested by any command in this repo — including
-`supabase/functions/modempay-webhook/index.ts`, the unauthenticated
-money-moving endpoint, and `settlement-e2e/index.test.ts`, a Deno test that
-exercises real settlement math and has no runner script.
+neither typechecked nor tested by any command in this repo.
+
+One partial exception, and it is easy to over-read: `supabase/functions/_shared/modempay.ts`
+**is** typechecked, because `src/lib/__tests__/modempaySignatureGate.test.ts`
+imports it, which pulls it into the app program (and is why
+`src/deno-edge-functions.d.ts` exists). That covers **one** file. Every other
+edge function — including `modempay-webhook/index.ts`, the unauthenticated
+money-moving endpoint — is still unchecked, and `settlement-e2e/index.test.ts`,
+a Deno test exercising real settlement math, still has no runner script.
 
 Do not assume `npm run typecheck` or `npm test` covers them. Details and the
 recommended remediation are in `docs/testing.md`.

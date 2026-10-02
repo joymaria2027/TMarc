@@ -39,8 +39,6 @@ describe('PaymentMethodSelect label fallback', () => {
     render(
       <PaymentMethodSelect
         deliveryId="d1"
-       
-       
         currentMethod="bank_transfer"
         currentBankName="GTBank"
       />,

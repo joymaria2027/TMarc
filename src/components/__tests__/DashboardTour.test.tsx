@@ -129,6 +129,16 @@ describe('DashboardTour wrapper (slice 02 contract)', () => {
     expect(joyrideState.lastProps?.run).toBe(false);
   });
 
+  it('leaves a missing target to react-joyride, which auto-advances past it', () => {
+    // v3 dropped the v2 STATUS.ERROR that this used to branch on. It records the
+    // failure and moves to the next step itself (useLifecycleEffect), so the
+    // wrapper must NOT force-stop here — doing so would abort a tour over one
+    // bad selector. Asserted so the decision stays deliberate.
+    renderTour('admin', true);
+    fireJoyride({ type: 'error:target_not_found' });
+    expect(joyrideState.lastProps?.run).toBe(true);
+  });
+
   it('replays on demand via replaySignal even after completion', () => {
     window.localStorage.setItem(tourKey('admin'), 'done');
     const { rerender } = render(
