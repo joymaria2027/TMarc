@@ -81,7 +81,6 @@ export default function PayrollPage() {
 
   // Filters for runs
   const [runSearch, setRunSearch] = useState('');
-  const [runStatusFilter, setRunStatusFilter] = useState<string[]>([]);
 
   // Bulk selection
   const [assignmentSelectedIds, setAssignmentSelectedIds] = useState<Set<string>>(new Set());
@@ -127,6 +126,9 @@ export default function PayrollPage() {
   }, [assignments, assignmentSearch, assignmentStatusFilter, assignmentPayerFilter, profiles, merchants]);
 
   // Filtered runs
+  // payroll_runs.status is NOT NULL DEFAULT 'completed' and nothing ever writes
+  // another value, so the former pending/failed filter options could never match
+  // and were removed rather than left as dead UI.
   const filteredRuns = useMemo(() => {
     return runs.filter(r => {
       if (runSearch) {
@@ -135,12 +137,9 @@ export default function PayrollPage() {
         const payeeName = a ? profileName(a.payee_user_id).toLowerCase() : '';
         return payeeName.includes(q) || r.assignment_id.slice(0, 8).includes(q);
       }
-      if (runStatusFilter.length > 0) {
-        if (!runStatusFilter.includes(r.status)) return false;
-      }
       return true;
     });
-  }, [runs, runSearch, runStatusFilter, assignments, profiles]);
+  }, [runs, runSearch, assignments, profiles]);
 
   // Bulk selection handlers for assignments
   const toggleAssignmentSelectAll = () => {
@@ -225,7 +224,6 @@ export default function PayrollPage() {
 
   const clearRunFilters = () => {
     setRunSearch('');
-    setRunStatusFilter([]);
   };
 
   const createAssignment = async () => {
@@ -266,6 +264,17 @@ export default function PayrollPage() {
     if (!runDialog || running) return;
     const periodError = validateRunPeriod(runForm.period_start, runForm.period_end);
     if (periodError) { setRunError(periodError); return; }
+    // UX only — the UNIQUE constraint in run_payroll is the control. Two admins
+    // clicking at once both pass this check; only the database rejects the
+    // second, and that surfaces as 23505 through the generic handler below.
+    const alreadyRun = runs.some(r =>
+      r.assignment_id === runDialog.id
+      && r.period_start === runForm.period_start
+      && r.period_end === runForm.period_end);
+    if (alreadyRun) {
+      setRunError('Payroll has already been run for this assignment and period.');
+      return;
+    }
     setRunError(null);
     setRunning(true);
     try {
@@ -513,22 +522,11 @@ export default function PayrollPage() {
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <Input id="run-search" type="search" className="pl-9" placeholder="Search payee..." value={runSearch} onChange={e => setRunSearch(e.target.value)} />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="run-status">Status</Label>
-                <Select value={runStatusFilter.join(',')} onValueChange={v => setRunStatusFilter(v ? [v] : [])}>
-                  <SelectTrigger id="run-status" className="w-36"><SelectValue placeholder="All" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="flex items-end gap-2">
                 <Button variant="outline" size="sm" onClick={handleRunExportCsv} className="gap-1 min-h-[44px]">
                   <Download className="h-3.5 w-3.5" aria-hidden="true" />Export CSV
                 </Button>
-                {(runSearch || runStatusFilter.length > 0) && (
+                {(runSearch) && (
                   <Button variant="ghost" size="sm" onClick={clearRunFilters} className="gap-1 min-h-[44px]">
                     <X className="h-3.5 w-3.5" aria-hidden="true" />Clear all
                   </Button>
