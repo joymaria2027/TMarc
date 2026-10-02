@@ -18,10 +18,10 @@ and update your row when done.
 | [001](001-fix-three-shipped-runtime-crashes.md) | Fix the three shipped runtime crashes | P1 | S | LOW | — | DONE (`14b5110`) |
 | [002](002-verification-baseline.md) | Establish a green verification baseline | P1 | M | LOW | 001 | DONE (`df4bb8c`, `565e3fb`) |
 | [003](003-webhook-fail-closed.md) | Fail closed when the ModemPay webhook secret is unconfigured | P1 | S | LOW | 002 | DONE (`54e5445`) |
-| [004](004-guard-delivery-settlement-columns.md) | Block Riders from writing settlement and tariff columns | P1 | M | HIGH | 002 | TODO |
-| [005](005-money-ledger-integrity.md) | Close the money-ledger integrity gaps | P1 | M | MED | 002 | TODO |
-| [006](006-no-double-debits.md) | Eliminate the two double-debit paths | P1 | M | MED | 002, 005 | TODO |
-| [007](007-checkout-delivery-fee-race.md) | Stop checkout writing a zero delivery fee | P2 | S | LOW | 002 | TODO |
+| [004](004-guard-delivery-settlement-columns.md) | Block Riders from writing settlement and tariff columns | P1 | M | HIGH | 002 | DONE (`448a6ad`) — migration unapplied, needs staging apply |
+| [005](005-money-ledger-integrity.md) | Close the money-ledger integrity gaps | P1 | M | MED | 002 | PARTIAL (`1f7754d`) — 3 of 4 shipped; step 4 STOPPED, `wallets.balance` still writable |
+| [006](006-no-double-debits.md) | Eliminate the two double-debit paths | P1 | M | MED | 002, 005 | DONE (`a20dfc2`, `95c22af`) — migrations unapplied |
+| [007](007-checkout-delivery-fee-race.md) | Stop checkout writing a zero delivery fee | P2 | S | LOW | 002 | DONE (`92bc383`) |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED` (with a one-line
 reason) | `REJECTED` (with a one-line rationale).
@@ -57,6 +57,69 @@ local/remote migration-history drift (recorded in
 `.scratch/audit-remediation/issues/03-edge-function-payment-holes.md:30-33`).
 **Applying them is a human task on a staging database.** Each plan's step 7
 lists the role scenarios to verify.
+
+## Execution report: 004-007 (commits `448a6ad`, `1f7754d`, `a20dfc2`, `95c22af`, `92bc383`)
+
+All four plans executed. Verification: `npm test` 857 passed / 115 files,
+`npm run typecheck` 0 errors, `npx eslint .` 0 errors / 1201 warnings (unchanged
+from baseline), `npm run build` succeeds.
+
+**No migration is applied.** `supabase db push` is still blocked by the known
+local/remote history drift. All three migrations were additionally validated
+against the live database inside `BEGIN … ROLLBACK` — they compile against the
+real schema — and the behaviour was exercised there per scenario. Nothing was
+persisted. Applying them remains a human task on staging, in timestamp order.
+
+### 005 is PARTIAL, and why
+
+Step 4 (`BEFORE UPDATE OF balance` on `public.wallets` requiring a matching
+`wallet_transactions` row) hit the plan's own STOP condition and was **not**
+shipped. The proposed predicate is evaluated in a BEFORE trigger, but every
+credit path updates the balance *before* inserting its ledger row
+(`credit_wallets_on_settlement` at `20260520120446:193`/`:195`, `run_payroll` at
+`:368`/`:369`). At trigger time the row does not exist, so the predicate is a
+coin flip between false-positives on legitimate settlement credits — which
+would halt the core business flow — and false-negatives that leave the hole
+open. `wallets.balance` is still directly writable by an accountant/admin
+session. It needs its own plan; the sound alternative is probably a
+`current_user`-based guard (every legitimate balance writer is a SECURITY
+DEFINER function), not a time-based one.
+
+Fixes 1, 2 and 4 shipped and are behaviourally verified.
+
+### Deviations from the plans' literal instructions
+
+1. **004** — none. No client change, as required.
+2. **005** — `submit_order`'s existing `subtotal` comment claimed to catch a
+   rewritten `order.total`. It never did; reworded rather than left standing.
+3. **006** — the bulk handler clears the *whole* consumed selection. Leaving
+   ineligible rows selected strands the manager: their checkbox is disabled for
+   exactly those statuses, so a checked+disabled row can never be cleared.
+4. **007** — two deviations, both forced:
+   - the Pay button is gated only for a **signed-in** user. The plan's literal
+     `disabled={… || !feesResolved}` made the signed-out button dead, so a
+     visitor could not reach the account card. Caught by
+     `CheckoutPage.firstPaint`.
+   - `groups` is rebuilt every render, so it cannot be an effect dependency. The
+     plan's step 3 anticipated this and sanctioned memoising; the merchant-id
+     list is memoised from `items` (state, therefore stable) so `cart.ts` stays
+     untouched and the `exhaustive-deps` suppression is gone.
+
+`src/pages/__tests__/CheckoutHaptics.test.tsx` was modified although plan 007
+does not list it. The fee gate moved the click later, which let the async
+customer-prefill effect blank the form before `submit()`; those tests had only
+ever passed by clicking in the same tick as the field changes. They now flush the
+prefill first.
+
+### Not done, still open
+
+- The `PUBLIC` EXECUTE grants on 20+ `SECURITY DEFINER` functions.
+- `wallets.balance` unledgered writes (005 step 4, above).
+- The `withdrawal_pin` browser-only check; the `receipts` bucket.
+- `WithdrawalRequestsTable.tsx:56-69` — `StatusBadge`'s `map` has 5 entries but
+  `labels` has 4, so a `processing` withdrawal renders a raw lowercase word.
+- Order `total` is computed as IEEE-754 `number` at ~6 independent sites, with
+  no shared rounding helper, while the columns are `NUMERIC(12,2)`.
 
 ## Verification baseline (measured 2026-10-02, at `08f5ec4`)
 
