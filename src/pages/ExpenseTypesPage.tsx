@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Fuel, Plus, Pencil, CheckCircle2, XCircle, Clock, Trash2, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableCaption, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { Database } from "@/integrations/supabase/types";
 
 interface ExpenseType {
   id: string;
@@ -233,7 +234,7 @@ export default function ExpenseTypesPage() {
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error('Name required'); return; }
-    const payload: Partial<ExpenseType> = {
+    const payload: Database["public"]["Tables"]["expense_types"]["Insert"] = {
       name: form.name.trim(), applies_to: form.applies_to,
       is_fuel: form.is_fuel, is_active: form.is_active,
       is_maintenance: form.is_maintenance,
@@ -274,7 +275,12 @@ export default function ExpenseTypesPage() {
 
   const submitVariant = async () => {
     if (!vForm.fuel_type.trim()) { toast.error('Fuel type name required'); return; }
-    const payload: Partial<FuelVariant> = {
+    // Typed as the generated Update: the edit path passes it straight to
+    // `.update()`, and the create path spreads it into an `.insert()` with
+    // `expense_type_id` supplied from the owning row. `fuel_type` is intersected
+    // back in as required because the guard above already rejects a blank one —
+    // without it the spread widens to optional and fails the Insert contract.
+    const payload: Database["public"]["Tables"]["fuel_variants"]["Update"] & { fuel_type: string } = {
       fuel_type: vForm.fuel_type.trim(),
       price_per_litre: vForm.price_per_litre ? parseFloat(vForm.price_per_litre) : null,
       cost_per_mile: parseFloat(vForm.cost_per_mile || '0'),

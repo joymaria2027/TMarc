@@ -124,7 +124,12 @@ export async function fetchDeliveriesPage({
 
   const { data, error } = await query.range(from, to);
   if (error) throw error;
-  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
+  // Sound cast: the select string embeds `merchants(name)` and
+  // `riders(...)`, which supabase-js's SelectQueryError type cannot model,
+  // so `data` is over-narrowed. `withMerchantAndRiderName` immediately
+  // normalizes the array-or-object embed, which is why JoinedDeliveryRow
+  // accepts both forms.
+  return ((data ?? []) as unknown as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
 }
 
 export interface UnassignedPageParams {
@@ -152,7 +157,12 @@ export async function fetchUnassignedPage({
   if (excludeIds.length > 0) query = query.not('id', 'in', `(${excludeIds.join(',')})`);
   const { data, error } = await query.range(from, to);
   if (error) throw error;
-  return ((data ?? []) as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
+  // Sound cast: the select string embeds `merchants(name)` and
+  // `riders(...)`, which supabase-js's SelectQueryError type cannot model,
+  // so `data` is over-narrowed. `withMerchantAndRiderName` immediately
+  // normalizes the array-or-object embed, which is why JoinedDeliveryRow
+  // accepts both forms.
+  return ((data ?? []) as unknown as JoinedDeliveryRow[]).map(withMerchantAndRiderName);
 }
 
 /**

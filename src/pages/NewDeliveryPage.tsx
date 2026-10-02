@@ -58,7 +58,11 @@ export default function NewDeliveryPage() {
     (async () => {
       const [mRes, tRes, rRes] = await Promise.all([
         supabase.from('merchants').select('id, name, address, latitude, longitude').eq('id', merchantId).maybeSingle(),
-        supabase.from('tariffs').select('id, location_name, tariff_amount').eq('merchant_id', merchantId),
+        // Was `from('tariffs')` — a table that exists in no migration, so this
+        // call 404'd at runtime and the tariff-zone list always came back
+        // empty. `merchant_tariffs` carries the same columns and FKs to
+        // merchants.id, and is what MerchantsPage edits.
+        supabase.from('merchant_tariffs').select('id, location_name, tariff_amount').eq('merchant_id', merchantId),
         // Riders assigned to THIS merchant only (was: all riders platform-wide)
         supabase
           .from('merchant_riders')

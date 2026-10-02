@@ -36,7 +36,13 @@ export function normalizeWriteError(err: unknown): WriteError {
  * the failure is *seen* and the error is *returned* before you mutate.
  */
 export async function guardedWrite<T = unknown>(
-  write: Promise<GuardedResult<T>> | GuardedResult<T>,
+  // `PromiseLike`, not `Promise`: supabase's PostgREST builders (e.g.
+  // `supabase.from('x').update({...})`) are thenable but have no `.catch`,
+  // `.finally`, or `[Symbol.toStringTag]`, so they are not `Promise`s. `await`
+  // works on any thenable, so the body below needs no change. Narrowing this
+  // back to `Promise` breaks all 9 call sites at once — fix the signature here,
+  // do not cast at the call sites.
+  write: PromiseLike<GuardedResult<T>> | GuardedResult<T>,
   options: { context: string; silent?: boolean },
 ): Promise<GuardedResult<T>> {
   let data: T | null = null;

@@ -88,7 +88,11 @@ export default function DashboardTour({ role, runWhen, replaySignal = 0, tourId,
     (data: EventData) => {
       if (data.status === STATUS.FINISHED) finish("done");
       else if (data.status === STATUS.SKIPPED) finish("dismissed");
-      else if (data.status === STATUS.ERROR) setRun(false); // target never appeared: stop quietly
+      // react-joyride 3.x has no `STATUS.ERROR`. Hard failures (a rejecting
+      // `before` hook) surface as an `error` event on `data.type` instead, so
+      // match that to stop quietly. A *missing target* needs no branch: v3
+      // records the failure and auto-advances to the next step on its own.
+      else if (data.type === "error") setRun(false);
     },
     [finish]
   );
@@ -118,8 +122,13 @@ export default function DashboardTour({ role, runWhen, replaySignal = 0, tourId,
       options={{
         buttons: ["back", "close", "primary", "skip"],
         closeButtonAction: "skip",
-        dismissKeyAction: "skip",
-        overlayClickAction: "skip",
+        // react-joyride 3.x dropped "skip" from these two: ESC and overlay
+        // click can only close the step (continuous mode then beacons the next
+        // one) — they can no longer end the tour. The explicit Skip *button*
+        // (above) still ends it and still persists "dismissed", so the
+        // never-auto-reshow contract is unchanged.
+        dismissKeyAction: "close",
+        overlayClickAction: "close",
         showProgress: true,
         skipBeacon: true,
         targetWaitTimeout: 3000,

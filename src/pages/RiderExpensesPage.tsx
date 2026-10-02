@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import EmptyState from '@/components/EmptyState';
 import { pageEmptyStates } from '@/lib/pageEmptyStates';
+import type { DeliveryRow as FullDeliveryRow } from "@/lib/queries/deliveries";
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,30 +90,20 @@ export default function RiderExpensesPage() {
     created_at: string;
   }
 
-  interface Delivery {
-    id: string;
-    order_reference: string | null;
-    delivered_at: string | null;
-    created_at: string;
-    status: string;
-    pickup_address: string | null;
-    dropoff_address: string | null;
-    pickup_latitude: number | null;
-    pickup_longitude: number | null;
-    dropoff_latitude: number | null;
-    dropoff_longitude: number | null;
-    actual_distance_km: number | null;
-    estimated_distance_km: number | null;
-    estimated_tariff: number | null;
-    actual_tariff: number | null;
-    dispatched_at: string | null;
-    picked_up_at: string | null;
-    customer_name: string | null;
-    customer_phone: string | null;
-    payment_method: string | null;
-    payment_bank_name: string | null;
-    settlement_approved: boolean;
-  }
+  /**
+   * The delivery columns this page reads. Derived from the generated schema
+   * rather than hand-listed, so a migration that changes a column's
+   * nullability is caught here instead of silently drifting.
+   */
+  type Delivery = Pick<
+    FullDeliveryRow,
+    | "id" | "order_reference" | "delivered_at" | "created_at" | "status"
+    | "pickup_address" | "dropoff_address"
+    | "pickup_latitude" | "pickup_longitude" | "dropoff_latitude" | "dropoff_longitude"
+    | "actual_distance_km" | "estimated_distance_km" | "estimated_tariff" | "actual_tariff"
+    | "dispatched_at" | "picked_up_at" | "customer_name" | "customer_phone"
+    | "payment_method" | "payment_bank_name" | "settlement_approved"
+  >;
 
   interface Waypoint {
     id: string;
@@ -136,7 +127,9 @@ export default function RiderExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [expensesVisible, setExpensesVisible] = useState(20);
   const EXPENSES_PAGE_SIZE = 20;
-  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
+  // Partial: `viewDelivery` falls back to a bare `{ id }` when the row is neither
+  // cached nor returned; the dialog renders blanks for every missing field.
+  const [selectedDelivery, setSelectedDelivery] = useState<Partial<Delivery> | null>(null);
   const [selectedWaypoints, setSelectedWaypoints] = useState<Waypoint[]>([]);
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -267,7 +260,7 @@ export default function RiderExpensesPage() {
   };
 
   const viewDelivery = async (deliveryId: string) => {
-    let delivery = deliveriesMap[deliveryId];
+    let delivery: Partial<Delivery> = deliveriesMap[deliveryId];
     if (!delivery) {
       const { data } = await supabase.from('deliveries').select('*').eq('id', deliveryId).maybeSingle();
       delivery = data || { id: deliveryId };
@@ -440,7 +433,10 @@ export default function RiderExpensesPage() {
 
   const handleExpenseBulkAction = async (action: 'verified' | 'rejected') => {
     if (expenseSelectedIds.size === 0) return;
-    setExpenseBulkActionPending(action);
+    // Two distinct vocabularies on purpose: the button's pending state is the
+    // *action* the user is taking ('verify'/'reject'), while the row write below
+    // uses the resulting *status* ('verified'/'rejected'). Translate, don't conflate.
+    setExpenseBulkActionPending(action === 'verified' ? 'verify' : 'reject');
     const ids = Array.from(expenseSelectedIds);
     // C-band expenses need an individual reason — bulk never one-clicks them.
     const gated = action === 'verified'

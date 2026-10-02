@@ -62,7 +62,7 @@ vi.mock('@/integrations/supabase/client', () => ({
             data: table === 'products' ? (applyFilters(tableData.products as Array<Record<string, unknown>>)[0] ?? null) : null,
           }),
         then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
-          Promise.resolve({ data: applyFilters(tableData[table] ?? [] as Array<Record<string, unknown>>), error: null }).then(res, rej),
+          Promise.resolve({ data: applyFilters((tableData[table] ?? []) as Array<Record<string, unknown>>), error: null }).then(res, rej),
       };
       return p;
     },

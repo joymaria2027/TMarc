@@ -15,7 +15,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import WalletFolderCard, { WalletBalanceCard } from '@/components/wallet/WalletFolderCard';
-import WithdrawalRequestsTable from '@/components/wallet/WithdrawalRequestsTable';
+import WithdrawalRequestsTable, { type WithdrawalRow } from '@/components/wallet/WithdrawalRequestsTable';
 import TransactionHistoryTable from '@/components/wallet/TransactionHistoryTable';
 import {
   rpcHasWithdrawalPin,
@@ -26,6 +26,7 @@ import type { HasWithdrawalPinResult } from '@/lib/rpcTypes';
 import { validateWithdrawal, formatMoney } from '@/lib/finance';
 import { summarizeBulkResult, bulkResultMessage } from '@/lib/moneyGuards';
 import { buildWithdrawalFilterKey } from '@/components/wallet/withdrawalFilters';
+import type { Database } from "@/integrations/supabase/types";
 
 interface WalletRow {
   id: string;
@@ -37,22 +38,9 @@ interface WalletRow {
   merchant_id: string | null;
 }
 
-interface WithdrawalRow {
-  // TODO(data-layer): unify with WithdrawalRequestsTable's slimmer row —
-  // the child's onApprove/onFinalize callbacks currently widen-narrow against
-  // this fuller shape (app-tsc conflict at the table call site).
-  id: string;
-  wallet_id: string;
-  requested_by: string;
-  amount: number;
-  status: string;
-  payout_method: string | null;
-  payout_reference: string | null;
-  notes: string | null;
-  processed_by: string | null;
-  processed_at: string | null;
-  created_at: string;
-}
+// The withdrawals table owns this row shape. A second, wider local copy used to
+// live here; the table's onApprove/onFinalize callbacks pass its own slimmer row,
+// so the two only reconciled through a cast. Import the single source of truth.
 
 interface TransactionRow {
   id: string;
@@ -315,7 +303,7 @@ export default function WalletPage() {
     setProcessing(true);
     const finalMethod = payoutMethod === 'Bank Transfer' ? `Bank Transfer (${bankName})` : payoutMethod;
 
-    const updatePayload: Record<string, unknown> = {
+    const updatePayload: Database["public"]["Tables"]["withdrawal_requests"]["Update"] = {
       processed_by: user!.id,
       processed_at: new Date().toISOString(),
     };

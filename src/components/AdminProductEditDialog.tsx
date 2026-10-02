@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getProductPublicUrl } from "@/lib/productImage";
 import { toast } from "sonner";
 import { Crop, Images, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import type { Database } from "@/integrations/supabase/types";
 
 export interface AdminProductEditDialogProps {
   open: boolean;
@@ -122,7 +123,9 @@ export default function AdminProductEditDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const updatePayload: Record<string, any> = {
+      // Typed against the generated schema so a renamed/removed column fails
+      // here rather than at runtime as a PostgREST "unknown column" error.
+      const updatePayload: Database["public"]["Tables"]["products"]["Update"] = {
         name: name.trim(),
         description: description.trim() || null,
         price: parseFloat(price),

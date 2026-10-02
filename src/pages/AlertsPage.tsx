@@ -73,7 +73,9 @@ export default function AlertsPage() {
       .channel('alerts-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_alerts' }, (payload) => {
         // Patch state for the common case so the list doesn't jump while triaging.
-        const p = payload as { eventType?: string; new?: AlertItem; old?: { id?: string } };
+        // Sound cast: supabase types the payload against an untyped table, so
+        // it cannot know `eventType`/`new`/`old`. Guarded by `p.new?.id` below.
+        const p = payload as unknown as { eventType?: string; new?: AlertItem; old?: { id?: string } };
         const eventType = p.eventType ?? '';
         if (eventType === 'INSERT' && p.new?.id) {
           const status = filter === 'resolved' ? 'resolved' : filter === 'unresolved' ? 'unresolved' : 'all';

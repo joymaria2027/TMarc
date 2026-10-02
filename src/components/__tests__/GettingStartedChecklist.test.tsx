@@ -12,7 +12,7 @@ import {
   buildOwnerChecklist,
   buildDeveloperChecklist,
 } from '@/lib/dashboardChecklists';
-import type { ChecklistItem } from '@/lib/dashboardChecklists';
+import type { ChecklistItem, ChecklistRole } from '@/lib/dashboardChecklists';
 
 // Slice 03 contract: dismissible ≤4-item checklists, task-named, quick-win
 // first, real-event completion (never click-through), progress + success.
@@ -22,7 +22,7 @@ const items = (done: boolean[] = [false, false, false]): ChecklistItem[] => [
   { id: 'c', label: 'Review first Settlement', actionLabel: 'View Settlements', actionHref: '/settlements', done: done[2] },
 ];
 
-const renderList = (role = 'admin', list: ChecklistItem[] = items(), onOpenChange?: (open: boolean) => void, onAction?: (id: string) => void) =>
+const renderList = (role: ChecklistRole = 'admin', list: ChecklistItem[] = items(), onOpenChange?: (open: boolean) => void, onAction?: (id: string) => void) =>
   render(
     <MemoryRouter>
       <GettingStartedChecklist role={role} items={list} onOpenChange={onOpenChange} onAction={onAction} />

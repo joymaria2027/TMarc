@@ -17,6 +17,7 @@ import RiderSettlementCard from '@/components/settlements/RiderSettlementCard';
 import DeliverySettlementRow from '@/components/settlements/DeliverySettlementRow';
 import { partitionPayoutDeliveries, summarizeBulkResult } from '@/lib/moneyGuards';
 import { splitProofRows } from '@/lib/deliveries';
+import type { DeliveryRow } from '@/lib/queries/deliveries';
 import { formatMoney } from '@/lib/finance';
 import { format } from 'date-fns';
 import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
@@ -123,23 +124,34 @@ interface ProfileRow {
   full_name: string | null;
 }
 
-interface DeliveryRow {
-  id: string;
-  order_reference: string | null;
-  pickup_address: string;
-  dropoff_address: string;
-  actual_distance_km: number | null;
-  actual_tariff: number | null;
-  estimated_tariff: number | null;
-  receipt_attached: boolean;
-  settlement_approved: boolean;
-  settlement_source?: string | null;
-  delivered_at: string | null;
-  rider_id: string | null;
-  merchant_id: string;
-  payment_method?: string | null;
-  payment_bank_name?: string | null;
-}
+/**
+ * The settlement view reads a 17-column slice of `deliveries`. Previously this
+ * was a hand-written `interface DeliveryRow` that shadowed the real one from
+ * `@/lib/queries/deliveries` and drifted from it — it was missing `picked_up_at`
+ * and `gps_confirmed` (both read below, both added by a later migration), which
+ * is exactly the class of bug a shadowed type hides. Deriving the slice with
+ * `Pick` keeps nullability in step with the generated schema.
+ */
+type SettlementDelivery = Pick<
+  DeliveryRow,
+  | "id"
+  | "order_reference"
+  | "pickup_address"
+  | "dropoff_address"
+  | "actual_distance_km"
+  | "actual_tariff"
+  | "estimated_tariff"
+  | "receipt_attached"
+  | "settlement_approved"
+  | "settlement_source"
+  | "delivered_at"
+  | "picked_up_at"
+  | "gps_confirmed"
+  | "rider_id"
+  | "merchant_id"
+  | "payment_method"
+  | "payment_bank_name"
+>;
 
 export default function SettlementsPage() {
   const { user, hasRole } = useAuth();
@@ -228,7 +240,7 @@ export default function SettlementsPage() {
     const expenses = expensesRes.data || [];
     setAllExpenses(expenses);
 
-    const merged: SettlementRow[] = dels.map((d: DeliveryRow) => {
+    const merged: SettlementRow[] = dels.map((d: SettlementDelivery) => {
       const s = shares.find((sh: SharingRow) => sh.merchant_id === d.merchant_id);
       const restTariffs = tariffs.filter((t: TariffRow) => t.merchant_id === d.merchant_id);
       const bestTariff = restTariffs.length > 0

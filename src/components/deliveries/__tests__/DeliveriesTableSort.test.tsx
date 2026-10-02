@@ -40,6 +40,8 @@ function makeRow(overrides: Partial<DeliveryRow> = {}): DeliveryRow {
     rider_id: "r-1",
     route_deviation_detected: false,
     settlement_approved: false,
+    settlement_source: "manual",
+    merchant_name: null,
     settlement_approved_by: null,
     start_odometer_at: null,
     start_odometer_miles: null,

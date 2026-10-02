@@ -222,7 +222,10 @@ export interface DeliverySortRow {
   estimated_tariff: number | string | null | undefined;
   merchant_id: string | null | undefined;
   merchant_name: string | null | undefined;
-  merchants: { name: string } | null | undefined;
+  /** Optional, not required: realtime payloads carry no join, so `DeliveryRow`
+   *  may omit it entirely. Declaring it required broke `T`'s inference and
+   *  collapsed `sortDeliveries`' return type to `DeliverySortRow[]`. */
+  merchants?: { name: string } | null;
   rider_id: string | null | undefined;
 }
 

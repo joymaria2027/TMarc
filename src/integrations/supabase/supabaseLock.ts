@@ -72,8 +72,12 @@ export const resilientNavigatorLock: LockFn = async (name, acquireTimeout, fn) =
 };
 
 function timeoutError(): Error {
-  const e = new Error('LockAcquireTimeout');
-  (e as { name: string }).name = 'LockAcquireTimeoutError';
-  (e as { isAcquireTimeout: boolean }).isAcquireTimeout = true;
-  return e;
+  // `Object.assign` returns `Error & { name: string; isAcquireTimeout: boolean }`,
+  // so the `isAcquireTimeoutError` guard above recognises it with no cast. The
+  // previous `(e as { isAcquireTimeout: boolean })` was unsound — it asserted a
+  // property `Error` does not declare, which is why tsc rejected it.
+  return Object.assign(new Error('LockAcquireTimeout'), {
+    name: 'LockAcquireTimeoutError',
+    isAcquireTimeout: true,
+  });
 }

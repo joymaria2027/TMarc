@@ -90,7 +90,9 @@ export default function DispatchAuditPage() {
     const ch = supabase.channel("dispatch-audit")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "dispatch_audit_log" }, (payload) => {
         // Patch state for the common case instead of a full 1000-row reload.
-        const row = (payload as { new?: AuditRow }).new;
+        // Sound cast: the table is untyped in the generated schema, so the
+        // payload is `{[key:string]: any}`. Guarded by `row && row.id` below.
+        const row = (payload as unknown as { new?: AuditRow }).new;
         if (row && row.id) {
           setRows(prev => (prev.some(r => r.id === row.id) ? prev : [row, ...prev].slice(0, 1000)));
         } else {
@@ -133,7 +135,7 @@ export default function DispatchAuditPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="font-display text-3xl">Dispatch audit log</h1>
-        <Button variant="outline" size="sm" onClick={load} aria-label="Refresh audit log">
+        <Button variant="outline" size="sm" onClick={() => void load()} aria-label="Refresh audit log">
           <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />Refresh
         </Button>
       </div>

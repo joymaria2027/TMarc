@@ -64,7 +64,7 @@ describe("patchAlerts (realtime without list jumps)", () => {
   const rows = [...alerts] as unknown as Row[];
 
   it("prepends matching INSERTs, ignores filtered-out ones", () => {
-    const ins = { id: "5", alert_type: "duplicate", message: "x", is_resolved: false } as Row;
+    const ins = { id: "5", alert_type: "duplicate", message: "x", is_resolved: false } as unknown as Row;
     expect(patchAlerts(rows, { kind: "INSERT", row: ins }, "unresolved")[0].id).toBe("5");
     expect(patchAlerts(rows, { kind: "INSERT", row: ins }, "resolved")).toHaveLength(4);
   });

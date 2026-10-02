@@ -3,24 +3,33 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import DashboardTour, { TourReplay } from '../DashboardTour';
 import { dashboardTours, tourRoles, tourKey, pageTours, pageTourIds } from '@/lib/dashboardTours';
+import type { TourRole } from '@/lib/dashboardTours';
 
 // Slice 02 contract: 3-step spotlight micro-tours, Skip on every step,
 // progress, first-seen trigger, dismiss respected, reduced-motion safe.
 const joyrideState = vi.hoisted(() => ({ lastProps: null as null | Record<string, unknown> }));
 
+// Mirrors react-joyride@3.2.0's exported STATUS. v3 has no ERROR status:
+// hard failures arrive as an `error` *event* on `data.type`, and a missing
+// target is auto-advanced past by the library itself.
 vi.mock('react-joyride', () => ({
   Joyride: (props: Record<string, unknown>) => {
     joyrideState.lastProps = props;
     return null;
   },
-  STATUS: { FINISHED: 'finished', SKIPPED: 'skipped', ERROR: 'error', RUNNING: 'running' },
+  STATUS: {
+    IDLE: 'idle', READY: 'ready', WAITING: 'waiting',
+    RUNNING: 'running', PAUSED: 'paused', SKIPPED: 'skipped', FINISHED: 'finished',
+  },
 }));
 
-const fireJoyride = (status: string) => {
-  const onEvent = joyrideState.lastProps?.onEvent as ((d: { status: string }) => void) | undefined;
+const fireJoyride = (event: { status?: string; type?: string }) => {
+  const onEvent = joyrideState.lastProps?.onEvent as
+    | ((d: { status: string; type: string }) => void)
+    | undefined;
   if (!onEvent) throw new Error('Joyride onEvent not captured');
   act(() => {
-    onEvent({ status });
+    onEvent({ status: event.status ?? 'running', type: event.type ?? 'tour:status' });
   });
 };
 
@@ -61,7 +70,7 @@ describe('DashboardTour wrapper (slice 02 contract)', () => {
     joyrideState.lastProps = null;
   });
 
-  const renderTour = (role = 'admin', runWhen = true, replaySignal?: number) =>
+  const renderTour = (role: TourRole = 'admin', runWhen = true, replaySignal?: number) =>
     render(
       <MemoryRouter>
         <DashboardTour role={role} runWhen={runWhen} replaySignal={replaySignal} />
@@ -91,8 +100,9 @@ describe('DashboardTour wrapper (slice 02 contract)', () => {
     expect((options.buttons as string[])).toContain('skip');
     expect(options.showProgress).toBe(true);
     expect(options.closeButtonAction).toBe('skip');
-    expect(options.dismissKeyAction).toBe('skip');
-    expect(options.overlayClickAction).toBe('skip');
+    // v3 narrowed these to close/next/replay — see the note in DashboardTour.tsx.
+    expect(options.dismissKeyAction).toBe('close');
+    expect(options.overlayClickAction).toBe('close');
     expect((options.targetWaitTimeout as number)).toBeGreaterThanOrEqual(1000);
     const locale = joyrideState.lastProps?.locale as Record<string, string>;
     expect(locale.skip).toMatch(/skip/i);
@@ -102,20 +112,20 @@ describe('DashboardTour wrapper (slice 02 contract)', () => {
 
   it('persists completion on finish AND on skip — never auto-reshows', () => {
     renderTour('admin', true);
-    fireJoyride('finished');
+    fireJoyride({ status: 'finished' });
     expect(window.localStorage.getItem(tourKey('admin'))).toBe('done');
     expect(joyrideState.lastProps?.run).toBe(false);
 
     window.localStorage.clear();
     renderTour('rider', true);
-    fireJoyride('skipped');
+    fireJoyride({ status: 'skipped' });
     expect(window.localStorage.getItem(tourKey('rider'))).toBe('dismissed');
     expect(joyrideState.lastProps?.run).toBe(false);
   });
 
-  it('stops quietly when a target never appears (no crash)', () => {
+  it('stops quietly on a hard joyride error (no crash)', () => {
     renderTour('admin', true);
-    fireJoyride('error');
+    fireJoyride({ type: 'error' });
     expect(joyrideState.lastProps?.run).toBe(false);
   });
 
@@ -200,7 +210,7 @@ describe('pageTours map + override props (slice 04 contract)', () => {
     expect(joyrideState.lastProps?.run).toBe(true);
     const joySteps = joyrideState.lastProps?.steps as Array<{ target: string }>;
     expect(joySteps.map((s) => s.target)).toEqual(steps.map((s) => s.target));
-    fireJoyride('finished');
+    fireJoyride({ status: 'finished' });
     expect(window.localStorage.getItem(tourKey('deliveries-queue'))).toBe('done');
     // The dashboard role key is untouched by the page tour.
     expect(window.localStorage.getItem(tourKey('admin'))).toBeNull();

@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { formatMoney, paginate } from '@/lib/finance';
 import { validateRunPeriod } from '@/lib/moneyGuards';
 import { buildCsvRows, downloadCsv, generateFilename } from '@/lib/financeExport';
+import type { Database } from "@/integrations/supabase/types";
 
 interface Assignment {
   id: string;
@@ -51,7 +52,18 @@ export default function PayrollPage() {
   const today = new Date().toISOString().split('T')[0];
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
-  const [form, setForm] = useState({
+  // Annotated so `payer_type`/`basis` keep their literal unions instead of
+  // widening to `string` — the insert below is typed against the DB enums.
+  const [form, setForm] = useState<{
+    payee_user_id: string;
+    payer_type: Database["public"]["Enums"]["payroll_payer_type"];
+    payer_merchant_id: string;
+    basis: Database["public"]["Enums"]["payroll_basis"];
+    fixed_amount: string;
+    percent: string;
+    notes: string;
+    is_active: boolean;
+  }>({
     payee_user_id: '', payer_type: 'merchant', payer_merchant_id: '',
     basis: 'fixed', fixed_amount: '', percent: '', notes: '', is_active: true,
   });
@@ -223,7 +235,7 @@ export default function PayrollPage() {
     if (form.basis === 'percent_of_wallet_income' && (!form.percent || Number(form.percent) <= 0 || Number(form.percent) > 100)) { setFormError('Enter a percent between 0 and 100.'); return; }
     setFormError(null);
 
-    const payload: Record<string, unknown> = {
+    const payload: Database["public"]["Tables"]["payroll_assignments"]["Insert"] = {
       payee_user_id: form.payee_user_id,
       payer_type: form.payer_type,
       payer_merchant_id: form.payer_type === 'merchant' ? form.payer_merchant_id : null,

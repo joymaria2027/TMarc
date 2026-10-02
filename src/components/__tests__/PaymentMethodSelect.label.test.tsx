@@ -7,17 +7,21 @@ import PaymentMethodSelect from '../PaymentMethodSelect';
 // raw). The lookup miss must fall back to the saved value, never render
 // "undefined". Case variants of known values resolve to the canonical label.
 
+// `orderReference`/`userId` were never part of PaymentMethodSelectProps (verified
+// against both commits that touched the component) and are unreferenced in its
+// body; they were passed speculatively. Every assertion below depends only on
+// currentMethod/currentBankName.
 describe('PaymentMethodSelect label fallback', () => {
   it('renders the canonical label for known values', () => {
     render(
-      <PaymentMethodSelect deliveryId="d1" orderReference="R1" userId="u1" currentMethod="wave" />,
+      <PaymentMethodSelect deliveryId="d1" currentMethod="wave" />,
     );
     expect(screen.getByText('Wave')).toBeInTheDocument();
   });
 
   it('resolves case variants of known values', () => {
     render(
-      <PaymentMethodSelect deliveryId="d1" orderReference="R1" userId="u1" currentMethod="QMoney" />,
+      <PaymentMethodSelect deliveryId="d1" currentMethod="QMoney" />,
     );
     expect(screen.getByText('QMoney')).toBeInTheDocument();
     expect(screen.queryByText('undefined')).toBeNull();
@@ -25,7 +29,7 @@ describe('PaymentMethodSelect label fallback', () => {
 
   it('falls back to the saved value for legacy/unknown methods', () => {
     render(
-      <PaymentMethodSelect deliveryId="d1" orderReference="R1" userId="u1" currentMethod="OMoney" />,
+      <PaymentMethodSelect deliveryId="d1" currentMethod="OMoney" />,
     );
     expect(screen.getByText('OMoney')).toBeInTheDocument();
     expect(screen.queryByText('undefined')).toBeNull();
@@ -35,8 +39,8 @@ describe('PaymentMethodSelect label fallback', () => {
     render(
       <PaymentMethodSelect
         deliveryId="d1"
-        orderReference="R1"
-        userId="u1"
+       
+       
         currentMethod="bank_transfer"
         currentBankName="GTBank"
       />,
@@ -45,7 +49,7 @@ describe('PaymentMethodSelect label fallback', () => {
   });
 
   it('shows the setter button when no method is saved', () => {
-    render(<PaymentMethodSelect deliveryId="d1" orderReference="R1" userId="u1" />);
+    render(<PaymentMethodSelect deliveryId="d1" />);
     expect(screen.getByRole('button', { name: /set payment method/i })).toBeInTheDocument();
   });
 });
