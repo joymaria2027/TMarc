@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Truck, Users, AlertTriangle, CheckCircle2, Clock, MapPin, Bell, DollarSign, TrendingUp, Package } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
 import { formatMoney, CHART_COLORS } from '@/lib/finance';
+import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
 import WalletWidget from '@/components/WalletWidget';
 import EmptyState from '@/components/EmptyState';

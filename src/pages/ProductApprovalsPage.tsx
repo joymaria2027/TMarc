@@ -36,7 +36,7 @@ interface WholesaleRow {
 }
 
 export default function ProductApprovalsPage() {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, rolesReady } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [wholesale, setWholesale] = useState<Record<string, WholesaleRow>>({});
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
@@ -93,7 +93,40 @@ export default function ProductApprovalsPage() {
     load();
   }, []);
 
-  if (!hasRole("admin")) {
+  // Status counts for badge tabs
+  const counts = useMemo(() => {
+    return {
+      pending: products.filter((p) => p.approval_status === "pending").length,
+      approved: products.filter((p) => p.approval_status === "approved").length,
+      rejected: products.filter((p) => p.approval_status === "rejected").length,
+      all: products.length,
+    };
+  }, [products]);
+
+  // Filtered products based on active status tab and search text
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      if (statusFilter !== "all" && p.approval_status !== statusFilter) {
+        return false;
+      }
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchesName = p.name?.toLowerCase().includes(q);
+        const matchesMerchant = p.merchants?.name?.toLowerCase().includes(q);
+        const matchesCategory = p.product_categories?.name?.toLowerCase().includes(q);
+        if (!matchesName && !matchesMerchant && !matchesCategory) return false;
+      }
+      return true;
+    });
+  }, [products, statusFilter, search]);
+
+  // `rolesReady &&` is load-bearing, and so is this guard's position *after*
+  // every hook above. `useAuth` fills `roles` asynchronously, so
+  // `hasRole("admin")` is false on first paint; an early return at that point
+  // made hook order depend on role state and threw "Rendered more hooks than
+  // during the previous render", blanking the page for every admin. Until roles
+  // resolve, fall through and render the admin view.
+  if (rolesReady && !hasRole("admin")) {
     return <p className="text-muted-foreground">Admin access required.</p>;
   }
 
@@ -138,33 +171,6 @@ export default function ProductApprovalsPage() {
       load();
     }
   };
-
-  // Status counts for badge tabs
-  const counts = useMemo(() => {
-    return {
-      pending: products.filter((p) => p.approval_status === "pending").length,
-      approved: products.filter((p) => p.approval_status === "approved").length,
-      rejected: products.filter((p) => p.approval_status === "rejected").length,
-      all: products.length,
-    };
-  }, [products]);
-
-  // Filtered products based on active status tab and search text
-  const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      if (statusFilter !== "all" && p.approval_status !== statusFilter) {
-        return false;
-      }
-      if (search.trim()) {
-        const q = search.toLowerCase();
-        const matchesName = p.name?.toLowerCase().includes(q);
-        const matchesMerchant = p.merchants?.name?.toLowerCase().includes(q);
-        const matchesCategory = p.product_categories?.name?.toLowerCase().includes(q);
-        if (!matchesName && !matchesMerchant && !matchesCategory) return false;
-      }
-      return true;
-    });
-  }, [products, statusFilter, search]);
 
   return (
     <div className="space-y-5">

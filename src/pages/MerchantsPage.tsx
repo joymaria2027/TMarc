@@ -136,6 +136,7 @@ export default function MerchantsPage() {
   // highlights the matching merchant card + scrolls it into view once per id.
   // Unknown ids are ignored silently.
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const highlightId = parseHighlightId(searchParams.get('highlight'));
   const pageRef = useRef<HTMLDivElement>(null);
   const scrolledHighlightRef = useRef<string | null>(null);
